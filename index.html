@@ -37,6 +37,18 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px
 .player-col-chip input{width:15px;height:15px;margin:0;accent-color:#e7b84b}
 #eventPlayerTotals td{font-size:14px;font-weight:900;border-top:2px solid #e7b84b;padding-top:13px;padding-bottom:13px}
 #eventPlayerTotals td:first-child{color:#e7b84b}
+
+#eventPlayerTable{width:100%;table-layout:fixed}
+#eventPlayerTable th,#eventPlayerTable td{overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+#eventPlayerTable input{max-width:100%;box-sizing:border-box}
+#eventPlayerTable .col-name{text-align:left}
+#eventPlayerTable .col-memberId{text-align:left}
+#eventPlayerTable .col-nickname{text-align:left}
+#eventPlayerTable .col-buyin,#eventPlayerTable .col-rebuy,#eventPlayerTable .col-groups{text-align:center}
+#eventPlayerTable .col-rebuyDiscount,#eventPlayerTable .col-overbuyDiscount,
+#eventPlayerTable .col-manualDiscount,#eventPlayerTable .col-totalDiscount,
+#eventPlayerTable .col-paid{text-align:center}
+#eventPlayerTable .col-action{text-align:right}
 </style>
 
 <style id="eventReportRedesign">
@@ -949,7 +961,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.25 Web · Display Controls</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.26 Web · Adaptive Columns</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2654,7 +2666,21 @@ function render(){
   ['manualDiscount','手動優惠',visible.has('manualDiscount')],['totalDiscount','總優惠',visible.has('totalDiscount')],
   ['paid','實收',true],['action','操作',true]
  ].filter(x=>x[2]);
- if($('eventPlayerHead'))$('eventPlayerHead').innerHTML=cols.map(c=>`<th style="white-space:nowrap">${c[1]}</th>`).join('');
+ // 依目前勾選的欄位重新分配整張表寬度，不需要左右滑動。
+ const baseWeights={
+   name:2.0,memberId:1.45,nickname:1.35,buyin:1.0,rebuy:1.0,groups:.85,
+   rebuyDiscount:1.25,overbuyDiscount:1.25,manualDiscount:1.25,totalDiscount:1.15,
+   paid:1.25,action:.85
+ };
+ const totalWeight=cols.reduce((sum,c)=>sum+(baseWeights[c[0]]||1),0);
+ const colWidths=Object.fromEntries(cols.map(c=>[c[0],((baseWeights[c[0]]||1)/totalWeight*100)]));
+ let cg=$('eventPlayerColgroup');
+ if(!cg){
+   cg=document.createElement('colgroup');cg.id='eventPlayerColgroup';
+   $('eventPlayerTable').insertBefore(cg,$('eventPlayerTable').firstChild);
+ }
+ cg.innerHTML=cols.map(c=>`<col style="width:${colWidths[c[0]].toFixed(3)}%">`).join('');
+ if($('eventPlayerHead'))$('eventPlayerHead').innerHTML=cols.map(c=>`<th class="col-${c[0]}" style="white-space:nowrap">${c[1]}</th>`).join('');
 
  const rowData=currentEvent().players.map((p,i)=>{
    const m=db.members.find(x=>x.id===p.memberId)||{name:'未知',id:p.memberId},c=calcPlayer(p);
@@ -2662,19 +2688,19 @@ function render(){
    return {p,i,m,c,vals:{
     name:`<span style="white-space:nowrap">${m.name}</span>`,
     memberId:`<span style="white-space:nowrap">${m.id||p.memberId||''}</span>`,
-    nickname:`<input value="${p.nickname??m.nickname??''}" placeholder="綽號" style="width:90px;min-width:0" onchange="setP(${i},'nickname',this.value)">`,
-    buyin:`<input type="number" min="0" value="${p.buyin}" style="width:72px;min-width:0" onchange="setP(${i},'buyin',this.value)">`,
-    rebuy:`<input type="number" min="0" value="${p.rebuy}" style="width:72px;min-width:0" onchange="setP(${i},'rebuy',this.value)">`,
+    nickname:`<input value="${p.nickname??m.nickname??''}" placeholder="綽號" style="width:100%;min-width:0" onchange="setP(${i},'nickname',this.value)">`,
+    buyin:`<input type="number" min="0" value="${p.buyin}" style="width:100%;min-width:0" onchange="setP(${i},'buyin',this.value)">`,
+    rebuy:`<input type="number" min="0" value="${p.rebuy}" style="width:100%;min-width:0" onchange="setP(${i},'rebuy',this.value)">`,
     groups:`<span style="white-space:nowrap">${c.groups}</span>`,
     rebuyDiscount:`<span style="white-space:nowrap">${money(custom?(c.rebuyDiscount||0):(c.auto||0))}</span>`,
     overbuyDiscount:`<span style="white-space:nowrap">${money(custom?(c.overbuyDiscount||0):0)}</span>`,
-    manualDiscount:`<input type="number" min="0" value="${p.manualDiscount}" style="width:90px;min-width:0" onchange="setP(${i},'manualDiscount',this.value)">`,
+    manualDiscount:`<input type="number" min="0" value="${p.manualDiscount}" style="width:100%;min-width:0" onchange="setP(${i},'manualDiscount',this.value)">`,
     totalDiscount:`<b style="white-space:nowrap">${money(c.totalDiscount||0)}</b>`,
     paid:`<span style="white-space:nowrap">${money(c.paid)}</span>`,
     action:`<button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button>`
    }};
  });
- $('playerRows').innerHTML=rowData.map(r=>`<tr>${cols.map(c=>`<td>${r.vals[c[0]]}</td>`).join('')}</tr>`).join('');
+ $('playerRows').innerHTML=rowData.map(r=>`<tr>${cols.map(c=>`<td class="col-${c[0]}">${r.vals[c[0]]}</td>`).join('')}</tr>`).join('');
 
  const totals=rowData.reduce((a,r)=>{
    const c=r.c,custom=(currentEvent().pricingMode||'standard')==='custom';
@@ -2695,7 +2721,7 @@ function render(){
   totalDiscount:`<b>${money(totals.totalDiscount)}</b>`,
   paid:`<b>${money(totals.paid)}</b>`,action:''
  };
- if($('eventPlayerTotals'))$('eventPlayerTotals').innerHTML=cols.map(c=>`<td style="white-space:nowrap">${totalVals[c[0]]||''}</td>`).join('');
+ if($('eventPlayerTotals'))$('eventPlayerTotals').innerHTML=cols.map(c=>`<td class="col-${c[0]}" style="white-space:nowrap">${totalVals[c[0]]||''}</td>`).join('');
  let info=poolInfo(), totalGroups=currentEvent().players.reduce((s,p)=>s+calcPlayer(p).groups,0), expected=totalGroups*currentEvent().chips, actual=currentEvent().players.reduce((s,p)=>s+(+p.stack||0),0), chipDiff=actual-expected;
  let settledEvents=db.events.filter(x=>x.status==='已結算');
  let settledJP=settledEvents.reduce((sum,x)=>sum+(+x.finalJP||0),0);
