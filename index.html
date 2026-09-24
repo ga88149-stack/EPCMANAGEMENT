@@ -1,0 +1,3017 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>EPC Poker Management System V1.13.4</title>
+<style>
+:root{--bg:#0b0f14;--card:#121922;--card2:#17212c;--text:#eef3f8;--muted:#91a0b2;--line:#263443;--accent:#d6b35a;--good:#49c27d;--bad:#ff6b6b}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
+header{position:sticky;top:0;z-index:5;background:#0b0f14eF;border-bottom:1px solid var(--line);padding:14px 18px;display:flex;gap:14px;align-items:center;justify-content:space-between}
+.brand{font-weight:900;letter-spacing:.8px;font-size:24px}.brand-version{font-size:15px;color:var(--muted);margin-left:8px;font-weight:800}.brand b{color:var(--accent)} .small{font-size:12px;color:var(--muted)}
+nav{display:flex;gap:8px;overflow:auto;padding:12px 16px;border-bottom:1px solid var(--line)}
+button,.btn{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:9px;padding:9px 12px;cursor:pointer}
+button.primary{background:var(--accent);color:#111;border-color:var(--accent);font-weight:700}
+button.danger{color:#ffaaaa} nav button.active{border-color:var(--accent);color:var(--accent)}
+main{max-width:1280px;margin:auto;padding:18px}.page{display:none}.page.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.kpi .v{font-size:26px;font-weight:800;margin-top:4px}.kpi .l{font-size:12px;color:var(--muted)}
+h2,h3{margin:0 0 14px} input,select,textarea{width:100%;background:#0d141c;border:1px solid var(--line);color:var(--text);padding:9px;border-radius:8px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}.formgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:9px 7px;text-align:right}th:first-child,td:first-child{text-align:left}th{color:#b9c5d1;font-size:12px}
+.pos{color:var(--good);font-weight:700}.neg{color:var(--bad);font-weight:700}.warn{color:#ffd36d}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.pill{display:inline-block;padding:3px 7px;border-radius:99px;background:#202c38;color:#b9c5d1;font-size:11px}
+.notice{padding:10px 12px;border:1px solid #5c4e25;background:#2a2413;border-radius:9px;color:#f4d87b;margin:10px 0}
+@media(max-width:800px){.grid,.formgrid{grid-template-columns:1fr 1fr}.tablewrap{overflow:auto}table{min-width:900px}}
+@media(max-width:520px){.grid,.formgrid{grid-template-columns:1fr}header{align-items:flex-start}}
+.print-only{display:none}
+@media print{
+ body{background:#fff;color:#000;font-family:"Noto Sans TC",sans-serif} header,nav,.no-print{display:none!important} main{max-width:none;padding:0}
+ .page{display:none!important}.page.print-target{display:block!important}.card{border:0;padding:0;margin:0}.print-only{display:block}
+ table{font-size:11px}th,td{border:1px solid #777;padding:5px;color:#000}.small{color:#333}.pos,.neg{color:#000}
+}
+</style>
+
+<style id="eventReportRedesign">
+#eventreport{max-width:1180px;margin:0 auto;padding:26px 18px 48px}
+#eventreport>.report-topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+#eventreport>.report-topbar h2{font-size:24px;margin:0}
+#eventreport .report-actions{display:flex;gap:8px}
+#eventreport .report-settings{background:#101820;border:1px solid #263646;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+#eventreport .report-settings-title{font-size:13px;color:#9eacb9;margin-bottom:10px;font-weight:700}
+#eventreport #eventReportSettings{display:flex!important;flex-wrap:wrap;gap:8px 18px}
+#eventreport #eventReportSettings label{font-size:13px;min-width:auto!important;white-space:nowrap;color:#dce5ed}
+#eventreport #eventReportPaper{background:#fff!important;color:#15191d!important;border:0!important;border-radius:10px!important;padding:26px 30px!important;box-shadow:0 8px 30px rgba(0,0,0,.22)}
+#eventreport #eventReportPaper .report-paper-title{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:2px solid #1d2730;padding-bottom:12px;margin-bottom:16px}
+#eventreport #eventReportPaper .report-paper-title h2{color:#111!important;text-align:left!important;font-size:22px;margin:0!important;letter-spacing:.5px}
+#eventreport #eventReportPaper .report-status{font-size:12px;color:#66717a;border:1px solid #cdd4da;border-radius:999px;padding:4px 9px}
+#eventreport #eventReportHeader{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:0!important;border:1px solid #d7dde2;border-radius:8px;overflow:hidden;margin-bottom:18px}
+#eventreport #eventReportHeader>div{padding:10px 12px;border-right:1px solid #e0e5e9;background:#f7f9fa}
+#eventreport #eventReportHeader>div:last-child{border-right:0}
+#eventreport #eventReportHeader .small{color:#75818b!important;font-size:11px!important;margin-bottom:3px}
+#eventreport #eventReportHeader strong{color:#12171b!important;font-size:14px}
+#eventreport #eventReportPaper .tablewrap{margin-top:0!important;overflow-x:auto}
+#eventreport #eventReportPaper table{width:100%;border-collapse:collapse;background:#fff}
+#eventreport #eventReportPaper th{background:#202a33!important;color:#fff!important;font-size:14px;font-weight:700;padding:9px 7px;border:1px solid #202a33;white-space:nowrap}
+#eventreport #eventReportPaper td{color:#171b1f!important;font-size:14px;padding:10px 7px;border-bottom:1px solid #dce2e7;text-align:center;white-space:nowrap}
+#eventreport #eventReportPaper tbody tr:nth-child(even) td{background:#f8fafb}
+#eventreport #eventReportPaper .blank-report-row td{height:34px}
+
+#eventreport .report-summary-footer{display:grid;grid-template-columns:1fr 1fr 1.5fr;border:1px solid #d7dde2;border-top:0;margin-top:0}
+#eventreport .report-summary-footer>div{padding:10px 12px;border-right:1px solid #d7dde2;display:flex;align-items:center;justify-content:space-between;gap:10px}
+#eventreport .report-summary-footer>div:last-child{border-right:0}
+#eventreport .report-summary-footer span{font-size:11px;color:#75818b}
+#eventreport .report-summary-footer strong{font-size:14px;color:#12171b}
+
+@media(max-width:760px){
+ #eventreport{padding:16px 10px 36px}
+ #eventreport>.report-topbar{align-items:flex-start;flex-direction:column}
+ #eventreport #eventReportPaper{padding:18px 14px!important}
+ #eventreport #eventReportHeader{grid-template-columns:1fr 1fr!important}
+ #eventreport #eventReportHeader>div{border-bottom:1px solid #e0e5e9}
+}
+</style>
+
+
+<style id="nativePrintFix">
+@media print{
+  body *{visibility:hidden!important}
+  #eventReportPaper,#eventReportPaper *{visibility:visible!important}
+  #eventReportPaper{
+    position:absolute!important;
+    left:0!important;top:0!important;
+    width:100%!important;
+    max-width:none!important;
+    max-height:none!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:visible!important;
+    box-shadow:none!important;
+    border:0!important;
+  }
+  @page{size:A4 landscape;margin:6mm}
+}
+</style>
+
+<style id="v195UiFix">
+/* 領獎區、備註輸入加大 */
+#prizeArea, .prize-area, .prize-section,
+#event textarea, #event input[type="text"],
+#icm textarea, #icm input[type="text"]{font-size:16px}
+textarea[id*="note" i], input[id*="note" i],
+textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-height:1.45}
+</style>
+
+<style id="v196EventPrintFix">
+@media print{
+  @page{size:A4 landscape;margin:6mm}
+  body.printing-event-report{background:#fff!important}
+  body.printing-event-report > *{display:none!important}
+  body.printing-event-report #app{display:block!important}
+  body.printing-event-report #app > *{display:none!important}
+  body.printing-event-report #eventreport{
+    display:block!important;position:static!important;margin:0!important;padding:0!important;
+    background:#fff!important;color:#000!important;
+  }
+  body.printing-event-report #eventreport > *{display:none!important}
+  body.printing-event-report #eventReportPaper{
+    display:block!important;position:static!important;width:100%!important;max-width:none!important;
+    margin:0!important;padding:0!important;border:0!important;box-shadow:none!important;
+    background:#fff!important;color:#000!important;overflow:visible!important;
+  }
+  body.printing-event-report #eventReportPaper *{visibility:visible!important}
+  body.printing-event-report #eventReportPaper table{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important}
+  body.printing-event-report #eventReportPaper th{
+    font-size:11px!important;padding:4px 3px!important;background:#222!important;color:#fff!important;
+    border:1px solid #555!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important
+  }
+  body.printing-event-report #eventReportPaper td{
+    font-size:11px!important;padding:3px!important;height:5.2mm!important;border:1px solid #999!important;color:#000!important
+  }
+  body.printing-event-report #eventReportPaper .blank-report-row td{height:5.2mm!important}
+  body.printing-event-report #eventReportPaper .report-summary-footer{font-size:11px!important}
+  body.printing-event-report #eventReportRule{font-size:11px!important;line-height:1.35!important}
+}
+</style>
+
+<style id="v197PrintOnlyFix">
+#eventPrintOnly{display:none}
+@media print{
+ @page{size:A4 landscape;margin:6mm}
+ body.printing-event-report{margin:0!important;padding:0!important;background:#fff!important}
+ body.printing-event-report > *{display:none!important}
+ body.printing-event-report > #eventPrintOnly{display:block!important;width:100%!important;margin:0!important;padding:0!important;background:#fff!important;color:#000!important}
+ #eventPrintOnly #eventReportPaper{display:block!important;width:100%!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important;overflow:visible!important;background:#fff!important;color:#000!important}
+ #eventPrintOnly .report-paper-title{display:flex!important;justify-content:space-between!important;align-items:flex-end!important;border-bottom:2px solid #222!important;padding-bottom:5px!important;margin-bottom:6px!important}
+ #eventPrintOnly .report-paper-title h2{font-size:18px!important;margin:0!important}
+ #eventPrintOnly #eventReportHeader{display:grid!important;grid-template-columns:repeat(4,1fr)!important;border:1px solid #aaa!important;margin-bottom:6px!important}
+ #eventPrintOnly #eventReportHeader>div{display:block!important;padding:4px 6px!important;border-right:1px solid #ccc!important}
+ #eventPrintOnly #eventReportRule{display:block!important;margin:0 0 6px!important;padding:5px 7px!important;border:1px solid #bbb!important;font-size:10px!important;line-height:1.3!important}
+ #eventPrintOnly table{display:table!important;width:100%!important;border-collapse:collapse!important;table-layout:fixed!important}
+ #eventPrintOnly thead{display:table-header-group!important} #eventPrintOnly tbody{display:table-row-group!important}
+ #eventPrintOnly tr{display:table-row!important}
+ #eventPrintOnly th,#eventPrintOnly td{display:table-cell!important;border:1px solid #999!important;text-align:center!important}
+ #eventPrintOnly th{background:#222!important;color:#fff!important;font-size:10px!important;padding:4px 3px!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+ #eventPrintOnly td{color:#000!important;font-size:10px!important;padding:2px 3px!important;height:5mm!important}
+ #eventPrintOnly .blank-report-row td{height:5mm!important}
+ #eventPrintOnly .report-summary-footer{display:grid!important;grid-template-columns:1fr 1fr 1.5fr!important;border:1px solid #999!important;border-top:0!important}
+ #eventPrintOnly .report-summary-footer>div{display:flex!important;justify-content:space-between!important;align-items:center!important;padding:5px 7px!important;border-right:1px solid #aaa!important;font-size:10px!important}
+}
+</style>
+
+<style id="v198PortraitReport">
+@media print{
+  @page{size:A4 portrait;margin:7mm}
+
+  body.printing-event-report > #eventPrintOnly{
+    width:196mm!important;
+    max-width:196mm!important;
+    margin:0 auto!important;
+  }
+
+  #eventPrintOnly #eventReportPaper{
+    width:196mm!important;
+    max-width:196mm!important;
+    font-family:Arial,"Microsoft JhengHei",sans-serif!important;
+  }
+
+  #eventPrintOnly .report-paper-title{
+    margin-bottom:5px!important;
+    padding-bottom:5px!important;
+  }
+  #eventPrintOnly .report-paper-title h2{
+    font-size:17px!important;
+    line-height:1.2!important;
+  }
+  #eventPrintOnly .report-status{
+    font-size:10px!important;
+    padding:2px 6px!important;
+  }
+
+  /* Header reorganized for portrait width */
+  #eventPrintOnly #eventReportHeader{
+    grid-template-columns:repeat(2,1fr)!important;
+    margin-bottom:5px!important;
+  }
+  #eventPrintOnly #eventReportHeader>div{
+    padding:4px 6px!important;
+    min-height:10mm!important;
+    font-size:12px!important;
+  }
+  #eventPrintOnly #eventReportHeader .small{
+    font-size:9px!important;
+    margin-bottom:1px!important;
+  }
+
+  #eventPrintOnly #eventReportRule{
+    font-size:10.5px!important;
+    line-height:1.3!important;
+    padding:5px 7px!important;
+    margin-bottom:5px!important;
+    max-height:24mm!important;
+    overflow:hidden!important;
+  }
+
+  /* Keep text readable in portrait. */
+  #eventPrintOnly table{
+    table-layout:fixed!important;
+  }
+  #eventPrintOnly th{
+    font-size:9.5px!important;
+    line-height:1.15!important;
+    padding:4px 2px!important;
+    white-space:normal!important;
+  }
+  #eventPrintOnly td{
+    font-size:10.5px!important;
+    line-height:1.15!important;
+    padding:2px!important;
+    height:5.2mm!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:clip!important;
+  }
+  #eventPrintOnly .blank-report-row td{
+    height:5.2mm!important;
+  }
+
+  /* Practical portrait widths for 9 default report columns. */
+  #eventPrintOnly th:nth-child(1),#eventPrintOnly td:nth-child(1){width:10%!important}
+  #eventPrintOnly th:nth-child(2),#eventPrintOnly td:nth-child(2){width:13%!important}
+  #eventPrintOnly th:nth-child(3),#eventPrintOnly td:nth-child(3){width:7%!important}
+  #eventPrintOnly th:nth-child(4),#eventPrintOnly td:nth-child(4){width:10%!important}
+  #eventPrintOnly th:nth-child(5),#eventPrintOnly td:nth-child(5){width:11%!important}
+  #eventPrintOnly th:nth-child(6),#eventPrintOnly td:nth-child(6){width:9%!important}
+  #eventPrintOnly th:nth-child(7),#eventPrintOnly td:nth-child(7){width:10%!important}
+  #eventPrintOnly th:nth-child(8),#eventPrintOnly td:nth-child(8){width:14%!important}
+  #eventPrintOnly th:nth-child(9),#eventPrintOnly td:nth-child(9){width:16%!important}
+
+  #eventPrintOnly .report-summary-footer{
+    grid-template-columns:1fr 1fr 1.6fr!important;
+  }
+  #eventPrintOnly .report-summary-footer>div{
+    min-height:10mm!important;
+    padding:5px 7px!important;
+    font-size:10.5px!important;
+  }
+  #eventPrintOnly .report-summary-footer strong{
+    font-size:11.5px!important;
+  }
+}
+</style>
+
+<style id="v198PortraitPreview">
+#eventreport #eventReportPaper{
+  max-width:900px;
+  margin-left:auto;
+  margin-right:auto;
+}
+#eventreport #eventReportPaper th{font-size:13px!important}
+#eventreport #eventReportPaper td{font-size:13px!important}
+#eventreport #eventReportRule{font-size:14px!important;line-height:1.5}
+#eventreport .report-summary-footer span{font-size:13px!important}
+#eventreport .report-summary-footer strong{font-size:14px!important}
+</style>
+
+<style id="v199FullA4PortraitFix">
+@media print{
+  @page{size:A4 portrait;margin:5mm}
+
+  html,body{
+    width:210mm!important;
+    height:297mm!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:visible!important;
+  }
+
+  body.printing-event-report > #eventPrintOnly{
+    display:block!important;
+    width:200mm!important;
+    max-width:200mm!important;
+    height:287mm!important;
+    margin:0 auto!important;
+    padding:0!important;
+    overflow:visible!important;
+  }
+
+  #eventPrintOnly #eventReportPaper{
+    width:200mm!important;
+    max-width:200mm!important;
+    min-height:287mm!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:visible!important;
+    box-sizing:border-box!important;
+  }
+
+  #eventPrintOnly .report-paper-title{
+    height:12mm!important;
+    margin:0 0 3mm!important;
+    padding:0 1mm 2mm!important;
+  }
+  #eventPrintOnly .report-paper-title h2{
+    font-size:20px!important;
+    line-height:1.15!important;
+  }
+  #eventPrintOnly .report-status{
+    font-size:11px!important;
+  }
+
+  #eventPrintOnly #eventReportHeader{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    width:100%!important;
+    margin:0 0 3mm!important;
+  }
+  #eventPrintOnly #eventReportHeader>div{
+    min-width:0!important;
+    min-height:11mm!important;
+    padding:2mm 2.5mm!important;
+    font-size:14px!important;
+    line-height:1.15!important;
+  }
+  #eventPrintOnly #eventReportHeader .small{
+    font-size:10.5px!important;
+    line-height:1.1!important;
+  }
+
+  #eventPrintOnly #eventReportRule{
+    width:100%!important;
+    min-height:18mm!important;
+    max-height:28mm!important;
+    margin:0 0 3mm!important;
+    padding:2mm 2.5mm!important;
+    overflow:hidden!important;
+    font-size:12px!important;
+    line-height:1.3!important;
+  }
+
+  #eventPrintOnly .tablewrap,
+  #eventPrintOnly [style*="overflow"]{
+    overflow:visible!important;
+    width:100%!important;
+    max-width:100%!important;
+  }
+
+  #eventPrintOnly table{
+    display:table!important;
+    width:100%!important;
+    max-width:100%!important;
+    table-layout:fixed!important;
+    border-collapse:collapse!important;
+    margin:0!important;
+    overflow:visible!important;
+  }
+
+  /* Undo all earlier fixed nth-child widths. */
+  #eventPrintOnly th,
+  #eventPrintOnly td{
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+
+  #eventPrintOnly th{
+    height:9mm!important;
+    padding:1.5mm .8mm!important;
+    font-size:11.5px!important;
+    line-height:1.15!important;
+    white-space:normal!important;
+    overflow:hidden!important;
+  }
+  #eventPrintOnly td{
+    height:8.1mm!important;
+    padding:1mm .8mm!important;
+    font-size:12px!important;
+    line-height:1.15!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+  }
+  #eventPrintOnly .blank-report-row td{
+    height:8.1mm!important;
+  }
+
+  #eventPrintOnly .report-summary-footer{
+    display:grid!important;
+    grid-template-columns:1fr 1fr 1.55fr!important;
+    width:100%!important;
+    min-height:14mm!important;
+    margin:0!important;
+  }
+  #eventPrintOnly .report-summary-footer>div{
+    min-width:0!important;
+    min-height:14mm!important;
+    padding:2mm 2.5mm!important;
+    font-size:12px!important;
+  }
+  #eventPrintOnly .report-summary-footer span{
+    font-size:11.5px!important;
+  }
+  #eventPrintOnly .report-summary-footer strong{
+    font-size:13px!important;
+  }
+}
+</style>
+
+<style id="v199ScreenPreviewFix">
+#eventreport #eventReportPaper{
+  width:min(100%,900px)!important;
+  max-width:900px!important;
+  overflow:visible!important;
+}
+#eventreport #eventReportPaper .tablewrap{
+  width:100%!important;
+  max-width:100%!important;
+  overflow:visible!important;
+}
+#eventreport #eventReportPaper table{
+  width:100%!important;
+  max-width:100%!important;
+  table-layout:fixed!important;
+}
+#eventreport #eventReportPaper th,
+#eventreport #eventReportPaper td{
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+}
+</style>
+
+<style id="v1100FixedReportGrid">
+@media print{
+  @page{size:A4 portrait;margin:5mm}
+
+  body.printing-event-report > #eventPrintOnly,
+  #eventPrintOnly #eventReportPaper{
+    width:200mm!important;
+    min-width:200mm!important;
+    max-width:200mm!important;
+    height:287mm!important;
+    min-height:287mm!important;
+    max-height:287mm!important;
+    overflow:hidden!important;
+  }
+
+  /* 報表各區塊尺寸固定，不隨欄位數量改變 */
+  #eventPrintOnly .report-paper-title{height:12mm!important}
+  #eventPrintOnly #eventReportHeader{height:55mm!important}
+  #eventPrintOnly #eventReportRule{
+    height:25mm!important;
+    min-height:25mm!important;
+    max-height:25mm!important;
+  }
+
+  #eventPrintOnly table{
+    width:200mm!important;
+    min-width:200mm!important;
+    max-width:200mm!important;
+    table-layout:fixed!important;
+  }
+
+  #eventPrintOnly thead tr{height:9mm!important}
+  #eventPrintOnly tbody tr{height:8.1mm!important}
+  #eventPrintOnly th{height:9mm!important}
+  #eventPrintOnly td{height:8.1mm!important}
+
+  /* 不論勾選幾個欄位，現有欄位平均吃滿整個 200mm 表格 */
+  #eventPrintOnly th,
+  #eventPrintOnly td{
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+  }
+
+  #eventPrintOnly .report-summary-footer{
+    width:200mm!important;
+    min-width:200mm!important;
+    max-width:200mm!important;
+    height:14mm!important;
+    min-height:14mm!important;
+    max-height:14mm!important;
+  }
+}
+</style>
+
+<style id="v1100FixedScreenGrid">
+#eventreport #eventReportPaper{
+  width:900px!important;
+  max-width:100%!important;
+}
+#eventreport #eventReportPaper table{
+  width:100%!important;
+  table-layout:fixed!important;
+}
+#eventreport #eventReportPaper th,
+#eventreport #eventReportPaper td{
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+}
+</style>
+
+<style id="v1101ReportSizing">
+@media print{
+  @page{size:A4 portrait;margin:5mm}
+
+  body.printing-event-report > #eventPrintOnly,
+  #eventPrintOnly #eventReportPaper{
+    width:200mm!important;
+    min-width:200mm!important;
+    max-width:200mm!important;
+    height:287mm!important;
+    min-height:287mm!important;
+    max-height:287mm!important;
+    overflow:hidden!important;
+  }
+
+  /* 標題 */
+  #eventPrintOnly .report-paper-title{
+    height:12mm!important;
+    margin:0 0 2mm!important;
+  }
+  #eventPrintOnly .report-paper-title h2{
+    font-size:20px!important;
+  }
+
+  /* 賽事日期 / 賽事名稱 / 時間 / 組數 / 獎金 / JP：放大 */
+  #eventPrintOnly #eventReportHeader{
+    height:50mm!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    margin:0 0 2mm!important;
+  }
+  #eventPrintOnly #eventReportHeader>div{
+    min-height:0!important;
+    padding:2mm 3mm!important;
+    font-size:16px!important;
+    line-height:1.15!important;
+  }
+  #eventPrintOnly #eventReportHeader .small{
+    font-size:11px!important;
+    line-height:1.1!important;
+    margin-bottom:1mm!important;
+  }
+  #eventPrintOnly #eventReportHeader strong{
+    font-size:16px!important;
+  }
+
+  /* 本場規則：固定加大，不裁字 */
+  #eventPrintOnly #eventReportRule{
+    height:42mm!important;
+    min-height:42mm!important;
+    max-height:42mm!important;
+    margin:0 0 2mm!important;
+    padding:2.5mm 3mm!important;
+    font-size:12.5px!important;
+    line-height:1.35!important;
+    white-space:pre-wrap!important;
+    overflow:hidden!important;
+    word-break:break-word!important;
+  }
+
+  /* 玩家區縮小字體，把空間讓給規則與上方資訊 */
+  #eventPrintOnly table{
+    width:200mm!important;
+    table-layout:fixed!important;
+  }
+  #eventPrintOnly thead tr,
+  #eventPrintOnly th{
+    height:7mm!important;
+  }
+  #eventPrintOnly th{
+    padding:1mm .6mm!important;
+    font-size:9.5px!important;
+    line-height:1.1!important;
+  }
+  #eventPrintOnly tbody tr,
+  #eventPrintOnly td,
+  #eventPrintOnly .blank-report-row td{
+    height:6.4mm!important;
+  }
+  #eventPrintOnly td{
+    padding:.7mm .5mm!important;
+    font-size:10px!important;
+    line-height:1.05!important;
+  }
+
+  /* 底部統計維持固定 */
+  #eventPrintOnly .report-summary-footer{
+    height:13mm!important;
+    min-height:13mm!important;
+    max-height:13mm!important;
+  }
+  #eventPrintOnly .report-summary-footer>div{
+    min-height:13mm!important;
+    padding:1.5mm 2mm!important;
+  }
+  #eventPrintOnly .report-summary-footer span{font-size:10.5px!important}
+  #eventPrintOnly .report-summary-footer strong{font-size:12px!important}
+}
+</style>
+
+<style id="v1101ScreenSizing">
+#eventreport #eventReportHeader>div{font-size:16px!important}
+#eventreport #eventReportHeader .small{font-size:12px!important}
+#eventreport #eventReportRule{
+  min-height:150px!important;
+  font-size:15px!important;
+  line-height:1.5!important;
+  white-space:pre-wrap!important;
+}
+#eventreport #eventReportPaper th{font-size:12px!important}
+#eventreport #eventReportPaper td{font-size:12px!important}
+</style>
+
+<style id="v1102DynamicA4">
+@media print{
+  @page{size:A4 portrait;margin:5mm}
+
+  body.printing-event-report > #eventPrintOnly,
+  #eventPrintOnly #eventReportPaper{
+    width:200mm!important;
+    min-width:200mm!important;
+    max-width:200mm!important;
+    height:287mm!important;
+    min-height:287mm!important;
+    max-height:287mm!important;
+    margin:0 auto!important;
+    padding:0!important;
+    overflow:hidden!important;
+    box-sizing:border-box!important;
+  }
+
+  #eventPrintOnly .report-paper-title{
+    height:11mm!important;
+    margin:0 0 2mm!important;
+    padding:0 1mm 1.5mm!important;
+  }
+  #eventPrintOnly .report-paper-title h2{font-size:20px!important}
+
+  #eventPrintOnly #eventReportHeader{
+    height:46mm!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    margin:0 0 2mm!important;
+  }
+  #eventPrintOnly #eventReportHeader>div{
+    min-height:0!important;
+    padding:1.7mm 2.5mm!important;
+    font-size:15px!important;
+    line-height:1.1!important;
+  }
+  #eventPrintOnly #eventReportHeader .small{font-size:10.5px!important}
+  #eventPrintOnly #eventReportHeader strong{font-size:15px!important}
+
+  /* JS sets --rule-h and --player-row-h before printing. */
+  #eventPrintOnly #eventReportRule{
+    height:var(--rule-h,18mm)!important;
+    min-height:var(--rule-h,18mm)!important;
+    max-height:var(--rule-h,18mm)!important;
+    margin:0 0 2mm!important;
+    padding:2mm 2.5mm!important;
+    font-size:11.5px!important;
+    line-height:1.28!important;
+    white-space:pre-wrap!important;
+    word-break:break-word!important;
+    overflow:hidden!important;
+  }
+
+  #eventPrintOnly table{
+    width:200mm!important;
+    min-width:200mm!important;
+    max-width:200mm!important;
+    table-layout:fixed!important;
+    border-collapse:collapse!important;
+    margin:0!important;
+  }
+  #eventPrintOnly thead tr,
+  #eventPrintOnly th{
+    height:8mm!important;
+  }
+  #eventPrintOnly th{
+    padding:1mm .6mm!important;
+    font-size:9.5px!important;
+    line-height:1.05!important;
+  }
+  #eventPrintOnly tbody tr,
+  #eventPrintOnly td,
+  #eventPrintOnly .blank-report-row td{
+    height:var(--player-row-h,7.5mm)!important;
+  }
+  #eventPrintOnly td{
+    padding:.6mm .45mm!important;
+    font-size:10px!important;
+    line-height:1!important;
+  }
+
+  #eventPrintOnly .report-summary-footer{
+    height:14mm!important;
+    min-height:14mm!important;
+    max-height:14mm!important;
+    width:200mm!important;
+    margin:0!important;
+  }
+  #eventPrintOnly .report-summary-footer>div{
+    min-height:14mm!important;
+    padding:1.5mm 2mm!important;
+  }
+}
+</style>
+
+<style id="v1102ScreenAutoRule">
+#eventreport #eventReportRule{
+  min-height:70px!important;
+  height:auto!important;
+  max-height:none!important;
+  overflow:visible!important;
+  font-size:14px!important;
+  line-height:1.45!important;
+}
+</style>
+
+<style id="v1103MoreA4Area">
+@media print{
+  @page{size:A4 portrait;margin:3mm}
+
+  html,body{
+    width:210mm!important;
+    height:297mm!important;
+    margin:0!important;
+    padding:0!important;
+  }
+
+  body.printing-event-report > #eventPrintOnly,
+  #eventPrintOnly #eventReportPaper{
+    width:204mm!important;
+    min-width:204mm!important;
+    max-width:204mm!important;
+    height:291mm!important;
+    min-height:291mm!important;
+    max-height:291mm!important;
+    margin:0 auto!important;
+    padding:0!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important;
+  }
+
+  #eventPrintOnly table,
+  #eventPrintOnly .report-summary-footer{
+    width:204mm!important;
+    min-width:204mm!important;
+    max-width:204mm!important;
+  }
+
+  /* Slightly enlarge the visual content while retaining the fixed page. */
+  #eventPrintOnly .report-paper-title h2{font-size:21px!important}
+  #eventPrintOnly #eventReportHeader>div,
+  #eventPrintOnly #eventReportHeader strong{font-size:15.5px!important}
+  #eventPrintOnly #eventReportRule{font-size:12px!important}
+  #eventPrintOnly th{font-size:10px!important}
+  #eventPrintOnly td{font-size:10.5px!important}
+}
+</style>
+
+<style id="dailyAccountingPrintCss">
+#accountingPrintOnly{display:none}
+@media print{
+ @page{size:A4 portrait;margin:8mm}
+ body.printing-accounting>*{display:none!important}
+ body.printing-accounting>#accountingPrintOnly{display:block!important;background:#fff!important;color:#000!important}
+ #accountingPrintOnly .card{background:#fff!important;color:#000!important;border:1px solid #aaa!important;box-shadow:none!important;margin:0 0 10px!important}
+ #accountingPrintOnly .grid{display:grid!important;grid-template-columns:repeat(2,1fr)!important}
+ #accountingPrintOnly input{border:0!important;background:#fff!important;color:#000!important}
+ #accountingPrintOnly table{width:100%!important;border-collapse:collapse!important}
+ #accountingPrintOnly th,#accountingPrintOnly td{border:1px solid #999!important;padding:6px!important;color:#000!important}
+}
+</style>
+
+<style id="dailyAccountingDirectPrintFix">
+@media print{
+ @page{size:A4 portrait;margin:8mm}
+ body.printing-accounting-direct{
+   background:#fff!important;
+   color:#000!important;
+ }
+ body.printing-accounting-direct > *{
+   display:none!important;
+ }
+ body.printing-accounting-direct #app,
+ body.printing-accounting-direct main,
+ body.printing-accounting-direct #accounting,
+ body.printing-accounting-direct #accountingDetailView,
+ body.printing-accounting-direct #dailyAccountingPaper{
+   display:block!important;
+ }
+ body.printing-accounting-direct header,
+ body.printing-accounting-direct nav,
+ body.printing-accounting-direct #accountingListView,
+ body.printing-accounting-direct #accountingDetailView > .report-topbar{
+   display:none!important;
+ }
+ body.printing-accounting-direct #dailyAccountingPaper{
+   width:100%!important;
+   max-width:none!important;
+   margin:0!important;
+   padding:0!important;
+   background:#fff!important;
+   color:#000!important;
+ }
+ body.printing-accounting-direct #dailyAccountingPaper .card{
+   background:#fff!important;
+   color:#000!important;
+   border:1px solid #999!important;
+   box-shadow:none!important;
+   break-inside:avoid!important;
+   margin:0 0 8px!important;
+ }
+ body.printing-accounting-direct #dailyAccountingPaper .grid{
+   display:grid!important;
+   grid-template-columns:repeat(2,1fr)!important;
+ }
+ body.printing-accounting-direct #dailyAccountingPaper table{
+   width:100%!important;
+   border-collapse:collapse!important;
+   color:#000!important;
+ }
+ body.printing-accounting-direct #dailyAccountingPaper th,
+ body.printing-accounting-direct #dailyAccountingPaper td{
+   color:#000!important;
+   border:1px solid #999!important;
+   padding:6px!important;
+ }
+ body.printing-accounting-direct #dailyAccountingPaper input,
+ body.printing-accounting-direct #dailyAccountingPaper select,
+ body.printing-accounting-direct #dailyAccountingPaper button{
+   display:none!important;
+ }
+ body.printing-accounting-direct #dailyAccountingPaper .pos,
+ body.printing-accounting-direct #dailyAccountingPaper .neg,
+ body.printing-accounting-direct #dailyAccountingPaper .v,
+ body.printing-accounting-direct #dailyAccountingPaper .l{
+   color:#000!important;
+ }
+}
+</style>
+
+<style id="accountingPrintSheetCss">
+#accountingPrintSheet{display:none}
+@media print{
+ @page{size:A4 portrait;margin:8mm}
+ body.printing-accounting-sheet{
+   margin:0!important;
+   padding:0!important;
+   background:#fff!important;
+ }
+ body.printing-accounting-sheet > *{display:none!important}
+ body.printing-accounting-sheet > #accountingPrintSheet{
+   display:block!important;
+   width:194mm!important;
+   min-height:281mm!important;
+   margin:0 auto!important;
+   padding:0!important;
+   box-sizing:border-box!important;
+   background:#fff!important;
+   color:#000!important;
+   font-family:Arial,"Microsoft JhengHei",sans-serif!important;
+ }
+ #accountingPrintSheet .acct-print-title{
+   display:flex!important;
+   justify-content:space-between!important;
+   align-items:flex-end!important;
+   border-bottom:2px solid #111!important;
+   padding:0 0 3mm!important;
+   margin:0 0 4mm!important;
+ }
+ #accountingPrintSheet h1{font-size:20px!important;margin:0!important}
+ #accountingPrintSheet h2{font-size:15px!important;margin:5mm 0 2mm!important}
+ #accountingPrintSheet .acct-kpis{
+   display:grid!important;
+   grid-template-columns:repeat(4,1fr)!important;
+   border-top:1px solid #777!important;
+   border-left:1px solid #777!important;
+ }
+ #accountingPrintSheet .acct-kpis>div{
+   display:block!important;
+   border-right:1px solid #777!important;
+   border-bottom:1px solid #777!important;
+   padding:3mm!important;
+ }
+ #accountingPrintSheet .acct-kpis span{
+   display:block!important;font-size:10px!important;margin-bottom:1mm!important;
+ }
+ #accountingPrintSheet .acct-kpis strong{font-size:15px!important}
+ #accountingPrintSheet table{
+   display:table!important;width:100%!important;border-collapse:collapse!important;
+   table-layout:fixed!important;font-size:11px!important;
+ }
+ #accountingPrintSheet thead{display:table-header-group!important}
+ #accountingPrintSheet tbody{display:table-row-group!important}
+ #accountingPrintSheet tr{display:table-row!important}
+ #accountingPrintSheet th,#accountingPrintSheet td{
+   display:table-cell!important;border:1px solid #777!important;
+   padding:2.2mm!important;color:#000!important;background:#fff!important;
+ }
+ #accountingPrintSheet th{font-weight:700!important;background:#eee!important}
+ #accountingPrintSheet .num{text-align:right!important}
+ #accountingPrintSheet .acct-sign{
+   display:flex!important;justify-content:flex-end!important;gap:18mm!important;
+   margin-top:10mm!important;font-size:12px!important;
+ }
+}
+</style>
+
+<style id="settlementGroupSeparation">
+.settlement-group-card{
+  border:2px solid #2b3b4d!important;
+  margin:0 0 22px!important;
+  padding:0!important;
+  overflow:hidden;
+}
+.settlement-group-card .settlement-group-title{
+  margin:0!important;
+  padding:12px 14px!important;
+  background:#182532!important;
+  border-bottom:1px solid #31465a!important;
+  font-size:18px!important;
+}
+.settlement-group-card table{margin:0!important}
+.settlement-group-card tfoot td{
+  font-weight:800!important;
+  border-top:2px solid #52677b!important;
+}
+</style>
+</head>
+<body>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.14 Web · Verified Cloud</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<nav id="nav">
+<button data-page="dashboard" class="active">總覽</button>
+<button data-page="members">會員</button>
+<button data-page="events">賽事管理</button>
+
+<button data-page="dailysettle">分帳報表</button>
+<button data-page="accounting">EPC帳務</button>
+
+</nav>
+<main>
+<div id="actionMsg" style="display:none;position:sticky;top:72px;z-index:20;padding:11px 14px;margin-bottom:12px;border-radius:10px;background:#17212c;border:1px solid #d6b35a;color:#eef3f8;font-weight:700"></div>
+<section id="dashboard" class="page active">
+ <div style="display:flex;justify-content:space-between;align-items:end;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+  <h2 style="font-size:28px;margin:0">當月營運總覽</h2>
+  <div class="formgrid" style="grid-template-columns:1fr 1fr;min-width:430px">
+   <div><label>查詢開始營業日</label><input type="date" id="dashboardDateFrom" onchange="renderDashboardSummary()"></div>
+   <div><label>查詢結束營業日</label><input type="date" id="dashboardDateTo" onchange="renderDashboardSummary()"></div>
+  </div>
+ </div>
+
+ <div class="grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="card kpi"><div class="l">總會員數</div><div class="v" id="kMembers">0</div></div>
+  <div class="card kpi"><div class="l">區間新增會員數</div><div class="v" id="kNewMembers">0</div></div>
+  <div class="card kpi"><div class="l">總營利</div><div class="v" id="kProfit">$0</div></div>
+  <div class="card kpi"><div class="l">區間總營利</div><div class="v" id="kMonthProfit">$0</div></div>
+  <div class="card kpi"><div class="l">總 JP 累計</div><div class="v" id="kJP">$0</div></div>
+  <div class="card kpi"><div class="l">區間總支出</div><div class="v" id="kMonthExpense">$0</div></div>
+  <div class="card kpi" style="grid-column:span 2"><div class="l">區間賽事場次</div><div class="v" id="kMonthEvents">0 場</div><div class="small" id="kLevelBreakdown">尚無賽事</div></div>
+ </div>
+</section>
+
+<section id="members" class="page">
+ <h2>會員管理</h2>
+ <div class="card">
+  <div class="formgrid">
+   <div><label>會員名稱 / 暱稱</label><input id="mName"></div>
+   <div><label>會員 ID（可留白自動產生）</label><input id="mId"></div>
+   <div><label>預設結帳群組</label><input id="mGroup" placeholder="例如 A組"></div>
+   <div><label style="font-size:16px;font-weight:700">備註</label><input id="mNote"></div>
+  </div>
+  <div class="toolbar">
+   <button class="primary" id="memberSaveBtn" onclick="addMember()">新增會員</button>
+   <button id="memberCancelBtn" style="display:none" onclick="cancelMemberEdit()">取消編輯</button>
+  </div>
+ </div>
+ <div class="toolbar" style="margin:12px 0">
+  <input id="memberSearch" type="search" autocomplete="off" placeholder="搜尋姓名、會員 ID 或結帳群組" oninput="renderMemberRows()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();renderMemberRows();}" style="max-width:360px">
+  <button type="button" onclick="renderMemberRows()">搜尋</button>
+  <button type="button" onclick="clearMemberSearch()">清除搜尋</button>
+ </div>
+ <div class="card tablewrap"><table><thead><tr><th>會員</th><th>ID</th><th>結帳群組</th><th>累積買入</th><th>累積領回</th><th>累積盈虧</th><th>操作</th></tr></thead><tbody id="memberRows"></tbody></table></div>
+</section>
+
+
+<section id="events" class="page">
+ <h2>賽事管理</h2>
+ <div class="card" style="margin-bottom:12px">
+  <div class="formgrid" style="grid-template-columns:1fr 1fr">
+   <div><label>查詢開始營業日</label><input type="date" id="eventDateFrom" onchange="renderEventList()"></div>
+   <div><label>查詢結束營業日</label><input type="date" id="eventDateTo" onchange="renderEventList()"></div>
+  </div>
+ </div>
+ <div class="card">
+  <div class="formgrid" style="grid-template-columns:1.2fr .8fr .8fr auto">
+   <div><label>營業日</label><input type="date" id="eventBusinessDate" onchange="renderEventList()"></div>
+   <div><label>營業開始時間</label><input id="businessStartTime" inputmode="numeric" placeholder="16:00" onchange="saveBusinessHours()"></div>
+   <div><label>營業結束時間</label><input id="businessEndTime" inputmode="numeric" placeholder="07:00" onchange="saveBusinessHours()"></div>
+   <div style="display:flex;align-items:end"><button class="primary" onclick="newEvent()">＋ 建立新賽事</button></div>
+  </div>
+  <div class="small" style="margin-top:10px">營業日會依營業時間歸類。預設 16:00～隔日 07:00，例如 9/23 04:00 的賽事會歸在 9/22 營業日。</div>
+ </div>
+ <div class="card tablewrap">
+  <table>
+   <thead><tr><th>營業日</th><th>場次</th><th>級別</th><th>玩家</th><th>總組數</th><th>獎池</th><th>JP</th><th>狀態</th><th>操作</th></tr></thead>
+   <tbody id="eventRows"></tbody>
+  </table>
+ </div>
+</section>
+
+<section id="event" class="page">
+ <h2>賽事帳務 <span class="pill" id="currentEventLabel"></span></h2>
+ <div class="toolbar no-print"><button onclick="goEvents()">← 返回賽事管理</button><button class="primary" onclick="goICM()">ICM / 結算 →</button></div>
+ <div class="card">
+  <div class="formgrid">
+   <div><label>日期</label><input type="date" id="eDate"></div>
+ <div><label>開賽時間</label><input id="eStartTime" inputmode="numeric" placeholder="例如 16:00"></div>
+ <div><label>預計截止買入時間</label><input id="eRegCloseTime" inputmode="numeric" placeholder="例如 18:30"></div>
+   <div><label>級別</label><input id="eLevel" type="number" min="0" step="100" inputmode="numeric" placeholder="例如 1200、3400、6600、11000"></div>
+   <div><label>每組進獎池</label><input type="number" id="ePoolUnit"></div>
+   <div><label>每組行政費</label><input type="number" id="eAdmin"></div>
+   <div><label>起始籌碼 / 組</label><input type="number" id="eChips" value="300000"></div>
+   <div><label>JP %</label><input type="number" step=".1" id="eJP" value="3"></div>
+   <div><label>JP 取整單位</label><input type="number" id="eJPRound" value="100"></div>
+   <div><label>ICM 獎金梯度 %</label><input id="ePayout" value="50,30,20" placeholder="例如 50,30,20"></div>
+  </div>
+  <div class="toolbar"><button class="primary" onclick="saveEvent()">儲存賽事設定</button></div>
+ </div>
+ <div class="card">
+  <h3>加入玩家</h3>
+  <div class="formgrid">
+   <div>
+    <label>會員搜尋</label>
+    <input id="addPlayerSearch" autocomplete="off" placeholder="輸入姓名、會員 ID 或結帳群組" oninput="filterAddPlayerMembers(this.value)" onkeydown="handleAddPlayerSearchKey(event)">
+    <select id="addPlayerMember" size="5" style="margin-top:6px" onchange="syncAddPlayerSearch()"></select>
+   </div>
+   <div><label>本場結帳群組</label><input id="addPlayerGroup" placeholder="可留白"></div>
+  </div>
+  <div class="toolbar"><button class="primary" onclick="addPlayer()">加入本場</button></div>
+ </div>
+ <div class="card tablewrap">
+  <table><thead><tr><th>玩家</th><th>買入</th><th>重買</th><th>總組數</th><th>折扣計算</th><th>額外優惠</th><th>實收</th><th>結帳群組</th><th>操作</th></tr></thead><tbody id="playerRows"></tbody></table>
+ </div>
+ <div class="notice">組數優惠：第 1 組行政費原價；第 2～10 組行政費半價；第 11 組起免行政費。系統會自動加總「組數優惠」；其他招待、活動折扣請填在「額外優惠」。</div>
+</section>
+
+<section id="settle" class="page">
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+<h2 style="margin:0">ICM / 結算</h2>
+<button onclick="showPage('event')">← 返回賽事帳務</button>
+</div>
+ <div class="card" style="margin-bottom:12px">
+  <div class="small">目前結算賽事</div>
+  <div style="font-size:20px;font-weight:800;margin-top:5px" id="settleEventTitle">尚未選擇賽事</div>
+  <div class="small" id="settleEventMeta" style="margin-top:5px"></div>
+ </div>
+ <div class="card">
+  <div class="formgrid">
+   <div><label>開賽時間</label><input id="settleStartTime" readonly placeholder="--:--"></div>
+   <div><label>預計截止買入時間</label><input id="settleRegCloseTime" readonly placeholder="--:--"></div>
+   <div><label>實際結束時間</label><input id="settleEndTime" inputmode="numeric" placeholder="例如 20:15" onchange="saveEndTime(this.value)"></div>
+  </div>
+ </div>
+ <div class="grid">
+  <div class="card kpi"><div class="l">原始獎池</div><div class="v" id="sPool">$0</div></div>
+  <div class="card kpi"><div class="l">人次</div><div class="v" id="sEntrants">0</div></div>
+<div class="card kpi"><div class="l">起始籌碼</div><div class="v" id="sStartingChips">0</div></div>
+<div class="card kpi"><div class="l">JP 提撥</div><div class="v" id="sJP">$0</div></div>
+  <div class="card kpi"><div class="l">ICM 可發獎金</div><div class="v" id="sAvail">$0</div></div>
+  <div class="card kpi"><div class="l">籌碼差異</div><div class="v" id="sChipDiff">0</div></div>
+ </div>
+ <div class="card">
+  <div class="toolbar">
+<button type="button" class="primary" id="btnCalcICM" onclick="calculateICM()">① 計算 ICM</button><div class="small" style="margin-top:8px">獎金依「下桌籌碼占總籌碼比例」分配 ICM 可發獎金，最後以 100 元為單位調整，總額不變。</div>
+<button type="button" class="primary" id="btnConfirmSettlement" onclick="confirmSettlement()">② 正式結算 / 鎖定</button>
+  </div>
+
+  <div class="card" style="margin:14px 0 0">
+    <h3 style="margin-top:0">結算報表規則</h3>
+    <div class="small" style="margin-bottom:10px">設定後會自動帶到正式結算報表。</div>
+
+    <label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">本場規則</label>
+    <textarea id="settleReportRuleInput" rows="3"
+      placeholder="輸入本場賽事規則／獎金說明……"
+      style="width:100%;box-sizing:border-box;resize:vertical"
+      oninput="saveEventReportRule(this.value)"></textarea>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+      <button type="button" onclick="useDefaultReportRule()">套用預設規則</button>
+    </div>
+
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #263646">
+      <label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">預設規則</label>
+      <textarea id="settleDefaultReportRuleInput" rows="3"
+        placeholder="設定一次，之後新賽事自動套用"
+        style="width:100%;box-sizing:border-box;resize:vertical"
+        oninput="saveDefaultReportRule(this.value)"></textarea>
+    </div>
+  </div>
+<div class="small" style="margin-top:8px">在下方直接輸入每位玩家的「下桌籌碼」。只有籌碼差異 = 0 時，才能計算 ICM 與正式結算。</div>
+  <div class="small">JP = 總獎池 × 3% 後依設定單位向下取整；被捨去的餘數自然留在 ICM 可發獎池。</div>
+ </div>
+ <div class="card no-print">
+<h3>顯示設定</h3>
+<div class="small" style="margin-bottom:10px">勾選後可立即控制下方 ICM 結算表要顯示的欄位；設定也會保留。</div>
+<div id="reportColumnSettings" style="display:flex;gap:14px;flex-wrap:wrap"></div>
+</div>
+<div class="card tablewrap"><table id="settleTable"><thead><tr id="settleHead"></tr></thead><tbody id="settleRows"></tbody></table></div>
+ <div class="card tablewrap"><h3>合併結帳</h3><table><thead><tr><th>結帳群組</th><th>成員</th><th>合計輸贏</th></tr></thead><tbody id="groupRows"></tbody></table></div>
+</section>
+
+
+<section id="accounting" class="page">
+ <div id="accountingListView">
+  <div class="report-topbar">
+   <div>
+    <h2>EPC 帳務管理</h2>
+    <div class="small">以營業日建立每日帳務；建立後可進入、列印或刪除。</div>
+   </div>
+  </div>
+  <div class="card">
+   <h3 style="margin-top:0">營業時間設定</h3>
+   <div class="formgrid" style="grid-template-columns:1fr 1fr">
+    <div><label>營業開始時間</label><input id="accountBusinessStartTime" inputmode="numeric" placeholder="16:00" onchange="saveAccountingBusinessHours()"></div>
+    <div><label>營業結束時間</label><input id="accountBusinessEndTime" inputmode="numeric" placeholder="07:00" onchange="saveAccountingBusinessHours()"></div>
+   </div>
+   <div class="small" style="margin-top:8px">此設定套用於賽事、帳務與分帳的營業日歸屬。</div>
+  </div>
+  <div class="card">
+   <div class="formgrid" style="grid-template-columns:1fr 1fr">
+    <div><label>查詢開始營業日</label><input type="date" id="accountingDateFrom" onchange="renderAccountingManager()"></div>
+    <div><label>查詢結束營業日</label><input type="date" id="accountingDateTo" onchange="renderAccountingManager()"></div>
+   </div>
+  </div>
+  <div class="card">
+   <div class="formgrid">
+    <div><label>營業日</label><input type="date" id="accountingCreateDate"></div>
+    <div style="display:flex;align-items:flex-end"><button type="button" class="primary" id="createAccountingBtn">＋ 建立當天帳務</button></div>
+   </div>
+  </div>
+  <div class="card tablewrap">
+   <table>
+    <thead><tr><th>營業日</th><th>賽事數</th><th>實收行政費</th><th>其他收入</th><th>總支出</th><th>淨收入</th><th>狀態</th><th>操作</th></tr></thead>
+    <tbody id="accountingDayRows"></tbody>
+   </table>
+  </div>
+ </div>
+
+ <div id="accountingDetailView" style="display:none">
+  <div class="report-topbar">
+   <div>
+    <h2>EPC 當日帳務</h2>
+    <div class="small" id="accountingDetailDate"></div>
+   </div>
+   <div class="report-actions">
+    <button type="button" onclick="backToAccountingList()">← 返回帳務管理</button>
+    <button type="button" class="primary" id="printDailyAccountingBtn">列印</button>
+   </div>
+  </div>
+
+  <div id="dailyAccountingPaper">
+   <div class="card">
+    <div class="grid">
+     <div class="kpi"><div class="l">原價行政費</div><div class="v" id="aAdminGross">$0</div></div>
+     <div class="kpi"><div class="l">組數優惠</div><div class="v" id="aAutoDiscount">$0</div></div>
+     <div class="kpi"><div class="l">額外優惠</div><div class="v" id="aManualDiscount">$0</div></div>
+     <div class="kpi"><div class="l">實收行政費</div><div class="v" id="aAdminNet">$0</div></div>
+    </div>
+   </div>
+
+   <div class="card">
+    <div class="report-topbar" style="margin-bottom:10px">
+      <div><h3 style="margin:0">其他收支</h3><div class="small">項目可自行輸入，也可從常用項目下拉選擇後新增。</div></div>
+      <button type="button" class="primary" onclick="addAccountingItem()">＋ 新增收支</button>
+    </div>
+    <div class="formgrid" style="align-items:end">
+      <div>
+        <label>常用項目</label>
+        <select id="accountingItemPreset" onchange="useAccountingPreset()">
+          <option value="">自行輸入</option>
+          <optgroup label="收入">
+            <option value="income|場地 / 包廂費">場地 / 包廂費</option>
+            <option value="income|飲料 / 餐飲收入">飲料 / 餐飲收入</option>
+            <option value="income|其他收入">其他收入</option>
+          </optgroup>
+          <optgroup label="支出">
+            <option value="expense|人事薪資">人事薪資</option>
+            <option value="expense|兼職薪資">兼職薪資</option>
+            <option value="expense|餐費">餐費</option>
+            <option value="expense|水電">水電</option>
+            <option value="expense|耗材">耗材</option>
+            <option value="expense|設備維修">設備維修</option>
+            <option value="expense|其他支出">其他支出</option>
+          </optgroup>
+        </select>
+      </div>
+      <input id="accountingItemType" type="hidden" value="income"><div><label>項目名稱</label><input id="accountingItemName" type="text" placeholder="例如：飲料收入、晚班薪資"></div>
+      <div><label>金額</label><input id="accountingItemAmount" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
+    </div>
+    <div class="tablewrap" style="margin-top:12px">
+      <table>
+        <thead><tr><th>類型</th><th>項目</th><th>金額</th><th>操作</th></tr></thead>
+        <tbody id="accountingItemRows"></tbody>
+      </table>
+    </div>
+   </div>
+
+   <div class="card">
+    <div class="grid">
+     <div class="kpi"><div class="l">EPC 總收入</div><div class="v" id="aRevenue">$0</div></div>
+     <div class="kpi"><div class="l">EPC 總支出</div><div class="v" id="aExpense">$0</div></div>
+     <div class="kpi"><div class="l">當日淨收入</div><div class="v" id="aNet">$0</div></div>
+     <div class="kpi"><div class="l">JP 提撥（獨立）</div><div class="v" id="aJP">$0</div></div>
+    </div>
+   </div>
+
+   <div class="card tablewrap">
+    <h3>當日賽事明細</h3>
+    <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>原價行政費</th><th>優惠</th><th>實收行政費</th><th>JP</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
+   </div>
+  </div>
+ </div>
+</section>
+
+
+
+<section id="eventreport" class="page">
+  <div class="report-topbar">
+    <div>
+      <h2>本場賽事報表</h2>
+      <div class="small" style="margin-top:4px">預設 A4 直式單頁列印；不足 20 位玩家會自動補空白欄位</div>
+    </div>
+    <div class="report-actions">
+      <button type="button" onclick="showPage('settle')">← 返回結算</button>
+      <button type="button" class="primary" onclick="printEventReport()">列印報表</button>
+    </div>
+  </div>
+
+  <div class="report-settings">
+    <div class="report-settings-title">列印欄位</div>
+    <div id="eventReportSettings"></div>
+    </div>
+
+  <div id="eventReportPaper">
+    <div class="report-paper-title">
+      <h2>EPC 賽事結算報表</h2>
+      <span class="report-status">正式結算</span>
+    </div>
+    <div id="eventReportHeader"></div>
+    <div id="eventReportRule" style="display:none;margin:0 0 16px;padding:10px 12px;border:1px solid #d7dde2;border-radius:8px;background:#f7f9fa;color:#303840;font-size:12px;line-height:1.65;white-space:pre-wrap"></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr id="eventReportHead"></tr></thead>
+        <tbody id="eventReportRows"></tbody>
+      </table>
+    </div>
+    <div id="eventReportFooter" class="report-summary-footer">
+      <div><span>加總組數</span><strong id="eventReportTotalGroups">0</strong></div>
+      <div><span>加總籌碼</span><strong id="eventReportTotalChips">0</strong></div>
+      <div class="counter-sign"><span>櫃台簽名</span><strong>________________________</strong></div>
+    </div>
+  </div>
+</section>
+<section id="dailysettle" class="page">
+ <div id="settlementListView">
+  <div class="report-topbar"><div><h2>分帳報表管理</h2><div class="small">以營業日建立分帳報表；建立後可進入查看、列印或刪除。報表內容會依該營業日目前已正式結算的賽事即時計算。</div></div></div>
+  <div class="card">
+   <div class="formgrid" style="grid-template-columns:1fr 1fr">
+    <div><label>查詢開始營業日</label><input type="date" id="settlementDateFrom" onchange="renderSettlementManager()"></div>
+    <div><label>查詢結束營業日</label><input type="date" id="settlementDateTo" onchange="renderSettlementManager()"></div>
+   </div>
+  </div>
+  <div class="card">
+   <div class="formgrid">
+    <div><label>營業日</label><input type="date" id="settlementCreateDate"></div>
+    <div style="display:flex;align-items:flex-end"><button type="button" class="primary" onclick="createDailySettlementReport()">＋ 建立當日分帳報表</button></div>
+   </div>
+  </div>
+  <div class="card tablewrap"><table>
+   <thead><tr><th>營業日</th><th>已結算場次</th><th>參與會員</th><th>總實付</th><th>總獎金</th><th>總輸贏</th><th>操作</th></tr></thead>
+   <tbody id="settlementDayRows"></tbody>
+  </table></div>
+ </div>
+ <div id="settlementDetailView" style="display:none">
+  <div class="report-topbar">
+   <div><h2>當日分帳報表</h2><div class="small" id="settlementDetailDate"></div></div>
+   <div class="report-actions"><button type="button" onclick="backToSettlementList()">← 返回分帳報表管理</button><button type="button" class="primary" onclick="printDailySettlement()">列印</button></div>
+  </div>
+  <input type="hidden" id="dailyDate">
+  <div class="grid">
+   <div class="card kpi"><div class="l">已結算場次</div><div class="v" id="dEvents">0</div></div>
+   <div class="card kpi"><div class="l">參與會員</div><div class="v" id="dMembers">0</div></div>
+   <div class="card kpi"><div class="l">當日總實付</div><div class="v" id="dPaid">$0</div></div>
+   <div class="card kpi"><div class="l">當日總獎金</div><div class="v" id="dPrize">$0</div></div>
+  </div>
+  <div id="dailyGroupDetail"></div>
+ </div>
+</section>
+
+<section id="reports" class="page">
+ <h2>分帳報表</h2>
+ <div class="card">
+   <div class="small">此頁專門處理目前選取賽事的分帳輸贏報表；單場賽事結算報表請直接從「賽事管理 → 列印報表」開啟。</div>
+   <div class="toolbar"><button class="primary" onclick="printReport('accountReport')">列印分帳輸贏表</button></div>
+ </div>
+ <div id="accountReport" class="card report">
+  <div class="print-only"><h2>EPC 分帳輸贏結算表</h2></div>
+  <h3>分帳輸贏表</h3><div id="accountMeta" class="small"></div><br>
+  <div class="tablewrap"><table><thead><tr><th>結帳群組</th><th>玩家</th><th>總支付</th><th>領回</th><th>個人輸贏</th><th>群組合計</th></tr></thead><tbody id="accountRows"></tbody></table></div>
+ </div>
+</section>
+</main>
+
+
+<div id="deleteConfirmModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
+ <div style="width:min(440px,100%);background:#17212c;border:1px solid #e05d5d;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+  <h3 style="margin-top:0">確認刪除</h3>
+  <div id="deleteConfirmText" style="line-height:1.7;margin-bottom:18px">確定要刪除這筆資料嗎？</div>
+  <div style="display:flex;gap:10px;justify-content:flex-end">
+   <button type="button" onclick="cancelDeleteConfirm()">取消</button>
+   <button type="button" class="danger" onclick="executeDeleteConfirm()">確認刪除</button>
+  </div>
+ </div>
+</div>
+
+<div id="settlementConfirmModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
+  <div style="width:min(460px,100%);background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+    <h3 style="margin-top:0">確認正式結算</h3>
+    <div id="settlementConfirmText" style="line-height:1.7;margin-bottom:18px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button type="button" onclick="closeSettlementConfirm()">取消</button>
+      <button type="button" class="primary" onclick="executeFormalSettlement()">確認正式結算</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const money=n=>'$'+Math.round(Number(n||0)).toLocaleString('zh-TW');
+const uid=()=>String(Date.now()).slice(-8)+Math.floor(Math.random()*90+10);
+const CLOUD_API='https://script.google.com/macros/s/AKfycby1YCXllpyYOFEN60N-jR6kAk-Y2hOYpIa2GlS74cBFDK-Dt4mDa4sCd80MR6ZSxpbQ6A/exec';
+let db=JSON.parse(localStorage.getItem('epcV1')||'null')||{members:[],jpBalance:0,events:[],currentEventId:null};
+let cloudRevision=Number(localStorage.getItem('epcCloudRevision')||0);
+let cloudReady=false,cloudSaving=false,cloudSaveTimer=null,cloudPending=false;
+let localDirty=localStorage.getItem('epcLocalDirty')==='1';
+
+function setCloudState(text,isError=false){
+ const el=$('saveState'); if(!el)return;
+ el.textContent=text; el.style.color=isError?'#ff8a8a':'';
+}
+function mergeFormMembers(baseMembers,formMembers){
+ const base=Array.isArray(baseMembers)?baseMembers:[];
+ const forms=Array.isArray(formMembers)?formMembers:[];
+ const map=new Map(base.map(m=>[String(m.id||''),m]));
+ forms.forEach(f=>{
+   const id=String(f.id||'').trim(); if(!id)return;
+   const old=map.get(id)||{};
+   map.set(id,{...old,...f,group:old.group||f.group||'',note:old.note||f.note||'',history:Array.isArray(old.history)?old.history:(f.history||[]),createdAt:old.createdAt||f.createdAt||null,createdDate:f.createdDate||old.createdDate||'',source:'Form Responses 1'});
+ });
+ return [...map.values()];
+}
+function makeWriteId(){
+ return 'EPC-'+Date.now()+'-'+Math.random().toString(36).slice(2,10);
+}
+function backupLocal(reason){
+ try{
+   localStorage.setItem('epcSafetyBackup',JSON.stringify({
+     savedAt:new Date().toISOString(), reason:reason||'', revision:cloudRevision, db
+   }));
+ }catch(err){ console.warn('backup failed',err); }
+}
+async function cloudGet(action){
+ const r=await fetch(CLOUD_API+'?action='+encodeURIComponent(action)+'&_='+Date.now(),{cache:'no-store',redirect:'follow'});
+ if(!r.ok)throw new Error('HTTP '+r.status);
+ const j=await r.json(); if(!j.ok)throw new Error(j.error||'Cloud API error'); return j;
+}
+async function cloudPost(payload){
+ const r=await fetch(CLOUD_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),cache:'no-store',redirect:'follow'});
+ if(!r.ok)throw new Error('HTTP '+r.status);
+ const j=await r.json(); if(!j.ok)throw new Error(j.error||'Cloud API error'); return j;
+}
+async function initializeCloud(){
+ setCloudState('● 本機已儲存｜正在連接雲端…');
+ try{
+   const res=await cloudGet('load');
+   const serverRevision=Number(res.revision||0);
+
+   if(localDirty){
+     // 本機有未完成上傳的工作：只保留本機，不自動用雲端覆蓋。
+     backupLocal('startup-local-dirty');
+     db.members=mergeFormMembers(db.members,res.members);
+     cloudRevision=serverRevision;
+     localStorage.setItem('epcCloudRevision',String(cloudRevision));
+     cloudReady=true;
+     render();
+     setCloudState('● 本機有未上傳資料｜準備儲存雲端');
+     await saveCloudNow();
+     return;
+   }
+
+   if(res.data && typeof res.data==='object'){
+     backupLocal('before-startup-cloud-load');
+     db=res.data;
+     db.members=mergeFormMembers(db.members,res.members);
+     cloudRevision=serverRevision;
+     localStorage.setItem('epcV1',JSON.stringify(db));
+     localStorage.setItem('epcCloudRevision',String(cloudRevision));
+     localStorage.removeItem('epcLocalDirty');
+     localDirty=false;
+   }else{
+     db.members=mergeFormMembers(db.members,res.members);
+     cloudRevision=serverRevision;
+     localStorage.setItem('epcV1',JSON.stringify(db));
+   }
+
+   if(!db.settings)db.settings={};
+   if(!db.settings.businessStart)db.settings.businessStart='16:00';
+   if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
+   if(!Array.isArray(db.dailySettlementReports))db.dailySettlementReports=[];
+   cloudReady=true;
+   render();
+
+   if(!res.data){
+     localDirty=true;
+     localStorage.setItem('epcLocalDirty','1');
+     await saveCloudNow();
+   }else{
+     const t=res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
+     setCloudState('☁ 雲端已載入｜Revision '+cloudRevision+'｜'+t);
+   }
+ }catch(err){
+   cloudReady=false;
+   setCloudState('⚠ 雲端連線失敗｜本機資料已保留',true);
+   console.error('EPC cloud init failed',err);
+   render();
+ }
+}
+async function refreshFormMembers(saveAfter=true){
+ try{
+   const res=await cloudGet('members');
+   const before=JSON.stringify((db.members||[]).map(m=>[m.id,m.name,m.group,m.note,m.createdDate]));
+   db.members=mergeFormMembers(db.members,res.members);
+   localStorage.setItem('epcV1',JSON.stringify(db));
+   render();
+   const after=JSON.stringify((db.members||[]).map(m=>[m.id,m.name,m.group,m.note,m.createdDate]));
+   if(saveAfter && before!==after && cloudReady){
+     localDirty=true; localStorage.setItem('epcLocalDirty','1'); scheduleCloudSave();
+   }
+   return true;
+ }catch(err){console.error('member refresh failed',err);return false;}
+}
+function scheduleCloudSave(){
+ if(!cloudReady)return;
+ cloudPending=true;
+ clearTimeout(cloudSaveTimer);
+ cloudSaveTimer=setTimeout(saveCloudNow,900);
+}
+async function saveCloudNow(force=false){
+ if(!cloudReady||cloudSaving)return false;
+ cloudSaving=true; cloudPending=false;
+ setCloudState('☁ 正在上傳雲端…');
+ backupLocal('before-cloud-save');
+ const writeId=makeWriteId();
+ try{
+   const res=await cloudPost({action:'save',data:db,revision:cloudRevision,writeId,force:!!force});
+   const savedRevision=Number(res.revision||0);
+
+   // 寫入後立即重新讀取 Google Sheet 驗證 writeId + revision。
+   const verify=await cloudGet('load');
+   if(Number(verify.revision||0)!==savedRevision || String(verify.writeId||'')!==writeId){
+     throw new Error('CLOUD_VERIFY_FAILED');
+   }
+
+   cloudRevision=savedRevision;
+   localStorage.setItem('epcCloudRevision',String(cloudRevision));
+   localStorage.setItem('epcV1',JSON.stringify(db));
+   localStorage.removeItem('epcLocalDirty');
+   localDirty=false;
+   const t=verify.updatedAt ? new Date(verify.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
+   setCloudState('☁ 雲端已儲存｜Revision '+cloudRevision+'｜'+t);
+   return true;
+ }catch(err){
+   console.error('cloud save failed',err);
+   localDirty=true;
+   localStorage.setItem('epcLocalDirty','1');
+   if(String(err.message||err).includes('CLOUD_CONFLICT')){
+     setCloudState('⚠ 雲端已有較新版本｜本機資料未被覆蓋',true);
+   }else if(String(err.message||err).includes('CLOUD_VERIFY_FAILED')){
+     setCloudState('⚠ 上傳後驗證失敗｜不能視為已同步',true);
+   }else{
+     setCloudState('⚠ 雲端儲存失敗｜本機資料已保留',true);
+   }
+   return false;
+ }finally{
+   cloudSaving=false;
+   if(cloudPending)scheduleCloudSave();
+ }
+}
+async function manualCloudSync(){
+ localDirty=true;
+ localStorage.setItem('epcLocalDirty','1');
+ if(!cloudReady){
+   await initializeCloud();
+   return;
+ }
+ const ok=await saveCloudNow(false);
+ if(!ok && confirm('雲端可能有另一台電腦的新版本。\n\n要以「這台電腦目前的資料」覆蓋雲端嗎？\n\n按「確定」才會強制上傳；按「取消」不會改動雲端。')){
+   await saveCloudNow(true);
+ }
+}
+async function manualCloudLoad(){
+ if(localDirty){
+   const ok=confirm('這台電腦有尚未成功上傳的修改。\n\n從雲端載入會替換目前畫面資料，但系統會先建立本機安全備份。\n\n確定要載入雲端嗎？');
+   if(!ok)return;
+ }
+ try{
+   setCloudState('☁ 正在從雲端載入…');
+   backupLocal('before-manual-cloud-load');
+   const res=await cloudGet('load');
+   if(!res.data || typeof res.data!=='object')throw new Error('CLOUD_EMPTY');
+   db=res.data;
+   db.members=mergeFormMembers(db.members,res.members);
+   cloudRevision=Number(res.revision||0);
+   localStorage.setItem('epcV1',JSON.stringify(db));
+   localStorage.setItem('epcCloudRevision',String(cloudRevision));
+   localStorage.removeItem('epcLocalDirty');
+   localDirty=false;
+   cloudReady=true;
+   render();
+   const t=res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
+   setCloudState('☁ 已載入雲端｜Revision '+cloudRevision+'｜'+t);
+ }catch(err){
+   console.error(err);
+   setCloudState('⚠ 雲端載入失敗｜目前本機資料未變更',true);
+ }
+}
+
+if(!db.settings)db.settings={};
+if(!db.settings.businessStart)db.settings.businessStart='16:00';
+if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
+
+// 自動清理舊版本留下的「孤兒會員盈虧紀錄」：eventId 已不存在於賽事資料時直接移除。
+function cleanupOrphanMemberHistory(){
+ const validEventIds=new Set((db.events||[]).map(e=>String(e.id)));
+ let changed=false;
+ (db.members||[]).forEach(m=>{
+   const before=(m.history||[]).length;
+   m.history=(m.history||[]).filter(h=>h && h.eventId!=null && validEventIds.has(String(h.eventId)));
+   if(m.history.length!==before)changed=true;
+ });
+ if(changed)localStorage.setItem('epcV1',JSON.stringify(db));
+}
+cleanupOrphanMemberHistory();
+
+
+function hmMinutes(v,fallback){
+ const m=String(v||fallback).match(/^(\d{1,2}):(\d{2})$/);
+ if(!m)return hmMinutes(fallback,'00:00');
+ return Math.min(23,+m[1])*60+Math.min(59,+m[2]);
+}
+function shiftDate(dateStr,days){
+ const [y,m,d]=String(dateStr).split('-').map(Number);
+ const x=new Date(Date.UTC(y,m-1,d));x.setUTCDate(x.getUTCDate()+days);
+ return x.toISOString().slice(0,10);
+}
+function businessDateForEvent(e){
+ const date=e.date||new Date().toISOString().slice(0,10);
+ const mins=hmMinutes(e.startTime,'16:00');
+ const start=hmMinutes(db.settings.businessStart,'16:00');
+ const end=hmMinutes(db.settings.businessEnd,'07:00');
+ // Overnight business window: start (16:00) through midnight and next-day until end (07:00).
+ if(start>end && mins<end)return shiftDate(date,-1);
+ return date;
+}
+function saveAccountingBusinessHours(){
+ if($('accountBusinessStartTime'))db.settings.businessStart=$('accountBusinessStartTime').value||'16:00';
+ if($('accountBusinessEndTime'))db.settings.businessEnd=$('accountBusinessEndTime').value||'07:00';
+ persist();
+ if($('businessStartTime'))$('businessStartTime').value=db.settings.businessStart;
+ if($('businessEndTime'))$('businessEndTime').value=db.settings.businessEnd;
+ renderEventList();
+}
+function syncAccountingBusinessHours(){
+ if($('accountBusinessStartTime'))$('accountBusinessStartTime').value=db.settings.businessStart||'16:00';
+ if($('accountBusinessEndTime'))$('accountBusinessEndTime').value=db.settings.businessEnd||'07:00';
+}
+function saveBusinessHours(){
+ db.settings.businessStart=($('businessStartTime')?.value||'16:00').trim()||'16:00';
+ db.settings.businessEnd=($('businessEndTime')?.value||'07:00').trim()||'07:00';
+ persist();renderEventList();actionMsg('營業時間設定已儲存');
+}
+function openEventReportById(id){
+ const e=db.events.find(x=>String(x.id)===String(id));
+ if(!e){actionMsg('找不到這場賽事',true);return;}
+ db.currentEventId=e.id;persist();openEventReport();
+}
+
+function blankEvent(){
+ return {id:'EV'+Date.now()+Math.floor(Math.random()*90+10),date:new Date().toISOString().slice(0,10),seq:1,level:3400,poolUnit:3000,admin:400,chips:300000,jp:3,jpRound:100,payout:'50,30,20',players:[],status:'進行中',accounting:{otherIncome:0,venueIncome:0,laborExpense:0,otherExpense:0},createdAt:Date.now()};
+}
+// Migration from V1.1 single-event data to V1.2 multi-event data.
+if(!Array.isArray(db.events)){
+ db.events=[];
+ if(db.event){
+   db.event.id=db.event.id||('EV'+Date.now());
+   db.event.seq=db.event.seq||1;
+   db.event.status=db.event.status||'進行中';
+   db.events.push(db.event);
+   db.currentEventId=db.event.id;
+ }
+ delete db.event;
+}
+function currentEvent(){
+ let e=db.events.find(x=>x.id===db.currentEventId);
+ if(!e && db.events.length){e=db.events[0];db.currentEventId=e.id}
+ return e;
+}
+function requireEvent(){let e=currentEvent();if(!e){alert('請先到「賽事管理」建立一場賽事。');return null}return e}
+
+function persist(){
+ localStorage.setItem('epcV1',JSON.stringify(db));
+ localDirty=true;
+ localStorage.setItem('epcLocalDirty','1');
+ if(cloudReady)scheduleCloudSave();
+ else setCloudState('☁ 本機已儲存｜等待雲端連線');
+}
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$(b.dataset.page).classList.add('active');render()});
+async function addMember(){
+ if(editingMemberId)return saveMemberEdit();
+ const name=$('mName').value.trim(); if(!name)return alert('請輸入會員名稱');
+ const id=String($('mId').value.trim()||uid());
+ if((db.members||[]).some(m=>String(m.id||'').trim()===id))return alert('此會員 ID 已存在，請確認後再新增。');
+ const group=$('mGroup').value.trim(), note=$('mNote').value.trim();
+ const btn=$('memberSaveBtn'); if(btn){btn.disabled=true;btn.textContent='新增中…';}
+ try{
+   let member={id,name,group,note,history:[],createdAt:Date.now(),createdDate:new Date().toISOString(),source:'EPC'};
+   if(cloudReady){
+     setCloudState('☁ 正在新增會員…');
+     const res=await cloudPost({action:'addMember',member:{id,name}});
+     if(res.member)member={...member,...res.member,group,note,history:[]};
+   }
+   db.members.push(member);
+   ['mName','mId','mGroup','mNote'].forEach(x=>$(x).value='');
+   // 新增成功後清除會員搜尋條件，避免新會員被既有搜尋條件隱藏
+   if($('memberSearch'))$('memberSearch').value='';
+   persist();
+   renderMemberRows();
+   render();
+   actionMsg(`會員「${member.name}」已新增並同步至會員資料`);
+   if(cloudReady){
+     await saveCloudNow();
+     // 再向會員主資料來源核對一次，確保前端與 Form Responses 1 一致
+     await refreshFormMembers(false);
+     renderMemberRows();
+   }
+ }catch(err){
+   console.error('add member failed',err);
+   const msg=String(err.message||err);
+   if(msg.includes('MEMBER_EXISTS'))alert('此會員 ID 已存在於會員資料，請勿重複新增。');
+   else alert('會員新增失敗：'+msg);
+   setCloudState('☁ 新增會員失敗',true);
+ }finally{
+   if(btn){btn.disabled=false;btn.textContent='新增會員';btn.onclick=addMember;}
+ }
+}
+function delMember(id){
+ const m=(db.members||[]).find(x=>String(x.id)===String(id));
+ const label=m?.name||m?.id||'此會員';
+ askDeleteConfirm(`確定要刪除會員「${label}」嗎？\n若此會員來自會員資料表，也會同步從 Form Responses 1 刪除。`,()=>performDelMember(id));
+}
+async function performDelMember(id){
+ const sid=String(id);
+ const used=(db.events||[]).some(e=>(e.players||[]).some(p=>String(p.memberId)===sid));
+ if(used)return alert('此會員已有賽事紀錄，不能直接刪除，以免破壞歷史帳務。');
+ const m=(db.members||[]).find(x=>String(x.id)===sid);
+ try{
+   if(cloudReady && m && String(m.source||'').includes('Form Responses')){
+     setCloudState('☁ 正在刪除會員…');
+     await cloudPost({action:'deleteMember',memberId:sid});
+   }
+   db.members=(db.members||[]).filter(x=>String(x.id)!==sid);
+   persist();
+   renderMemberRows();
+   actionMsg('會員已刪除');
+   if(cloudReady)await saveCloudNow();
+ }catch(err){
+   console.error('delete member failed',err);
+   alert('會員刪除失敗：'+String(err.message||err));
+   setCloudState('☁ 刪除會員失敗',true);
+ }
+}
+let editingMemberId=null;
+function editMember(id){
+ let m=db.members.find(x=>x.id===id); if(!m)return;
+ editingMemberId=id;
+ $('mName').value=m.name||'';
+ $('mId').value=m.id||'';
+ $('mId').disabled=true;
+ $('mGroup').value=m.group||'';
+ $('mNote').value=m.note||'';
+ $('memberSaveBtn').textContent='儲存修改';
+ $('memberSaveBtn').onclick=saveMemberEdit;
+ $('memberCancelBtn').style.display='';
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+async function saveMemberEdit(){
+ let m=db.members.find(x=>x.id===editingMemberId); if(!m)return cancelMemberEdit();
+ let name=$('mName').value.trim(); if(!name)return alert('請輸入會員名稱');
+ m.name=name;
+ m.group=$('mGroup').value.trim();
+ m.note=$('mNote').value.trim();
+ // 先把 EPC 專屬欄位（結帳群組/備註）寫入本機，再立即寫入 EPC_DATA。
+ localStorage.setItem('epcV1',JSON.stringify(db));
+ cancelMemberEdit();
+ renderMemberRows();
+ render();
+ actionMsg(`會員「${m.name}」資料已修改`);
+ if(cloudReady){
+   try{
+     await saveCloudNow();
+     // 雲端快照完成後才重新抓 Form Responses 1。
+     // mergeFormMembers 會保留 EPC_DATA 的 group / note / history。
+     await refreshFormMembers(false);
+     renderMemberRows();
+   }catch(err){
+     console.error('member edit cloud save failed',err);
+     setCloudState('☁ 修改已存本機｜雲端同步失敗',true);
+   }
+ }else{
+   setCloudState('☁ 修改已存本機｜等待雲端連線');
+ }
+}
+function cancelMemberEdit(){
+ editingMemberId=null;
+ ['mName','mId','mGroup','mNote'].forEach(x=>$(x).value='');
+ $('mId').disabled=false;
+ $('memberSaveBtn').textContent='新增會員';
+ $('memberSaveBtn').onclick=addMember;
+ $('memberCancelBtn').style.display='none';
+}
+function levelChanged(){let lv=+$('eLevel').value;if(lv===3400){$('ePoolUnit').value=3000;$('eAdmin').value=400}else{$('ePoolUnit').value=6000;$('eAdmin').value=600}}
+function saveEvent(){
+ let e=requireEvent();if(!e)return;
+ 
+ e.date=$('eDate').value;
+ e.startTime=($('eStartTime')?.value||'').trim();
+ e.regCloseTime=($('eRegCloseTime')?.value||'').trim();
+ e.level=+$('eLevel').value;
+ e.poolUnit=+$('ePoolUnit').value;
+ e.admin=+$('eAdmin').value;
+ e.chips=+$('eChips').value;
+ e.jp=+$('eJP').value;
+ e.jpRound=+$('eJPRound').value;
+ e.payout=$('ePayout').value;
+ persist();render();
+ alert('賽事設定已儲存');
+}
+function filterAddPlayerMembers(keyword){
+ const sel=$('addPlayerMember');if(!sel)return;
+ const q=String(keyword||'').trim().toLowerCase();
+ const current=sel.value;
+ const list=db.members.filter(m=>{
+   const name=String(m.name||'').toLowerCase();
+   const id=String(m.id||'').toLowerCase();
+   const group=String(m.group||m.settleGroup||m.settlementGroup||m.accountGroup||'').toLowerCase();
+   return !q || name.includes(q) || id.includes(q) || group.includes(q);
+ });
+ sel.innerHTML=list.length
+   ? list.map(m=>`<option value="${m.id}">${m.name} (${m.id})</option>`).join('')
+   : '<option value="">找不到符合的會員</option>';
+ if(current && list.some(m=>m.id===current))sel.value=current;
+ else if(list.length===1)sel.value=list[0].id;
+}
+function syncAddPlayerSearch(){
+ const sel=$('addPlayerMember'),input=$('addPlayerSearch');if(!sel||!input)return;
+ const m=db.members.find(x=>x.id===sel.value);
+ if(m)input.value=`${m.name} (${m.id})`;
+}
+function handleAddPlayerSearchKey(event){
+ if(event.key!=='Enter')return;
+ event.preventDefault();
+ const sel=$('addPlayerMember');if(!sel||!sel.value)return;
+ addPlayer();
+}
+function addPlayer(){
+ if(currentEvent()?.status==='已結算')return alert('此賽事已完成結算並鎖定，不能加入玩家。');
+ let id=$('addPlayerMember').value;if(!id)return alert('請先建立會員');
+ if(currentEvent().players.some(p=>p.memberId===id))return alert('此會員已加入本場');
+ let m=db.members.find(x=>x.id===id);
+ currentEvent().players.push({memberId:id,buyin:1,rebuy:0,addon:0,manualDiscount:0,stack:0,group:$('addPlayerGroup').value.trim()||m.group||'',prize:0});
+ $('addPlayerGroup').value='';
+ if($('addPlayerSearch'))$('addPlayerSearch').value='';
+ persist();render();
+}
+function setP(i,k,v){
+ let e=currentEvent();if(!e)return;
+ if(e.status==='已結算')return alert('此賽事已完成結算並鎖定，不能再修改。');
+ e.players[i][k]=(k==='group'?v:+v);persist();render();
+}
+function removePlayerSafe(memberId){
+ const e=currentEvent();if(!e)return;
+ 
+ const idx=e.players.findIndex(p=>p.memberId===memberId);
+ if(idx<0)return alert('找不到這位玩家');
+ const m=db.members.find(x=>x.id===memberId);
+ if(!window.confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
+ e.players.splice(idx,1);persist();render();alert('玩家已移除');
+}
+
+function delP(i){
+ let e=currentEvent();if(!e)return;
+ 
+ let p=e.players[i],m=db.members.find(x=>x.id===p?.memberId);
+ if(!p)return;
+ if(!confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
+ e.players.splice(i,1);persist();render();
+}
+function calcPlayer(p){
+ let e=currentEvent(); if(!e)return {groups:0,auto:0,paid:0,pool:0};
+ return calcPlayerForEvent(p,e);
+}
+function poolInfo(){
+ let e=currentEvent(); if(!e)return {pool:0,jp:0,avail:0};
+ let pool=e.players.reduce((sum,p)=>sum+calcPlayer(p).pool,0);
+ let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=Math.floor(raw/unit)*unit;
+ return {pool,jp,avail:pool-jp};
+}
+// Exact ICM for payout positions; recursive memoized enumeration. Suitable for typical final tables.
+function icmEquities(stacks,payouts){
+ const n=stacks.length, m=Math.min(payouts.length,n), total=stacks.reduce((a,b)=>a+b,0);
+ if(total<=0)return Array(n).fill(0);
+ let eq=Array(n).fill(0), memo=new Map();
+ function rec(remaining,depth,prob){
+   if(depth>=m||!remaining.length)return;
+   let sum=remaining.reduce((s,i)=>s+stacks[i],0); if(sum<=0)return;
+   for(let z=0;z<remaining.length;z++){
+     let i=remaining[z], q=prob*stacks[i]/sum;
+     eq[i]+=q*payouts[depth];
+     if(depth+1<m) rec(remaining.filter((_,j)=>j!==z),depth+1,q);
+   }
+ }
+ rec([...Array(n).keys()],0,1); return eq;
+}
+
+const REPORT_COLUMNS=[
+ ['player','玩家'],['groups','總組數'],['paid','總支付'],['stack','下桌籌碼'],
+ ['prize','ICM獎金'],['chipNet','籌碼增長率'],['cashNet','個人盈虧'],['group','結帳群組']
+];
+function ensureReportColumns(){
+ if(!db.reportColumns)db.reportColumns={};
+ REPORT_COLUMNS.forEach(([k])=>{if(db.reportColumns[k]===undefined)db.reportColumns[k]=true});
+}
+function renderReportSettings(){
+ ensureReportColumns();let box=$('reportColumnSettings');if(!box)return;
+ box.innerHTML=REPORT_COLUMNS.map(([k,label])=>`<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${db.reportColumns[k]?'checked':''} onchange="setReportColumn('${k}',this.checked)"> ${label}</label>`).join('');
+}
+function setReportColumn(k,v){ensureReportColumns();db.reportColumns[k]=!!v;persist();render();}
+function visibleReportCols(){ensureReportColumns();return REPORT_COLUMNS.filter(([k])=>db.reportColumns[k]);}
+function saveEndTime(v){let e=currentEvent();if(!e)return;e.endTime=v||'';persist();}
+function goICM(){
+ if(!requireEvent())return;
+ document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+ $('settle').classList.add('active');
+ document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
+ render();window.scrollTo(0,0);
+}
+function chipGrowthFor(p,e){
+ let c=calcPlayerForEvent(p,e), invested=c.groups*(+e.chips||0);
+ if(invested<=0)return 0;
+ return (+p.stack||0)/invested;
+}
+
+function calculateICM(){
+ let e=currentEvent();if(!e)return;
+ let totalGroups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
+ let expected=totalGroups*(+e.chips||0);
+ let actual=e.players.reduce((sum,p)=>sum+(+p.stack||0),0);
+ let chipDiff=actual-expected;
+ if(chipDiff!==0)return alert(`籌碼差異必須為 0 才能計算獎金。\n目前差異：${chipDiff.toLocaleString()}`);
+ if(actual<=0)return alert('請先輸入下桌籌碼');
+ let info=poolInfo();
+ let raw=e.players.map(p=>info.avail*((+p.stack||0)/actual));
+ let unit=100;
+ let rounded=raw.map(x=>Math.floor(x/unit)*unit);
+ let remain=Math.round(info.avail-rounded.reduce((a,b)=>a+b,0));
+ let order=raw.map((x,i)=>({i,frac:x-rounded[i]})).sort((a,b)=>b.frac-a.frac);
+ let k=0;
+ while(remain>=unit && k<order.length){rounded[order[k].i]+=unit;remain-=unit;k++;}
+ if(remain!==0 && rounded.length)rounded[order[0].i]+=remain;
+ e.players.forEach((p,i)=>p.prize=rounded[i]||0);
+ persist();render();
+}
+
+
+
+let __pendingDeleteAction=null;
+function askDeleteConfirm(message,action){
+ __pendingDeleteAction=action;
+ if($('deleteConfirmText'))$('deleteConfirmText').textContent=message||'確定要刪除這筆資料嗎？';
+ if($('deleteConfirmModal'))$('deleteConfirmModal').style.display='flex';
+}
+function cancelDeleteConfirm(){
+ __pendingDeleteAction=null;
+ if($('deleteConfirmModal'))$('deleteConfirmModal').style.display='none';
+}
+function executeDeleteConfirm(){
+ const fn=__pendingDeleteAction;
+ __pendingDeleteAction=null;
+ if($('deleteConfirmModal'))$('deleteConfirmModal').style.display='none';
+ if(typeof fn==='function')fn();
+}
+
+function actionMsg(msg,isError=false){
+ const el=$('actionMsg'); if(!el)return;
+ el.textContent=msg; el.style.display='block';
+ el.style.borderColor=isError?'#ff6b6b':'#49c27d';
+ clearTimeout(window.__actionMsgTimer);
+ window.__actionMsgTimer=setTimeout(()=>{el.style.display='none'},3000);
+}
+
+function showPage(id){if(id==='eventreport')setTimeout(()=>renderEventReport(),0);
+ document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
+ document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));
+ render();
+}
+function goEvents(){showPage('events')}
+function newEvent(){
+ let e=blankEvent();
+ let bd=$('eventBusinessDate')?.value||new Date().toISOString().slice(0,10);
+ e.date=bd;
+ e.startTime=db.settings.businessStart||'16:00';
+ let same=db.events.filter(x=>businessDateForEvent(x)===bd);
+ e.seq=same.length?Math.max(...same.map(x=>+x.seq||0))+1:1;
+ db.events.unshift(e); db.currentEventId=e.id; persist(); showPage('event');
+}
+function openEvent(id){db.currentEventId=id;persist();showPage('event')}
+function deleteEventByIndex(index){
+ const e=db.events[index];if(!e){actionMsg('找不到這場賽事',true);return;}
+ const label=`${businessDateForEvent(e)} 第${e.seq||1}場 ${Number(e.level||0).toLocaleString()}`;
+ askDeleteConfirm(`確定要刪除「${label}」嗎？刪除後該場會員盈虧紀錄也會一起移除。`,()=>performDeleteEventByIndex(index));
+}
+async function performDeleteEventByIndex(index){
+ const e=db.events[index]; if(!e){actionMsg('找不到這場賽事',true);return;}
+ const label=`${businessDateForEvent(e)} 第${e.seq||1}場 ${Number(e.level||0).toLocaleString()}`;
+ const id=e.id;
+ // 賽事是分帳報表的唯一來源。刪除賽事時，同步移除所有會員歷史，
+ // 分帳報表與 EPC 帳務會立即依現存賽事重算，不保留孤兒結算資料。
+ (db.members||[]).forEach(m=>{
+   m.history=(m.history||[]).filter(h=>String(h.eventId)!==String(id));
+ });
+ db.events.splice(index,1);
+ cleanupOrphanMemberHistory();
+ if(String(db.currentEventId)===String(id))db.currentEventId=db.events[0]?.id||null;
+ localStorage.setItem('epcV1',JSON.stringify(db));
+ render();
+ actionMsg(`已刪除：${label}；分帳報表已同步更新`);
+ // 不等待 900ms 排程，避免刪除後立刻關閉頁面造成雲端仍保留舊賽事。
+ if(cloudReady) await saveCloudNow();
+}
+function removePlayerByIndex(index){
+ const e=currentEvent();if(!e){actionMsg('尚未選擇賽事',true);return;}
+ 
+ const p=e.players[index];if(!p){actionMsg('找不到這位玩家',true);return;}
+ const m=db.members.find(x=>String(x.id)===String(p.memberId));
+ const name=m?.name||'此玩家';
+ e.players.splice(index,1);persist();render();actionMsg(`已從本場移除：${name}`);
+}
+
+function deleteEventSafe(id){
+ const index=(db.events||[]).findIndex(e=>String(e.id)===String(id));
+ if(index<0)return actionMsg('找不到這場賽事',true);
+ deleteEventByIndex(index);
+}
+function deleteEvent(id){
+ const index=(db.events||[]).findIndex(e=>String(e.id)===String(id));
+ if(index<0)return;
+ deleteEventByIndex(index);
+}
+function finishEvent(){confirmSettlement();}
+
+
+
+
+function ensureDailyAccountingStore(){
+ if(!Array.isArray(db.dailyAccounting))db.dailyAccounting=[];
+ db.dailyAccounting=db.dailyAccounting.filter(x=>x&&typeof x==='object'&&x.date);
+ db.dailyAccounting.forEach(x=>{if(!Array.isArray(x.items))x.items=[];});
+ if(db.currentAccountingDate===undefined)db.currentAccountingDate=null;
+}
+function accountingEventsForDate(date){
+ return (db.events||[]).filter(e=>businessDateForEvent(e)===date);
+}
+
+function poolInfoForEvent(e){
+ if(!e)return {pool:0,jp:0,avail:0};
+ const players=Array.isArray(e.players)?e.players:[];
+ const pool=players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).pool,0);
+ const raw=pool*((+e.jp||0)/100);
+ const unit=Math.max(1,+e.jpRound||1);
+ const jp=Math.floor(raw/unit)*unit;
+ return {pool,jp,avail:pool-jp};
+}
+function eventOwnJP(e){
+ if(!e)return 0;
+ if(e.finalJP!==undefined && e.finalJP!==null && e.finalJP!=='')return +e.finalJP||0;
+ return poolInfoForEvent(e).jp;
+}
+function dailyAccountingInfo(date){
+ ensureDailyAccountingStore();
+ const events=accountingEventsForDate(date);
+ let gross=0,auto=0,manual=0,netAdmin=0,jp=0,groups=0;
+ events.forEach(e=>{
+   const eventPlayers=Array.isArray(e.players)?e.players:[];
+   eventPlayers.forEach(p=>{
+     const c=calcPlayerForEvent(p,e);
+     groups+=c.groups;
+     gross+=c.groups*(+e.admin||0);
+     auto+=c.auto||0;
+     manual+=c.manual||0;
+     netAdmin+=Math.max(0,c.groups*(+e.admin||0)-(c.auto||0)-(c.manual||0));
+   });
+   jp+=eventOwnJP(e);
+ });
+ const rec=db.dailyAccounting.find(x=>x.date===date)||{items:[]};
+ if(!Array.isArray(rec.items)){
+   rec.items=[];
+   if(+rec.otherIncome)rec.items.push({id:'legacy_other_income',type:'income',name:'其他收入',amount:+rec.otherIncome});
+   if(+rec.venueIncome)rec.items.push({id:'legacy_venue_income',type:'income',name:'場地 / 包廂費',amount:+rec.venueIncome});
+   if(+rec.laborExpense)rec.items.push({id:'legacy_labor_expense',type:'expense',name:'人事支出',amount:+rec.laborExpense});
+   if(+rec.otherExpense)rec.items.push({id:'legacy_other_expense',type:'expense',name:'其他支出',amount:+rec.otherExpense});
+ }
+ const itemIncome=rec.items.filter(x=>x.type==='income').reduce((n,x)=>n+(+x.amount||0),0);
+ const itemExpense=rec.items.filter(x=>x.type==='expense').reduce((n,x)=>n+(+x.amount||0),0);
+ const revenue=netAdmin+itemIncome;
+ const expense=itemExpense;
+ return {events,gross,auto,manual,netAdmin,jp,groups,itemIncome,itemExpense,revenue,expense,net:revenue-expense,rec};
+}
+
+function bindAccountingControls(){
+ const createBtn=document.getElementById('createAccountingBtn');
+ if(createBtn && !createBtn.dataset.bound){
+   createBtn.dataset.bound='1';
+   createBtn.addEventListener('click',function(ev){
+     ev.preventDefault();
+     ev.stopPropagation();
+     createDailyAccounting();
+   });
+ }
+ const printBtn=document.getElementById('printDailyAccountingBtn');
+ if(printBtn && !printBtn.dataset.bound){
+   printBtn.dataset.bound='1';
+   printBtn.addEventListener('click',function(ev){
+     ev.preventDefault();
+     ev.stopPropagation();
+     printDailyAccounting();
+   });
+ }
+}
+function createDailyAccounting(){
+ const dateInput=document.getElementById('accountingCreateDate');
+ const date=(dateInput&&dateInput.value?dateInput.value:'').trim();
+ if(!date){
+   alert('請先選擇營業日');
+   return false;
+ }
+ ensureDailyAccountingStore();
+
+ let rec=db.dailyAccounting.find(x=>x&&x.date===date);
+ if(!rec){
+   rec={date:date,items:[],createdAt:new Date().toISOString()};
+   db.dailyAccounting.push(rec);
+   db.dailyAccounting.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+ }
+ db.currentAccountingDate=date;
+ persist();
+
+ const list=document.getElementById('accountingListView');
+ const detail=document.getElementById('accountingDetailView');
+ if(list)list.style.display='none';
+ if(detail)detail.style.display='block';
+ bindAccountingControls();
+ renderDailyAccountingDetail();
+ return false;
+}
+function openDailyAccounting(date){
+ ensureDailyAccountingStore();
+ db.currentAccountingDate=date;
+ persist();
+ if($('accountingListView'))$('accountingListView').style.display='none';
+ if($('accountingDetailView'))$('accountingDetailView').style.display='block';
+ renderDailyAccountingDetail();
+}
+function backToAccountingList(){
+ db.currentAccountingDate=null;persist();
+ if($('accountingDetailView'))$('accountingDetailView').style.display='none';
+ if($('accountingListView'))$('accountingListView').style.display='block';
+ renderAccountingManager();
+}
+function useAccountingPreset(){
+ const raw=$('accountingItemPreset')?.value||'';
+ if(!raw)return;
+ const parts=raw.split('|');
+ const type=parts.shift()||'income';
+ const name=parts.join('|');
+ if($('accountingItemType'))$('accountingItemType').value=type;
+ if($('accountingItemName'))$('accountingItemName').value=name;
+}
+function addAccountingItem(){
+ ensureDailyAccountingStore();
+ const date=db.currentAccountingDate;if(!date)return;
+ const name=($('accountingItemName')?.value||'').trim();
+ const amount=+$('accountingItemAmount')?.value||0;
+ let type=$('accountingItemType')?.value||'income';
+ const preset=$('accountingItemPreset')?.value||'';
+ if(!preset){
+   type=/薪資|工資|餐費|水電|耗材|維修|租金|支出|費用/.test(name)?'expense':'income';
+ }
+ if(!name)return alert('請輸入收支項目名稱');
+ if(amount<=0)return alert('請輸入大於 0 的金額');
+ let rec=db.dailyAccounting.find(x=>x.date===date);if(!rec)return;
+ if(!Array.isArray(rec.items))rec.items=[];
+ rec.items.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),type,name,amount});
+ persist();
+ $('accountingItemName').value='';$('accountingItemAmount').value='';$('accountingItemPreset').value='';$('accountingItemType').value='income';
+ renderDailyAccountingDetail();
+}
+function deleteAccountingItem(id){
+ const date=db.currentAccountingDate;
+ let rec=(db.dailyAccounting||[]).find(x=>x.date===date);if(!rec)return;
+ askDeleteConfirm('確定要刪除這筆收支嗎？',()=>{
+   rec.items=(rec.items||[]).filter(x=>x.id!==id);
+   persist();renderDailyAccountingDetail();
+ });
+}
+function saveDailyAccounting(){
+ persist();renderDailyAccountingDetail();
+}
+function deleteDailyAccounting(date){
+ const rec=(db.dailyAccounting||[]).find(x=>x.date===date);if(!rec)return;
+ askDeleteConfirm(`確定要刪除 ${date} 的帳務資料嗎？`,()=>{
+   db.dailyAccounting=db.dailyAccounting.filter(x=>x.date!==date);
+   if(db.currentAccountingDate===date)db.currentAccountingDate=null;
+   persist();renderAccountingManager();
+ });
+}
+function renderAccountingManager(){
+ ensureDailyAccountingStore();
+ if($('accountingCreateDate') && !$('accountingCreateDate').value){
+   $('accountingCreateDate').value=new Date().toISOString().slice(0,10);
+ }
+ const tbody=$('accountingDayRows');if(!tbody)return;
+ let af=$('accountingDateFrom')?.value||'',at=$('accountingDateTo')?.value||'';
+ tbody.innerHTML=(db.dailyAccounting||[]).filter(rec=>rec&&rec.date&&(!af||rec.date>=af)&&(!at||rec.date<=at)).map(rec=>{
+   const ai=dailyAccountingInfo(rec.date);
+   return `<tr>
+    <td>${rec.date}</td><td>${ai.events.length}</td><td>${money(ai.netAdmin)}</td>
+    <td>${money(ai.itemIncome)}</td><td>${money(ai.expense)}</td>
+    <td class="${ai.net>=0?'pos':'neg'}">${money(ai.net)}</td><td><span class="badge">已建立</span></td>
+    <td><button onclick="openDailyAccounting('${rec.date}')">進入</button>
+    <button onclick="openDailyAccounting('${rec.date}');setTimeout(printDailyAccounting,50)">列印</button>
+    <button class="danger" onclick="deleteDailyAccounting('${rec.date}')">刪除</button></td>
+   </tr>`;
+ }).join('');
+}
+function renderDailyAccountingDetail(){
+ ensureDailyAccountingStore();
+ const date=db.currentAccountingDate;if(!date)return;
+ const ai=dailyAccountingInfo(date),rec=ai.rec;
+ if($('accountingDetailDate'))$('accountingDetailDate').textContent=`營業日：${date}｜共 ${ai.events.length} 場賽事`;
+ if($('accountingItemRows'))$('accountingItemRows').innerHTML=(rec.items||[]).map(x=>`<tr>
+   <td>${x.type==='income'?'<span class="pos">收入</span>':'<span class="neg">支出</span>'}</td>
+   <td>${x.name}</td><td>${money(+x.amount||0)}</td>
+   <td><button class="danger" onclick="deleteAccountingItem('${x.id}')">刪除</button></td>
+ </tr>`).join('') || '<tr><td colspan="4" class="small">尚未新增其他收支</td></tr>';
+ $('aAdminGross').textContent=money(ai.gross);$('aAutoDiscount').textContent=money(ai.auto);
+ $('aManualDiscount').textContent=money(ai.manual);$('aAdminNet').textContent=money(ai.netAdmin);
+ $('aRevenue').textContent=money(ai.revenue);$('aExpense').textContent=money(ai.expense);
+ $('aNet').textContent=money(ai.net);$('aJP').textContent=money(ai.jp);
+ $('aNet').className='v '+(ai.net>=0?'pos':'neg');
+ $('accountingEventRows').innerHTML=ai.events.map(e=>{
+   let g=0,gross=0,disc=0,net=0;
+   (Array.isArray(e.players)?e.players:[]).forEach(p=>{const c=calcPlayerForEvent(p,e);g+=c.groups;gross+=c.groups*(+e.admin||0);disc+=(c.auto||0)+(c.manual||0);net+=Math.max(0,c.groups*(+e.admin||0)-(c.auto||0)-(c.manual||0));});
+   return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td>${g}</td><td>${money(gross)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td></tr>`;
+ }).join('');
+}
+function printDailyAccounting(){
+ const date=db.currentAccountingDate;
+ if(!date){alert('找不到當日帳務日期');return false;}
+ const ai=dailyAccountingInfo(date);
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+ const itemRows=(ai.rec.items||[]).map(x=>`
+ <tr><td>${x.type==='income'?'收入':'支出'}</td><td>${esc(x.name)}</td><td class="num">${money(+x.amount||0)}</td></tr>`
+ ).join('') || '<tr><td colspan="3">無其他收支</td></tr>';
+
+ const eventRows=ai.events.map((e,i)=>{
+   let g=0,gross=0,disc=0,net=0;
+   (Array.isArray(e.players)?e.players:[]).forEach(p=>{
+     const c=calcPlayerForEvent(p,e);
+     g+=c.groups;
+     gross+=c.groups*(+e.admin||0);
+     disc+=(c.auto||0)+(c.manual||0);
+     net+=Math.max(0,c.groups*(+e.admin||0)-(c.auto||0)-(c.manual||0));
+   });
+   return `<tr>
+    <td>第${e.seq||i+1}場</td>
+    <td>${Number(e.level||0).toLocaleString()} 賽事</td>
+    <td class="num">${g}</td>
+    <td class="num">${money(gross)}</td>
+    <td class="num">${money(disc)}</td>
+    <td class="num">${money(net)}</td>
+    <td class="num">${money(eventOwnJP(e))}</td>
+   </tr>`;
+ }).join('') || '<tr><td colspan="7">本營業日尚無賽事</td></tr>';
+
+ const html=`<!doctype html>
+ <html lang="zh-Hant"><head><meta charset="utf-8">
+ <title>EPC 當日帳務報表 ${esc(date)}</title>
+ <style>
+ @page{size:A4 portrait;margin:10mm}
+ *{box-sizing:border-box}
+ html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Arial,"Microsoft JhengHei",sans-serif}
+ .page{width:190mm;margin:0 auto;background:#fff}
+ .title{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:3mm;margin-bottom:4mm}
+ h1{font-size:22px;margin:0} h2{font-size:16px;margin:5mm 0 2mm}
+ .date{font-size:13px;font-weight:700}
+ .kpis{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #777;border-left:1px solid #777}
+ .kpis>div{border-right:1px solid #777;border-bottom:1px solid #777;padding:3mm}
+ .kpis span{display:block;font-size:10px;margin-bottom:1mm}.kpis strong{font-size:16px}
+ table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
+ th,td{border:1px solid #777;padding:2.2mm;vertical-align:middle}
+ th{background:#eee;font-weight:700}.num{text-align:right}
+ .sign{display:flex;justify-content:flex-end;gap:18mm;margin-top:12mm;font-size:12px}
+ .toolbar{display:flex;justify-content:flex-end;gap:8px;margin:0 auto 12px;width:190mm}
+ button{padding:9px 18px;border:1px solid #999;border-radius:7px;background:#fff;cursor:pointer}
+ button.primary{background:#d9ad45;border-color:#d9ad45;font-weight:700}
+ @media print{.toolbar{display:none}.page{width:190mm;margin:0 auto}}
+ </style></head><body>
+ <div class="toolbar"><button onclick="window.close()">關閉</button><button class="primary" onclick="window.print()">列印報表</button></div>
+ <div class="page">
+  <div class="title"><h1>EPC 當日帳務報表</h1><div class="date">營業日：${esc(date)}</div></div>
+  <div class="kpis">
+   <div><span>原價行政費</span><strong>${money(ai.gross)}</strong></div>
+   <div><span>組數優惠</span><strong>${money(ai.auto)}</strong></div>
+   <div><span>額外優惠</span><strong>${money(ai.manual)}</strong></div>
+   <div><span>實收行政費</span><strong>${money(ai.netAdmin)}</strong></div>
+   <div><span>EPC 總收入</span><strong>${money(ai.revenue)}</strong></div>
+   <div><span>EPC 總支出</span><strong>${money(ai.expense)}</strong></div>
+   <div><span>當日淨收入</span><strong>${money(ai.net)}</strong></div>
+   <div><span>JP 提撥（獨立）</span><strong>${money(ai.jp)}</strong></div>
+  </div>
+  <h2>其他收支</h2>
+  <table><thead><tr><th>類型</th><th>項目</th><th>金額</th></tr></thead><tbody>${itemRows}</tbody></table>
+  <h2>當日賽事明細</h2>
+  <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>原價行政費</th><th>優惠</th><th>實收行政費</th><th>JP</th></tr></thead><tbody>${eventRows}</tbody></table>
+  <div class="sign"><div>製表：____________________</div><div>覆核：____________________</div></div>
+ </div></body></html>`;
+
+ const w=window.open('','_blank');
+ if(!w){
+   alert('瀏覽器封鎖了帳務報表視窗，請允許此頁面的彈出式視窗後再試一次。');
+   return false;
+ }
+ w.document.open();
+ w.document.write(html);
+ w.document.close();
+ w.focus();
+
+ // Let Chrome finish laying out the standalone document, then open print preview.
+ setTimeout(()=>{try{w.print();}catch(err){alert('無法開啟列印預覽：'+(err?.message||err));}},500);
+ return false;
+}
+function ensureAccounting(e){
+ if(!e.accounting)e.accounting={otherIncome:0,venueIncome:0,laborExpense:0,otherExpense:0};
+ return e.accounting;
+}
+function saveAccounting(){
+ let e=requireEvent(); if(!e)return;
+ let a=ensureAccounting(e);
+ a.otherIncome=+$('aOtherIncome').value||0;
+ a.venueIncome=+$('aVenueIncome').value||0;
+ a.laborExpense=+$('aLaborExpense').value||0;
+ a.otherExpense=+$('aOtherExpense').value||0;
+ persist(); render();
+}
+function accountingInfo(e){
+ let gross=0,auto=0,manual=0,netAdmin=0;
+ e.players.forEach(p=>{
+   let c=calcPlayerForEvent(p,e);
+   gross+=c.groups*e.admin;
+   auto+=c.auto;
+   manual+=c.manual||0;
+   // manual discounts are assumed to reduce EPC receipts after group discount.
+   netAdmin+=Math.max(0,c.groups*e.admin-c.auto-(c.manual||0));
+ });
+ let a=ensureAccounting(e);
+ let revenue=netAdmin+a.otherIncome+a.venueIncome;
+ let expense=a.laborExpense+a.otherExpense;
+ return {gross,auto,manual,netAdmin,revenue,expense,net:revenue-expense};
+}
+function validateSettlement(){
+ let e=requireEvent(); if(!e)return {ok:false,msg:'尚未建立賽事'};
+ if(!e.players.length)return {ok:false,msg:'本場尚未加入玩家'};
+ let totalGroups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
+ let expected=totalGroups*e.chips;
+ let actual=e.players.reduce((sum,p)=>sum+(+p.stack||0),0);
+ if(actual!==expected)return {ok:false,msg:`籌碼不平：理論 ${expected.toLocaleString()}，實際 ${actual.toLocaleString()}，差額 ${(actual-expected).toLocaleString()}`};
+ let info=poolInfo();
+ let prizes=e.players.reduce((sum,p)=>sum+(+p.prize||0),0);
+ if(prizes!==info.avail)return {ok:false,msg:`獎金尚未完成或不平：應發 ${money(info.avail)}，目前 ICM 合計 ${money(prizes)}`};
+ return {ok:true};
+}
+function confirmSettlement(){
+ let e=requireEvent();if(!e){actionMsg('尚未選擇賽事',true);return;}
+ 
+ let v=validateSettlement();
+ if(!v.ok){actionMsg(v.msg,true);return;}
+ if(!e.endTime){actionMsg('請先輸入實際結束時間。',true);return;}
+ let info=poolInfo(e);
+ let groups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
+ $('settlementConfirmText').innerHTML=
+   `即將正式結算並鎖定本場賽事。<br><br>`+
+   `<strong>${e.date}｜${Number(e.level||0).toLocaleString()} 賽事</strong><br>`+
+   `總組數：${groups}<br>總獎池：${money(info.pool)}<br>JP：${money(info.jp)}<br>可發獎金：${money(info.avail)}<br><br>`+
+   `確認後會更新本場正式結算資料，之後仍可編輯並重新正式結算。`;
+ $('settlementConfirmModal').style.display='flex';
+}
+function closeSettlementConfirm(){
+ $('settlementConfirmModal').style.display='none';
+}
+function executeFormalSettlement(){
+ let e=requireEvent();if(!e)return;
+ 
+ let v=validateSettlement();
+ if(!v.ok){closeSettlementConfirm();actionMsg(v.msg,true);return;}
+ db.members.forEach(m=>m.history=(m.history||[]).filter(h=>h.eventId!==e.id));
+ e.players.forEach(p=>{
+   let m=db.members.find(x=>x.id===p.memberId);if(!m)return;
+   let c=calcPlayerForEvent(p,e);
+   m.history=m.history||[];
+   m.history.push({eventId:e.id,date:e.date,eventSeq:e.seq,level:e.level,groups:c.groups,paid:c.paid,prize:+p.prize||0,net:(+p.prize||0)-c.paid,group:p.group||m.name});
+ });
+ let acc=accountingInfo(e);
+ e.finalJP=poolInfo(e).jp;
+ e.finalAccounting={...acc};
+ e.status='已結算';
+ persist();
+ closeSettlementConfirm();
+ render();
+ showPage('events');
+ actionMsg('正式結算完成，可在該場操作欄直接列印報表。');
+}
+
+function renderEventList(){
+ let body=$('eventRows'); if(!body)return;
+ if($('businessStartTime'))$('businessStartTime').value=db.settings.businessStart||'16:00';
+ if($('businessEndTime'))$('businessEndTime').value=db.settings.businessEnd||'07:00';
+ if($('eventBusinessDate') && !$('eventBusinessDate').value){
+   let today=new Date().toISOString().slice(0,10);
+   let now=new Date(),mins=now.getHours()*60+now.getMinutes(),end=hmMinutes(db.settings.businessEnd,'07:00');
+   $('eventBusinessDate').value=(mins<end)?shiftDate(today,-1):today;
+ }
+ let selected=$('eventBusinessDate')?.value||'';
+ let from=$('eventDateFrom')?.value||'',to=$('eventDateTo')?.value||'';
+ let rows=db.events.map((e,eventIndex)=>({e,eventIndex})).filter(x=>{
+   const d=businessDateForEvent(x.e);
+   return (from||to)?((!from||d>=from)&&(!to||d<=to)):(!selected||d===selected);
+ });
+ body.innerHTML=rows.map(({e,eventIndex})=>{
+   let groups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
+   let pool=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).pool,0);
+   let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=Math.floor(raw/unit)*unit;
+   let reportBtn=`<button type="button" onclick="openEventReportById('${e.id}')">列印報表</button>`;
+   return `<tr><td>${businessDateForEvent(e)}</td><td>第 ${e.seq||1} 場</td><td>${e.level}</td><td>${e.players.length}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} <button type="button" class="danger" onclick="deleteEventByIndex(${eventIndex})">刪除</button></td></tr>`;
+ }).join('') || '<tr><td colspan="9" style="text-align:center;color:#91a0b2">此營業日尚無賽事</td></tr>';
+}
+function calcPlayerForEvent(p,e){
+ let groups=(+p.buyin||0)+(+p.rebuy||0)+(+p.addon||0);
+ let base=groups*(e.poolUnit+e.admin);
+
+ // EPC 組數行政費優惠：
+ // 第1組：行政費原價
+ // 第2～10組：行政費半價 => 每組優惠 admin * 50%
+ // 第11組起：免行政費 => 每組優惠 admin * 100%
+ let halfPriceGroups=Math.max(0,Math.min(groups,10)-1);
+ let freeAdminGroups=Math.max(0,groups-10);
+ let auto=halfPriceGroups*e.admin*0.5 + freeAdminGroups*e.admin;
+
+ let manual=(+p.manualDiscount||0);
+ let disc=auto+manual;
+ return {
+   groups,
+   auto,
+   manual,
+   totalDiscount:disc,
+   original:base,
+   paid:Math.max(0,base-disc),
+   pool:groups*e.poolUnit
+ };
+}
+
+function renderMemberRows(){
+ const tbody=$('memberRows'); if(!tbody)return;
+ const q=String($('memberSearch')?.value||'').trim().toLowerCase();
+ const memberList=(db.members||[]).filter(m=>{
+   if(!q)return true;
+   const name=String(m.name||'').toLowerCase();
+   const id=String(m.id||'').toLowerCase();
+   const group=String(m.group||m.settleGroup||m.settlementGroup||m.accountGroup||'').toLowerCase();
+   return name.includes(q)||id.includes(q)||group.includes(q);
+ });
+ tbody.innerHTML=memberList.map(m=>{
+   const h=Array.isArray(m.history)?m.history:[];
+   const bi=h.reduce((sum,x)=>sum+(+x.paid||0),0);
+   const pr=h.reduce((sum,x)=>sum+(+x.prize||0),0);
+   const net=pr-bi;
+   return `<tr><td>${m.name||''}</td><td>${m.id||''}</td><td>${m.group||'-'}</td><td>${money(bi)}</td><td>${money(pr)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`;
+ }).join('')||'<tr><td colspan="7" class="small">找不到符合條件的會員</td></tr>';
+}
+function clearMemberSearch(){
+ if($('memberSearch'))$('memberSearch').value='';
+ renderMemberRows();
+}
+function dashboardDefaultRange(){
+ const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
+ const first=`${y}-${m}-01`;
+ const last=new Date(y,now.getMonth()+1,0);
+ const end=`${y}-${m}-${String(last.getDate()).padStart(2,'0')}`;
+ return {first,end};
+}
+function memberCreatedBusinessDate(m){
+ if(m.createdDate)return String(m.createdDate).slice(0,10);
+ if(m.createdAt){
+   const d=new Date(m.createdAt);
+   if(!isNaN(d))return d.toISOString().slice(0,10);
+ }
+ return '';
+}
+function renderDashboardSummary(){
+ const def=dashboardDefaultRange();
+ let from=$('dashboardDateFrom')?.value||def.first;
+ let to=$('dashboardDateTo')?.value||def.end;
+ if($('dashboardDateFrom')&&!$('dashboardDateFrom').value)$('dashboardDateFrom').value=from;
+ if($('dashboardDateTo')&&!$('dashboardDateTo').value)$('dashboardDateTo').value=to;
+
+ const settled=(db.events||[]).filter(e=>e.status==='已結算');
+ const inRange=settled.filter(e=>{
+   const d=businessDateForEvent(e);
+   return (!from||d>=from)&&(!to||d<=to);
+ });
+
+ const totalProfit=settled.reduce((sum,e)=>sum+(+e.finalAccounting?.net||0),0);
+ const rangeProfit=inRange.reduce((sum,e)=>sum+(+e.finalAccounting?.net||0),0);
+ const totalJP=settled.reduce((sum,e)=>sum+(+e.finalJP||0),0);
+
+ // 區間總支出必須直接沿用「EPC 帳務」的正式計算邏輯，
+ // dailyAccountingInfo() 會正確讀取 items 中 type='expense' 的支出。
+ let rangeExpense=0;
+ const expenseDates=new Set();
+ (db.dailyAccounting||[]).forEach(r=>{
+   if(r&&r.date&&r.date>=from&&r.date<=to)expenseDates.add(r.date);
+ });
+ expenseDates.forEach(date=>{
+   const ai=dailyAccountingInfo(date);
+   rangeExpense+=(+ai.expense||0);
+ });
+
+ const newMembers=(db.members||[]).filter(m=>{
+   const d=memberCreatedBusinessDate(m);
+   return d && d>=from && d<=to;
+ }).length;
+
+ const levels={};
+ inRange.forEach(e=>{
+   const lv=Number(e.level||0);
+   const key=lv?lv.toLocaleString():'未設定';
+   levels[key]=(levels[key]||0)+1;
+ });
+ const levelText=Object.entries(levels)
+   .sort((a,b)=>(parseInt(a[0].replace(/,/g,''))||999999)-(parseInt(b[0].replace(/,/g,''))||999999))
+   .map(([lv,n])=>`${lv}：${n} 場`).join('　｜　')||'尚無已結算賽事';
+
+ if($('kMembers'))$('kMembers').textContent=(db.members||[]).length;
+ if($('kNewMembers'))$('kNewMembers').textContent=newMembers;
+ if($('kProfit')){$('kProfit').textContent=money(totalProfit);$('kProfit').className='v '+(totalProfit>=0?'pos':'neg');}
+ if($('kMonthProfit')){$('kMonthProfit').textContent=money(rangeProfit);$('kMonthProfit').className='v '+(rangeProfit>=0?'pos':'neg');}
+ if($('kJP'))$('kJP').textContent=money(totalJP);
+ if($('kMonthExpense'))$('kMonthExpense').textContent=money(rangeExpense);
+ if($('kMonthEvents'))$('kMonthEvents').textContent=`${inRange.length} 場`;
+ if($('kLevelBreakdown'))$('kLevelBreakdown').textContent=levelText;
+}
+
+function render(){
+ renderDashboardSummary();
+ syncAccountingBusinessHours();
+ let ev=currentEvent();
+ renderEventList();
+ renderAccountingManager();
+ renderSettlementManager();
+ renderMemberRows();
+ bindAccountingControls();
+ if(db.currentAccountingDate)renderDailyAccountingDetail();
+ if(!ev){
+   if($('settleEventTitle'))$('settleEventTitle').textContent='尚未選擇賽事';
+   if($('settleEventMeta'))$('settleEventMeta').textContent='請先到「賽事管理」建立或進入一場賽事';
+   return;
+ }
+ $('currentEventLabel').textContent=`${ev.date} · 第${ev.seq||1}場 · ${ev.level}｜開賽 ${ev.startTime||'--:--'}｜預計截止買入 ${ev.regCloseTime||'--:--'}`;
+ if($('settleEventTitle'))$('settleEventTitle').textContent=`${ev.date}｜第 ${ev.seq||1} 場｜${Number(ev.level).toLocaleString()} 賽事`;
+ if($('settleEventMeta'))$('settleEventMeta').textContent=`每組獎池 ${money(ev.poolUnit)}＋行政費 ${money(ev.admin)}｜每組籌碼 ${Number(ev.chips).toLocaleString()}｜狀態：${ev.status}`;
+ if($('settleStartTime'))$('settleStartTime').value=ev.startTime||'';
+ if($('settleRegCloseTime'))$('settleRegCloseTime').value=ev.regCloseTime||'';
+ if($('settleEndTime'))$('settleEndTime').value=ev.endTime||'';
+ $('eDate').value=ev.date;if($('eStartTime'))$('eStartTime').value=ev.startTime||'';if($('eRegCloseTime'))$('eRegCloseTime').value=ev.regCloseTime||'';$('eLevel').value=currentEvent().level;$('ePoolUnit').value=currentEvent().poolUnit;$('eAdmin').value=currentEvent().admin;$('eChips').value=currentEvent().chips;$('eJP').value=currentEvent().jp;$('eJPRound').value=currentEvent().jpRound;$('ePayout').value=currentEvent().payout;
+ filterAddPlayerMembers($('addPlayerSearch')?.value||'');
+ {
+ const q=String($('memberSearch')?.value||'').trim().toLowerCase();
+ const memberList=db.members.filter(m=>{
+   if(!q)return true;
+   const name=String(m.name||'').toLowerCase();
+   const id=String(m.id||'').toLowerCase();
+   const group=String(m.group||m.settleGroup||m.settlementGroup||m.accountGroup||'').toLowerCase();
+   return name.includes(q)||id.includes(q)||group.includes(q);
+ });
+ $('memberRows').innerHTML=memberList.map(m=>{let h=m.history||[],bi=h.reduce((s,x)=>s+x.paid,0),pr=h.reduce((s,x)=>s+x.prize,0),net=pr-bi;return `<tr><td>${m.name}</td><td>${m.id}</td><td>${m.group||'-'}</td><td>${money(bi)}</td><td>${money(pr)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`}).join('');
+}
+ $('playerRows').innerHTML=currentEvent().players.map((p,i)=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p);return `<tr><td>${m.name}</td>
+ <td><input type="number" min="0" value="${p.buyin}" onchange="setP(${i},'buyin',this.value)"></td>
+ <td><input type="number" min="0" value="${p.rebuy}" onchange="setP(${i},'rebuy',this.value)"></td>
+ <td>${c.groups}</td><td>${c.auto>0?(c.auto/currentEvent().admin).toFixed(1).replace('.0',''):0} 組 / ${money(c.auto)}</td>
+ <td><input type="number" min="0" value="${p.manualDiscount}" onchange="setP(${i},'manualDiscount',this.value)"></td>
+ <td>${money(c.paid)}</td>
+ <td><input value="${p.group||''}" onchange="setP(${i},'group',this.value)"></td><td><button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button></td></tr>`}).join('');
+ let info=poolInfo(), totalGroups=currentEvent().players.reduce((s,p)=>s+calcPlayer(p).groups,0), expected=totalGroups*currentEvent().chips, actual=currentEvent().players.reduce((s,p)=>s+(+p.stack||0),0), chipDiff=actual-expected;
+ let settledEvents=db.events.filter(x=>x.status==='已結算');
+ let settledJP=settledEvents.reduce((sum,x)=>sum+(+x.finalJP||0),0);
+ let totalProfit=settledEvents.reduce((sum,x)=>sum+(x.finalAccounting?.net||0),0);
+ $('kMembers').textContent=db.members.length;
+ $('kProfit').textContent=money(totalProfit);$('kProfit').className='v '+(totalProfit>=0?'pos':'neg');
+ $('kJP').textContent=money(settledJP);
+ $('sPool').textContent=money(info.pool);$('sJP').textContent=money(info.jp);$('sAvail').textContent=money(info.avail);if($('sEntrants'))$('sEntrants').textContent=ev.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,ev).groups,0);if($('sStartingChips'))$('sStartingChips').textContent=Number(ev.chips||0).toLocaleString();$('sChipDiff').textContent=chipDiff.toLocaleString();$('sChipDiff').className='v '+(chipDiff===0?'pos':'neg');
+ if($('btnCalcICM')){$('btnCalcICM').disabled=chipDiff!==0;$('btnCalcICM').style.opacity=$('btnCalcICM').disabled?'.45':'1';}
+ if($('btnConfirmSettlement')){$('btnConfirmSettlement').disabled=false;$('btnConfirmSettlement').style.opacity='1';}
+ renderReportSettings();
+ let reportCols=visibleReportCols();
+ $('settleHead').innerHTML=reportCols.map(([,label])=>`<th>${label}</th>`).join('');
+ let settleSorted=currentEvent().players.map((p,i)=>({p,i,g:chipGrowthFor(p,currentEvent())})).sort((a,b)=>b.g-a.g);
+ $('settleRows').innerHTML=settleSorted.map(({p,i})=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p),cash=(p.prize||0)-c.paid,chip=chipGrowthFor(p,currentEvent());
+  let cells={
+   player:`<td>${m.name}</td>`,
+   groups:`<td>${c.groups}</td>`,
+   paid:`<td>${money(c.paid)}</td>`,
+   stack:`<td><input type="number" min="0" value="${p.stack||0}" onchange="setP(${i},'stack',this.value)" style="min-width:110px"></td>`,
+   prize:`<td>${money(p.prize||0)}</td>`,
+   chipNet:`<td>${chip.toFixed(1)}</td>`,
+   cashNet:`<td class="${cash>=0?'pos':'neg'}">${money(cash)}</td>`,
+   group:`<td>${p.group||m.name}</td>`
+  };return `<tr>${reportCols.map(([k])=>cells[k]).join('')}</tr>`}).join('');
+ let groups={};currentEvent().players.forEach(p=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},g=p.group||m.name,c=calcPlayer(p),net=(p.prize||0)-c.paid;if(!groups[g])groups[g]={names:[],net:0};groups[g].names.push(m.name);groups[g].net+=net});
+ $('groupRows').innerHTML=Object.entries(groups).map(([g,x])=>`<tr><td>${g}</td><td>${x.names.join('、')}</td><td class="${x.net>=0?'pos':'neg'}">${money(x.net)}</td></tr>`).join('');
+ let meta=`日期：${currentEvent().date}　賽事：${currentEvent().level}　原始獎池：${money(info.pool)}　JP：${money(info.jp)}　可發獎金：${money(info.avail)}　玩家：${currentEvent().players.length} 人`;
+ if($('prizeMeta'))$('prizeMeta').textContent=meta;if($('accountMeta'))$('accountMeta').textContent=meta;
+ if($('prizeRows'))$('prizeRows').innerHTML=currentEvent().players.map(p=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知',id:''},c=calcPlayer(p);return `<tr><td>${m.name}</td><td>${m.id}</td><td>${c.groups}</td><td>${money(c.paid)}</td><td>${(+p.stack||0).toLocaleString()}</td><td>${money(p.prize||0)}</td><td style="height:34px"></td></tr>`}).join('');
+ let first={};Object.entries(groups).forEach(([g,x])=>first[g]=true);
+ $('accountRows').innerHTML=currentEvent().players.map(p=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p),net=(p.prize||0)-c.paid,g=p.group||m.name,show=first[g];if(show)first[g]=false;return `<tr><td>${g}</td><td>${m.name}</td><td>${money(c.paid)}</td><td>${money(p.prize||0)}</td><td>${money(net)}</td><td>${show?money(groups[g].net):''}</td></tr>`}).join('');
+
+ renderDailySettlement();
+}
+
+function ensureSettlementReportStore(){
+ if(!Array.isArray(db.dailySettlementReports))db.dailySettlementReports=[];
+ db.dailySettlementReports=db.dailySettlementReports.filter(x=>x&&x.date);
+}
+function createDailySettlementReport(){
+ ensureSettlementReportStore();
+ const date=($('settlementCreateDate')?.value||'').trim();
+ if(!date)return alert('請先選擇營業日');
+ if(!db.dailySettlementReports.some(x=>x.date===date)){
+   db.dailySettlementReports.push({date,createdAt:new Date().toISOString()});
+   db.dailySettlementReports.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+ }
+ db.currentSettlementDate=date;
+ persist();
+ openDailySettlementReport(date);
+}
+function openDailySettlementReport(date){
+ ensureSettlementReportStore();
+ db.currentSettlementDate=date;
+ localStorage.setItem('epcV1',JSON.stringify(db));
+ if($('settlementListView'))$('settlementListView').style.display='none';
+ if($('settlementDetailView'))$('settlementDetailView').style.display='block';
+ if($('dailyDate'))$('dailyDate').value=date;
+ renderDailySettlement();
+}
+function backToSettlementList(){
+ db.currentSettlementDate=null;
+ persist();
+ if($('settlementDetailView'))$('settlementDetailView').style.display='none';
+ if($('settlementListView'))$('settlementListView').style.display='block';
+ renderSettlementManager();
+}
+function deleteDailySettlementReport(date){
+ ensureSettlementReportStore();
+ askDeleteConfirm(`確定要刪除 ${date} 的分帳報表嗎？\n不會刪除原始賽事與結算資料。`,()=>{
+   db.dailySettlementReports=db.dailySettlementReports.filter(x=>x.date!==date);
+   if(db.currentSettlementDate===date)db.currentSettlementDate=null;
+   persist();renderSettlementManager();
+ });
+}
+function renderSettlementManager(){
+ ensureSettlementReportStore();
+ if($('settlementCreateDate')&&!$('settlementCreateDate').value)$('settlementCreateDate').value=new Date().toISOString().slice(0,10);
+ const tbody=$('settlementDayRows');if(!tbody)return;
+ const from=$('settlementDateFrom')?.value||'',to=$('settlementDateTo')?.value||'';
+ tbody.innerHTML=db.dailySettlementReports.filter(r=>(!from||r.date>=from)&&(!to||r.date<=to)).map(r=>{
+   const d=dailySettlementData(r.date);
+   const paid=d.groups.reduce((n,g)=>n+g.paid,0),prize=d.groups.reduce((n,g)=>n+g.prize,0),net=prize-paid;
+   return `<tr><td>${r.date}</td><td>${d.events.length}</td><td>${d.memberCount}</td><td>${money(paid)}</td><td>${money(prize)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="openDailySettlementReport('${r.date}')">進入</button> <button onclick="openDailySettlementReport('${r.date}');setTimeout(printDailySettlement,50)">列印</button> <button class="danger" onclick="deleteDailySettlementReport('${r.date}')">刪除</button></td></tr>`;
+ }).join('')||'<tr><td colspan="7" class="small">尚未建立分帳報表</td></tr>';
+}
+function normalizeSettlementGroupName(value){
+ let v=String(value||'').trim();
+ if(!v || v==='未分組')return '未分組';
+ v=v.replace(/^分帳群組\s*/,'').replace(/^群組\s*/,'').replace(/\s*組$/,'').trim();
+ return v||'未分組';
+}
+
+function dailySettlementData(date){
+ const events=(db.events||[]).filter(e=>businessDateForEvent(e)===date && e.status==='已結算');
+ const groups={};
+ const membersSeen=new Set();
+
+ events.forEach((e,eventIndex)=>{
+   (Array.isArray(e.players)?e.players:[]).forEach(p=>{
+     const m=db.members.find(x=>x.id===p.memberId);
+     if(!m)return;
+
+     const c=calcPlayerForEvent(p,e);
+     const memberGroup=String(
+       m.settleGroup || m.settlementGroup || m.group || m.accountGroup || ''
+     ).trim();
+     const playerGroup=String(
+       p.settleGroup || p.settlementGroup || p.group || p.accountGroup || ''
+     ).trim();
+     const group=normalizeSettlementGroupName(
+       (memberGroup && memberGroup!=='未分組')
+         ? memberGroup
+         : ((playerGroup && playerGroup!=='未分組') ? playerGroup : '未分組')
+     );
+     const paid=+c.paid||0;
+     const prize=+p.prize||0;
+     const discount=+c.totalDiscount||0;
+     const net=prize-paid;
+     membersSeen.add(m.id);
+
+     if(!groups[group])groups[group]={
+       name:group,members:{},paid:0,prize:0,discount:0,net:0
+     };
+     const g=groups[group];
+
+     if(!g.members[m.id]){
+       g.members[m.id]={
+         memberId:m.id,member:m.name,events:[],
+         paid:0,prize:0,discount:0,net:0
+       };
+     }
+     const mr=g.members[m.id];
+     mr.events.push({
+       eventId:e.id,
+       eventSeq:e.seq||eventIndex+1,
+       eventName:`${Number(e.level||0).toLocaleString()} 賽事`,
+       paid,prize,discount,net
+     });
+     mr.paid+=paid;
+     mr.prize+=prize;
+     mr.discount+=discount;
+     mr.net+=net;
+
+     g.paid+=paid;
+     g.prize+=prize;
+     g.discount+=discount;
+     g.net+=net;
+   });
+ });
+
+ const orderName=name=>{
+   if(name==='未分組')return '~~~~';
+   return String(name);
+ };
+ const groupList=Object.values(groups).map(g=>{
+   g.rows=Object.values(g.members).sort((a,b)=>String(a.member).localeCompare(String(b.member),'zh-Hant'));
+   delete g.members;
+   return g;
+ }).sort((a,b)=>orderName(a.name).localeCompare(orderName(b.name),'zh-Hant',{numeric:true}));
+
+ return {events,memberCount:membersSeen.size,groups:groupList};
+}
+function renderDailySettlement(){
+ const el=$('dailyDate'); if(!el)return;
+ if(!el.value)el.value=db.currentSettlementDate||(currentEvent()?.date)||new Date().toISOString().slice(0,10);
+ db.currentSettlementDate=el.value;
+ const d=dailySettlementData(el.value);
+ if($('settlementDetailDate'))$('settlementDetailDate').textContent=`營業日：${el.value}｜報表依目前已正式結算賽事即時計算`;
+
+ const totalPaid=d.groups.reduce((s,g)=>s+g.paid,0);
+ const totalPrize=d.groups.reduce((s,g)=>s+g.prize,0);
+ $('dEvents').textContent=d.events.length;
+ $('dMembers').textContent=d.memberCount;
+ $('dPaid').textContent=money(totalPaid);
+ $('dPrize').textContent=money(totalPrize);
+
+ const box=$('dailyGroupDetail');
+ if(!box)return;
+ if(!d.groups.length){
+   box.innerHTML='<div class="card">此日期尚無已正式結算賽事</div>';
+   return;
+ }
+
+ box.innerHTML=d.groups.map(g=>`
+  <div class="card settlement-group-card" style="margin-bottom:22px">
+   <h3 class="settlement-group-title" style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+     <span>${g.name==='未分組'?'未分組':'群組 '+g.name}</span>
+     <span style="font-size:16px;font-weight:900">
+      總實付 ${money(g.paid)}　｜　總領回 ${money(g.prize)}　｜　總折扣 ${money(g.discount)}　｜　
+      <span class="${g.net>=0?'pos':'neg'}">總輸贏 ${money(g.net)}</span>
+     </span>
+    </h3>
+   <div style="padding:12px">
+    ${g.rows.map(m=>`
+     <div class="member-settlement-block" style="margin-bottom:14px">
+      <div class="member-summary-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;padding:7px 10px;background:#17222d;border-radius:6px">
+       <span style="font-size:17px;font-weight:900">${m.member}</span>
+       <span style="font-size:14px;font-weight:800">
+        當日總結｜實付 ${money(m.paid)}　｜　領回 ${money(m.prize)}　｜　折扣 ${money(m.discount)}　｜　
+        <span class="${m.net>=0?'pos':'neg'}">輸贏 ${money(m.net)}</span>
+       </span>
+      </div>
+      <div class="tablewrap">
+       <table>
+        <thead><tr>
+         <th>參加賽事</th><th>實付</th><th>領回</th><th>折扣</th><th>輸贏</th>
+        </tr></thead>
+        <tbody>
+         ${m.events.map(ev=>`<tr>
+          <td>第${ev.eventSeq}場｜${ev.eventName}</td>
+          <td>${money(ev.paid)}</td>
+          <td>${money(ev.prize)}</td>
+          <td>${money(ev.discount)}</td>
+          <td class="${ev.net>=0?'pos':'neg'}">${money(ev.net)}</td>
+         </tr>`).join('')}
+        </tbody>
+       </table>
+      </div>
+     </div>`).join('')}
+   </div>
+  </div>`).join('');
+}
+function printDailySettlement(){
+ renderDailySettlement();
+ const date=$('dailyDate').value,d=dailySettlementData(date);
+ if(!d.events.length)return alert('此日期沒有已正式結算的賽事');
+
+ const sections=d.groups.map(g=>`
+  <section class="group">
+   <h2>
+    <span>${g.name==='未分組'?'未分組':'群組 '+g.name}</span>
+    <span class="group-head-total">總實付 ${money(g.paid)} ｜ 總領回 ${money(g.prize)} ｜ 總折扣 ${money(g.discount)} ｜ <b class="${g.net>=0?'pos':'neg'}">總輸贏 ${money(g.net)}</b></span>
+   </h2>
+   ${g.rows.map(m=>`
+    <div class="member">
+     <h3 class="member-head">
+      <span>${m.member}</span>
+      <span class="member-total">當日總結｜實付 ${money(m.paid)} ｜ 領回 ${money(m.prize)} ｜ 折扣 ${money(m.discount)} ｜ <b class="${m.net>=0?'pos':'neg'}">輸贏 ${money(m.net)}</b></span>
+     </h3>
+     <table>
+      <thead><tr><th>參加賽事</th><th>實付</th><th>領回</th><th>折扣</th><th>輸贏</th></tr></thead>
+      <tbody>${m.events.map(ev=>`<tr>
+       <td>第${ev.eventSeq}場｜${ev.eventName}</td>
+       <td>${money(ev.paid)}</td><td>${money(ev.prize)}</td>
+       <td>${money(ev.discount)}</td><td>${money(ev.net)}</td>
+      </tr>`).join('')}</tbody>
+     </table>
+    </div>`).join('')}
+  </section>`).join('');
+
+ const w=window.open('','_blank');
+ if(!w)return alert('瀏覽器阻擋列印視窗，請允許彈出式視窗後再試');
+ w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>EPC ${date} 分帳報表</title>
+ <style>
+ @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}
+ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#000;margin:0}
+ h1{font-size:20px;margin:0 0 5px}h2{font-size:17px;margin:0;padding:7px;background:#222;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}.group-head-total{font-size:11px;font-weight:800;text-align:right}
+ h3.member-head{font-size:12.5px;margin:8px 0 4px;padding:5px 6px;background:#f0f0f0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+ .member-total{font-size:10px;font-weight:800;text-align:right}
+ .pos{color:#008a45!important}.neg{color:#d62828!important}
+ h3{font-size:13px;margin:8px 0 4px}.meta{font-size:11px;margin-bottom:12px}
+ .group{margin:0 0 16px;break-inside:auto}.member{break-inside:avoid;margin-bottom:8px}
+ table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10.5px}
+ th,td{border:1px solid #777;padding:5px;text-align:right}
+ th:first-child,td:first-child{text-align:left}thead th{background:#eee}
+ tfoot td{font-weight:800;background:#f3f3f3}.group-total{margin-top:7px}
+ .group-total td{font-weight:900;background:#ddd}
+ </style></head><body>
+ <h1>EPC 當日分帳報表</h1>
+ <div class="meta">日期：${date}　已結算場次：${d.events.length}　參與會員：${d.memberCount}</div>
+ ${sections}</body></html>`);
+ w.document.close();w.focus();setTimeout(()=>w.print(),350);
+}
+function printReport(id){
+ const report=document.getElementById(id);
+ if(!report)return alert('找不到列印報表');
+
+ // 不再直接依賴目前頁面的 window.print()。
+ // 先建立乾淨的列印視窗，避免部分手機/內嵌預覽器阻擋列印。
+ const title=id==='prizeReport'?'EPC ICM 獎金簽領表':'EPC 分帳輸贏結算表';
+ const w=window.open('','_blank');
+ if(!w){
+   // 若瀏覽器阻擋新視窗，退回原頁列印。
+   document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-target'));
+   $('reports').classList.add('print-target');
+   document.querySelectorAll('.report').forEach(r=>r.style.display=r.id===id?'block':'none');
+   setTimeout(()=>{window.print();document.querySelectorAll('.report').forEach(r=>r.style.display='');},100);
+   return;
+ }
+ const css=`
+  @page{size:A4;margin:12mm}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#000;margin:0}
+  h2,h3{margin:0 0 10px}.small{font-size:11px;color:#333}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th,td{border:1px solid #666;padding:6px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  .no-print,.toolbar,button{display:none!important}
+  .print-only{display:block!important}
+  .card{border:0!important;background:#fff!important;color:#000!important;padding:0!important}
+ `;
+ w.document.open();
+ w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${css}</style></head><body>${report.outerHTML}</body></html>`);
+ w.document.close();
+ w.focus();
+ setTimeout(()=>{w.print();},350);
+}
+
+
+
+
+function applySettledLock(){
+ // 已結算賽事仍允許編輯；再次正式結算時會覆寫本場會員紀錄與最終帳務。
+}
+
+const EVENT_REPORT_FIELDS=[
+ ['player','玩家'],['memberId','會員ID'],['groups','總組數'],['paid','總支付'],
+ ['stack','最終籌碼'],['growth','籌碼增長率'],['prize','ICM獎金'],['net','個人盈虧'],['signature','簽名'],['note','備註']
+];
+function ensureEventReportSettings(e){
+ if(!e.reportFields)e.reportFields={};
+ EVENT_REPORT_FIELDS.forEach(([k])=>{if(e.reportFields[k]===undefined)e.reportFields[k]=true;});
+}
+function setEventReportField(key,checked){
+ let e=currentEvent();if(!e)return;
+ ensureEventReportSettings(e);
+ if(e.reportRule===undefined){e.reportRule=db.defaultReportRule||'';persist();}e.reportFields[key]=checked;persist();renderEventReport();
+}
+function saveDefaultReportRule(value){
+ db.defaultReportRule=value||'';persist();
+ if($('settleDefaultReportRuleInput') && $('settleDefaultReportRuleInput').value!==db.defaultReportRule)$('settleDefaultReportRuleInput').value=db.defaultReportRule;
+}
+function useDefaultReportRule(){
+ let e=currentEvent();if(!e)return;
+ e.reportRule=db.defaultReportRule||'';
+ persist();
+ if($('settleReportRuleInput'))$('settleReportRuleInput').value=e.reportRule;
+ renderEventReport();
+ actionMsg('已套用預設規則');
+}
+function saveEventReportRule(value){
+ let e=currentEvent();if(!e)return;
+ e.reportRule=value||'';persist();
+ if($('settleReportRuleInput') && $('settleReportRuleInput').value!==e.reportRule)$('settleReportRuleInput').value=e.reportRule;
+ if($('eventReportRule')){
+   $('eventReportRule').textContent=(e.reportRule||'').trim()?('本場規則：'+e.reportRule):'';
+   $('eventReportRule').style.display=(e.reportRule||'').trim()?'block':'none';
+ }
+}
+function renderEventReport(){
+ let e=currentEvent();if(!e)return;
+ ensureEventReportSettings(e);
+ let info=poolInfo(e);
+ let totalGroups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
+ let eventName=`${Number(e.level||0).toLocaleString()} 賽事`;
+ if($('eventReportSettings'))$('eventReportSettings').innerHTML=EVENT_REPORT_FIELDS.map(([k,label])=>
+   `<label style="display:flex;gap:7px;align-items:center"><input type="checkbox" ${e.reportFields[k]?'checked':''} onchange="setEventReportField('${k}',this.checked)"> ${label}</label>`
+ ).join('');
+ if($('eventReportHeader'))$('eventReportHeader').innerHTML=[
+   ['賽事日期',e.date||''],['賽事名稱',eventName],['開始時間',e.startTime||'--:--'],
+   ['結束時間',e.endTime||'--:--'],['總買入組數',totalGroups],
+   ['總可發獎金',money(info.avail)],['總JP',money(info.jp)]
+ ].map(([k,v])=>`<div><div class="small">${k}</div><strong>${v}</strong></div>`).join('');
+ if($('eventReportRule')){
+   $('eventReportRule').textContent=(e.reportRule||'').trim()?('本場規則：'+e.reportRule):'';
+   $('eventReportRule').style.display=(e.reportRule||'').trim()?'block':'none';
+ }
+ let fields=EVENT_REPORT_FIELDS.filter(([k])=>e.reportFields[k]);
+ if($('eventReportHead'))$('eventReportHead').innerHTML=fields.map(([,label])=>`<th>${label}</th>`).join('');
+ let rows=e.players.map((p,i)=>{
+   let m=db.members.find(x=>String(x.id)===String(p.memberId))||{name:'未知',id:p.memberId};
+   let c=calcPlayerForEvent(p,e), growth=chipGrowthFor(p,e);
+   let vals={
+     player:m.name||'未知',
+     memberId:m.id||p.memberId||'',
+     groups:c.groups,
+     paid:money(c.paid),
+     stack:Number(p.stack||0).toLocaleString(),
+     growth:growth.toFixed(1),
+     prize:money(+p.prize||0),
+     net:((+p.prize||0)-c.paid>=0?'+':'-')+money(Math.abs((+p.prize||0)-c.paid)),
+     signature:'________________',
+     note:''
+   };
+   return {html:fields.map(([k])=>`<td>${vals[k]}</td>`).join(''),growth};
+ }).sort((a,b)=>b.growth-a.growth);
+ if($('eventReportTotalGroups'))$('eventReportTotalGroups').textContent=totalGroups.toLocaleString();
+ if($('eventReportTotalChips')){
+   const totalChips=e.players.reduce((sum,p)=>sum+(+p.stack||0),0);
+   $('eventReportTotalChips').textContent=totalChips.toLocaleString();
+ }
+ if($('eventReportRows')){
+   const minRows=20;
+   let html=rows.map(x=>`<tr>${x.html}</tr>`).join('');
+   const blankCount=Math.max(0,minRows-rows.length);
+   for(let b=0;b<blankCount;b++){
+     html+=`<tr class="blank-report-row">${fields.map(()=>'<td>&nbsp;</td>').join('')}</tr>`;
+   }
+   $('eventReportRows').innerHTML=html;
+ }
+}
+function openEventReport(){
+ document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-target'));
+ if($('eventreport'))$('eventreport').classList.add('print-target');
+ renderEventReport();
+ showPage('eventreport');
+}
+function printEventReport(){
+ const paper=$('eventReportPaper');
+ if(!paper){alert('找不到列印報表');return;}
+
+ let old=$('eventPrintOnly');
+ if(old)old.remove();
+
+ const printOnly=document.createElement('div');
+ printOnly.id='eventPrintOnly';
+ printOnly.innerHTML=paper.outerHTML;
+ document.body.appendChild(printOnly);
+
+ const clonedPaper=printOnly.querySelector('#eventReportPaper');
+ const rule=printOnly.querySelector('#eventReportRule');
+
+ // 規則高度依文字量自動調整：最少 14mm，最多 34mm。
+ // 文字越少，省下的高度全部回補給 20 個玩家列，讓報表固定吃滿 A4。
+ const ruleText=(rule?.textContent||'').trim();
+ const chars=ruleText.length;
+ const lines=Math.max(1,ruleText.split(/\n/).length);
+ let ruleMm=14 + Math.max(0,lines-1)*3 + Math.max(0,Math.ceil(chars/70)-1)*3;
+ ruleMm=Math.max(14,Math.min(34,ruleMm));
+
+ // A4 可印高度 287mm。
+ // 固定區：標題13 + 賽事資料48 + 區塊間距4 + 表頭8 + 底部14 ≈ 87mm。
+ // 剩餘高度扣除規則後，平均分配給固定 20 列。
+ const fixedMm=87;
+ const availableRowsMm=291-fixedMm-ruleMm;
+ const rowMm=Math.max(6.2,Math.min(10.0,availableRowsMm/20));
+
+ if(clonedPaper){
+   clonedPaper.style.setProperty('--rule-h',ruleMm+'mm');
+   clonedPaper.style.setProperty('--player-row-h',rowMm+'mm');
+ }
+
+ document.body.classList.add('printing-event-report');
+
+ const cleanup=()=>{
+   document.body.classList.remove('printing-event-report');
+   const el=$('eventPrintOnly');
+   if(el)el.remove();
+ };
+ window.addEventListener('afterprint',cleanup,{once:true});
+
+ try{window.print();}
+ catch(err){cleanup();alert('無法開啟列印預覽。');}
+
+ setTimeout(()=>{
+   if(document.body.classList.contains('printing-event-report'))cleanup();
+ },3000);
+}
+
+(function(){
+ const a=$('businessStartTime'),b=$('businessEndTime');
+ if(a&&a.parentElement)a.parentElement.style.display='none';
+ if(b&&b.parentElement)b.parentElement.style.display='none';
+})();
+
+render();
+initializeCloud();
+setInterval(()=>{if(cloudReady)refreshFormMembers(true)},120000);
+</script>
+</body></html>
