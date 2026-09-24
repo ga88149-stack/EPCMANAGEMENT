@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.30 Web · Safe Phone Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.31 Web · Safe Phone Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1580,25 +1580,13 @@ async function manualCloudSync(){
    await saveCloudNow(true);
  }
 }
-function phoneBridgeJsonp(action){
- return new Promise((resolve,reject)=>{
-   const cb='__epcPhoneCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-   const script=document.createElement('script');
-   const timer=setTimeout(()=>finish(new Error('PHONE_BRIDGE_TIMEOUT')),15000);
-   function finish(err,data){
-     clearTimeout(timer);
-     try{delete window[cb]}catch(_){}
-     try{script.remove()}catch(_){}
-     err?reject(err):resolve(data);
-   }
-   window[cb]=(data)=>{
-     if(!data||data.ok!==true)return finish(new Error((data&&data.error)||'PHONE_BRIDGE_ERROR'));
-     finish(null,data);
-   };
-   script.onerror=()=>finish(new Error('PHONE_BRIDGE_HTTP_ERROR'));
-   script.src=PHONE_BRIDGE_API+'?action='+encodeURIComponent(action)+'&callback='+encodeURIComponent(cb)+'&_='+Date.now();
-   document.head.appendChild(script);
- });
+async function phoneBridgeFetch(action){
+ const url=PHONE_BRIDGE_API+'?action='+encodeURIComponent(action)+'&_='+Date.now();
+ const r=await fetch(url,{method:'GET',redirect:'follow',cache:'no-store'});
+ if(!r.ok)throw new Error('PHONE_BRIDGE_HTTP_'+r.status);
+ const data=await r.json();
+ if(!data||data.ok!==true)throw new Error((data&&data.error)||'PHONE_BRIDGE_ERROR');
+ return data;
 }
 async function syncPhoneStacksOnly(){
  const localEvent=currentEvent();
@@ -1608,7 +1596,7 @@ async function syncPhoneStacksOnly(){
  try{
    setCloudState('☁ 正在讀取手機籌碼…');
    // 經 EPC PHONE bridge 讀取雲端；不把整份雲端 DB 載入電腦。
-   const res=await phoneBridgeJsonp('stacks');
+   const res=await phoneBridgeFetch('stacks');
    const cloudDb=res.data;
    if(!cloudDb||!Array.isArray(cloudDb.events))throw new Error('CLOUD_EMPTY');
 
