@@ -29,6 +29,14 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px
  .page{display:none!important}.page.print-target{display:block!important}.card{border:0;padding:0;margin:0}.print-only{display:block}
  table{font-size:11px}th,td{border:1px solid #777;padding:5px;color:#000}.small{color:#333}.pos,.neg{color:#000}
 }
+
+.player-col-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.player-col-controls .control-title{font-weight:900;margin-right:4px;white-space:nowrap}
+.player-col-chip{display:inline-flex;align-items:center;gap:7px;margin:0;padding:7px 10px;border:1px solid #2b3a49;border-radius:9px;background:#0d1721;cursor:pointer;white-space:nowrap;font-size:13px;font-weight:700}
+.player-col-chip:hover{border-color:#51677c}
+.player-col-chip input{width:15px;height:15px;margin:0;accent-color:#e7b84b}
+#eventPlayerTotals td{font-size:14px;font-weight:900;border-top:2px solid #e7b84b;padding-top:13px;padding-bottom:13px}
+#eventPlayerTotals td:first-child{color:#e7b84b}
 </style>
 
 <style id="eventReportRedesign">
@@ -941,7 +949,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.24 Web · Player Column Display</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.25 Web · Display Controls</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1058,16 +1066,16 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   <div class="toolbar"><button class="primary" onclick="addPlayer()">加入本場</button></div>
  </div>
  <div class="card" style="margin-bottom:10px">
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-   <strong style="white-space:nowrap">顯示欄位</strong>
-   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="memberId" onchange="render()"> 會員編號</label>
-   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="nickname" onchange="render()"> 綽號</label>
-   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="rebuyDiscount" onchange="render()"> 重買優惠</label>
-   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="overbuyDiscount" onchange="render()"> 超買優惠</label>
-   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="manualDiscount" onchange="render()"> 手動優惠</label>
-   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="totalDiscount" onchange="render()"> 總優惠</label>
+  <div class="player-col-controls">
+   <span class="control-title">顯示欄位</span>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="memberId" onchange="render()">會員編號</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="nickname" onchange="render()">綽號</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="rebuyDiscount" onchange="render()">重買優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="overbuyDiscount" onchange="render()">超買優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="manualDiscount" onchange="render()">手動優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="totalDiscount" onchange="render()">總優惠</label>
   </div>
-  <div class="small" style="margin-top:7px">玩家、買入、重買、總組數、實收固定顯示；結帳群組僅供後台分帳使用，不在此表顯示。</div>
+  <div class="small" style="margin-top:8px">玩家、買入、重買、總組數、實收固定顯示；結帳群組僅供後台分帳使用。</div>
  </div>
  <div class="card">
   <table id="eventPlayerTable" style="width:100%;table-layout:auto">
