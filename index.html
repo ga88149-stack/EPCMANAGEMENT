@@ -941,7 +941,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.17 Web · Custom Re-entry Pricing</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.18 Web · Custom Pricing Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1897,6 +1897,9 @@ function goICM(){
  document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
  render();window.scrollTo(0,0);
 }
+function pricingDiscountFor(c,e){
+ return (e.pricingMode||'standard')==='custom' ? 0 : (+c.auto||0);
+}
 function chipGrowthFor(p,e){
  let c=calcPlayerForEvent(p,e);
  let original=(+e.chips||0);
@@ -2582,7 +2585,7 @@ function render(){
  $('playerRows').innerHTML=currentEvent().players.map((p,i)=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p);return `<tr><td>${m.name}</td>
  <td><input type="number" min="0" value="${p.buyin}" onchange="setP(${i},'buyin',this.value)"></td>
  <td><input type="number" min="0" value="${p.rebuy}" onchange="setP(${i},'rebuy',this.value)"></td>
- <td>${c.groups}</td><td>${(currentEvent().pricingMode||'standard')==='custom'?'固定重買價':(c.auto>0?(c.auto/currentEvent().admin).toFixed(1).replace('.0',''):0)+' 組 / '+money(c.auto)}</td>
+ <td>${c.groups}</td><td>${(currentEvent().pricingMode||'standard')==='custom'?'0 組 / '+money(0):(c.auto>0?(c.auto/currentEvent().admin).toFixed(1).replace('.0',''):0)+' 組 / '+money(c.auto)}</td>
  <td><input type="number" min="0" value="${p.manualDiscount}" onchange="setP(${i},'manualDiscount',this.value)"></td>
  <td>${money(c.paid)}</td>
  <td><input value="${p.group||''}" onchange="setP(${i},'group',this.value)"></td><td><button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button></td></tr>`}).join('');
