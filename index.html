@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.29 Web · Phone Chip Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.30 Web · Safe Phone Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1410,6 +1410,7 @@ const $=id=>document.getElementById(id);
 const money=n=>'$'+Math.round(Number(n||0)).toLocaleString('zh-TW');
 const uid=()=>String(Date.now()).slice(-8)+Math.floor(Math.random()*90+10);
 const CLOUD_API='https://script.google.com/macros/s/AKfycby1YCXllpyYOFEN60N-jR6kAk-Y2hOYpIa2GlS74cBFDK-Dt4mDa4sCd80MR6ZSxpbQ6A/exec';
+const PHONE_BRIDGE_API='https://script.google.com/macros/s/AKfycbyCxNxPmXhdfDragzrfHE8TnobTYUaLTbG6xod8uEMku8elOM2MCKsJ31paZmEXu6D2/exec';
 let db=JSON.parse(localStorage.getItem('epcV1')||'null')||{members:[],jpBalance:0,events:[],currentEventId:null};
 let cloudRevision=Number(localStorage.getItem('epcCloudRevision')||0);
 let cloudReady=false,cloudSaving=false,cloudSaveTimer=null,cloudPending=false;
@@ -1579,6 +1580,26 @@ async function manualCloudSync(){
    await saveCloudNow(true);
  }
 }
+function phoneBridgeJsonp(action){
+ return new Promise((resolve,reject)=>{
+   const cb='__epcPhoneCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+   const script=document.createElement('script');
+   const timer=setTimeout(()=>finish(new Error('PHONE_BRIDGE_TIMEOUT')),15000);
+   function finish(err,data){
+     clearTimeout(timer);
+     try{delete window[cb]}catch(_){}
+     try{script.remove()}catch(_){}
+     err?reject(err):resolve(data);
+   }
+   window[cb]=(data)=>{
+     if(!data||data.ok!==true)return finish(new Error((data&&data.error)||'PHONE_BRIDGE_ERROR'));
+     finish(null,data);
+   };
+   script.onerror=()=>finish(new Error('PHONE_BRIDGE_HTTP_ERROR'));
+   script.src=PHONE_BRIDGE_API+'?action='+encodeURIComponent(action)+'&callback='+encodeURIComponent(cb)+'&_='+Date.now();
+   document.head.appendChild(script);
+ });
+}
 async function syncPhoneStacksOnly(){
  const localEvent=currentEvent();
  if(!localEvent)return alert('請先選擇要結算的賽事');
@@ -1586,8 +1607,8 @@ async function syncPhoneStacksOnly(){
 
  try{
    setCloudState('☁ 正在讀取手機籌碼…');
-   // 只讀雲端快照，不以雲端 DB 取代本機 db。
-   const res=await cloudGet('load');
+   // 經 EPC PHONE bridge 讀取雲端；不把整份雲端 DB 載入電腦。
+   const res=await phoneBridgeJsonp('stacks');
    const cloudDb=res.data;
    if(!cloudDb||!Array.isArray(cloudDb.events))throw new Error('CLOUD_EMPTY');
 
@@ -1596,24 +1617,18 @@ async function syncPhoneStacksOnly(){
 
    const cloudPlayers=Array.isArray(cloudEvent.players)?cloudEvent.players:[];
    let updated=0, unchanged=0, missing=0;
-
    (localEvent.players||[]).forEach(lp=>{
      const cp=cloudPlayers.find(p=>String(p.memberId)===String(lp.memberId));
-     if(!cp){missing++;return;}
-     // 空白代表手機尚未輸入，不用空白覆蓋電腦原本的籌碼。
-     if(cp.stack===undefined||cp.stack===null||String(cp.stack).trim()===''){missing++;return;}
+     if(!cp || cp.stack===undefined || cp.stack===null || String(cp.stack).trim()===''){missing++;return;}
      const stack=Number(cp.stack);
      if(!Number.isFinite(stack)||stack<0){missing++;return;}
      if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;
    });
 
-   // 這裡刻意不修改 cloudRevision、不替換 db，也不碰任何其他欄位。
-   // persist() 只保存目前電腦資料 + 剛同步進來的 stack。
-   if(updated>0)persist();
-   else render();
-
+   // 只改本機玩家 stack；其他欄位完全不從手機覆蓋。
+   if(updated>0)persist(); else render();
    actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入/找不到 ${missing} 人`);
-   setCloudState(`☁ 手機籌碼已讀取｜只更新下桌籌碼`);
+   setCloudState('☁ 手機籌碼已同步｜只更新下桌籌碼');
  }catch(err){
    console.error('phone stack sync failed',err);
    setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
