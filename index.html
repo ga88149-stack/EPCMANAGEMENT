@@ -961,7 +961,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.26 Web · Adaptive Columns</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.27 Web · Group Print</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1353,6 +1353,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   <strong>查看群組</strong>
   <button type="button" class="secondary" onclick="selectAllSettlementGroups(true)">全選</button>
   <button type="button" class="secondary" onclick="selectAllSettlementGroups(false)">清除</button>
+  <button type="button" class="primary" onclick="printSelectedSettlementGroups()">列印已選群組</button>
  </div>
  <div id="settlementGroupFilter" style="display:flex;gap:8px 16px;flex-wrap:wrap"></div>
 </div>
@@ -2971,12 +2972,19 @@ function selectAllSettlementGroups(checked){
  document.querySelectorAll('#settlementGroupFilter input[type="checkbox"]').forEach(x=>x.checked=checked);
  renderDailySettlement();
 }
-function printDailySettlement(){
+function printSelectedSettlementGroups(){
+ const selected=Array.from(document.querySelectorAll('#settlementGroupFilter input[type="checkbox"]:checked')).map(x=>x.value);
+ if(!selected.length)return alert('請先勾選至少一個要列印的群組');
+ printDailySettlement(selected);
+}
+function printDailySettlement(groupNames=null){
  renderDailySettlement();
  const date=$('dailyDate').value,d=dailySettlementData(date);
  if(!d.events.length)return alert('此日期沒有已正式結算的賽事');
 
- const sections=d.groups.map(g=>`
+ const printGroups=Array.isArray(groupNames)?d.groups.filter(g=>groupNames.includes(g.name)):d.groups;
+ if(!printGroups.length)return alert('請先選擇至少一個要列印的群組');
+ const sections=printGroups.map(g=>`
   <section class="group">
    <h2>
     <span>${g.name==='未分組'?'未分組':'群組 '+g.name}</span>
@@ -3018,7 +3026,7 @@ function printDailySettlement(){
  .group-total td{font-weight:900;background:#ddd}
  </style></head><body>
  <h1>EPC 當日分帳報表</h1>
- <div class="meta">日期：${date}　已結算場次：${d.events.length}　參與會員：${d.memberCount}</div>
+ <div class="meta">日期：${date}　已結算場次：${d.events.length}　列印群組：${printGroups.map(g=>g.name).join('、')}</div>
  ${sections}</body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),350);
 }
