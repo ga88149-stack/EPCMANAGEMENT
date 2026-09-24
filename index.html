@@ -941,7 +941,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.22 Web · Multi Group Filter</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.24 Web · Player Column Display</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1057,8 +1057,24 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   </div>
   <div class="toolbar"><button class="primary" onclick="addPlayer()">加入本場</button></div>
  </div>
- <div class="card tablewrap">
-  <table><thead><tr><th>玩家</th><th>買入</th><th>重買</th><th>總組數</th><th>重買優惠</th><th>超買優惠</th><th>手動優惠</th><th>總優惠</th><th>實收</th><th>結帳群組</th><th>操作</th></tr></thead><tbody id="playerRows"></tbody></table>
+ <div class="card" style="margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+   <strong style="white-space:nowrap">顯示欄位</strong>
+   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="memberId" onchange="render()"> 會員編號</label>
+   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="nickname" onchange="render()"> 綽號</label>
+   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="rebuyDiscount" onchange="render()"> 重買優惠</label>
+   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="overbuyDiscount" onchange="render()"> 超買優惠</label>
+   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="manualDiscount" onchange="render()"> 手動優惠</label>
+   <label style="margin:0;white-space:nowrap"><input type="checkbox" data-player-col="totalDiscount" onchange="render()"> 總優惠</label>
+  </div>
+  <div class="small" style="margin-top:7px">玩家、買入、重買、總組數、實收固定顯示；結帳群組僅供後台分帳使用，不在此表顯示。</div>
+ </div>
+ <div class="card">
+  <table id="eventPlayerTable" style="width:100%;table-layout:auto">
+   <thead><tr id="eventPlayerHead"></tr></thead>
+   <tbody id="playerRows"></tbody>
+   <tfoot><tr id="eventPlayerTotals" style="font-weight:900;background:#17222d"></tr></tfoot>
+  </table>
  </div>
  <div class="notice" id="pricingNotice">標準模式：第 1 組行政費原價；第 2～10 組行政費半價；第 11 組起免行政費。自訂模式：第 2 組至超買門檻依重買價計價；超過門檻後免重買行政費。優惠分為重買優惠、超買優惠、手動優惠。</div>
 </section>
@@ -1830,7 +1846,7 @@ function addPlayer(){
  let id=$('addPlayerMember').value;if(!id)return alert('請先建立會員');
  if(currentEvent().players.some(p=>p.memberId===id))return alert('此會員已加入本場');
  let m=db.members.find(x=>x.id===id);
- currentEvent().players.push({memberId:id,buyin:1,rebuy:0,addon:0,manualDiscount:0,stack:0,group:$('addPlayerGroup').value.trim()||m.group||'',prize:0});
+ currentEvent().players.push({memberId:id,buyin:1,rebuy:0,addon:0,manualDiscount:0,stack:0,nickname:m.nickname||'',group:$('addPlayerGroup').value.trim()||m.group||'',prize:0});
  $('addPlayerGroup').value='';
  if($('addPlayerSearch'))$('addPlayerSearch').value='';
  persist();render();
@@ -1838,7 +1854,7 @@ function addPlayer(){
 function setP(i,k,v){
  let e=currentEvent();if(!e)return;
  if(e.status==='已結算')return alert('此賽事已完成結算並鎖定，不能再修改。');
- e.players[i][k]=(k==='group'?v:+v);persist();render();
+ e.players[i][k]=((k==='group'||k==='nickname')?v:+v);persist();render();
 }
 function removePlayerSafe(memberId){
  const e=currentEvent();if(!e)return;
@@ -2565,6 +2581,15 @@ function renderDashboardSummary(){
  if($('kLevelBreakdown'))$('kLevelBreakdown').textContent=levelText;
 }
 
+const PLAYER_OPTIONAL_COLS=['memberId','nickname','rebuyDiscount','overbuyDiscount','manualDiscount','totalDiscount'];
+function playerVisibleCols(){
+ if(!window.__playerVisibleCols)window.__playerVisibleCols=new Set();
+ document.querySelectorAll('[data-player-col]').forEach(cb=>{
+   if(cb.checked)window.__playerVisibleCols.add(cb.dataset.playerCol);
+   else window.__playerVisibleCols.delete(cb.dataset.playerCol);
+ });
+ return window.__playerVisibleCols;
+}
 function render(){
  renderDashboardSummary();
  syncAccountingBusinessHours();
@@ -2612,16 +2637,57 @@ function render(){
  });
  $('memberRows').innerHTML=memberList.map(m=>{let h=m.history||[],bi=h.reduce((s,x)=>s+x.paid,0),pr=h.reduce((s,x)=>s+x.prize,0),net=pr-bi;return `<tr><td>${m.name}</td><td>${m.id}</td><td>${m.group||'-'}</td><td>${money(bi)}</td><td>${money(pr)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`}).join('');
 }
- $('playerRows').innerHTML=currentEvent().players.map((p,i)=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p);return `<tr><td>${m.name}</td>
- <td><input type="number" min="0" value="${p.buyin}" onchange="setP(${i},'buyin',this.value)"></td>
- <td><input type="number" min="0" value="${p.rebuy}" onchange="setP(${i},'rebuy',this.value)"></td>
- <td>${c.groups}</td>
- <td>${money((currentEvent().pricingMode||'standard')==='custom'?(c.rebuyDiscount||0):(c.auto||0))}</td>
- <td>${money((currentEvent().pricingMode||'standard')==='custom'?(c.overbuyDiscount||0):0)}</td>
- <td><input type="number" min="0" value="${p.manualDiscount}" onchange="setP(${i},'manualDiscount',this.value)"></td>
- <td><b>${money(c.totalDiscount||0)}</b></td>
- <td>${money(c.paid)}</td>
- <td><input value="${p.group||''}" onchange="setP(${i},'group',this.value)"></td><td><button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button></td></tr>`}).join('');
+ const visible=playerVisibleCols();
+ document.querySelectorAll('[data-player-col]').forEach(cb=>cb.checked=visible.has(cb.dataset.playerCol));
+ const cols=[
+  ['name','玩家',true],['memberId','會員編號',visible.has('memberId')],['nickname','綽號',visible.has('nickname')],
+  ['buyin','買入',true],['rebuy','重買',true],['groups','總組數',true],
+  ['rebuyDiscount','重買優惠',visible.has('rebuyDiscount')],['overbuyDiscount','超買優惠',visible.has('overbuyDiscount')],
+  ['manualDiscount','手動優惠',visible.has('manualDiscount')],['totalDiscount','總優惠',visible.has('totalDiscount')],
+  ['paid','實收',true],['action','操作',true]
+ ].filter(x=>x[2]);
+ if($('eventPlayerHead'))$('eventPlayerHead').innerHTML=cols.map(c=>`<th style="white-space:nowrap">${c[1]}</th>`).join('');
+
+ const rowData=currentEvent().players.map((p,i)=>{
+   const m=db.members.find(x=>x.id===p.memberId)||{name:'未知',id:p.memberId},c=calcPlayer(p);
+   const custom=(currentEvent().pricingMode||'standard')==='custom';
+   return {p,i,m,c,vals:{
+    name:`<span style="white-space:nowrap">${m.name}</span>`,
+    memberId:`<span style="white-space:nowrap">${m.id||p.memberId||''}</span>`,
+    nickname:`<input value="${p.nickname??m.nickname??''}" placeholder="綽號" style="width:90px;min-width:0" onchange="setP(${i},'nickname',this.value)">`,
+    buyin:`<input type="number" min="0" value="${p.buyin}" style="width:72px;min-width:0" onchange="setP(${i},'buyin',this.value)">`,
+    rebuy:`<input type="number" min="0" value="${p.rebuy}" style="width:72px;min-width:0" onchange="setP(${i},'rebuy',this.value)">`,
+    groups:`<span style="white-space:nowrap">${c.groups}</span>`,
+    rebuyDiscount:`<span style="white-space:nowrap">${money(custom?(c.rebuyDiscount||0):(c.auto||0))}</span>`,
+    overbuyDiscount:`<span style="white-space:nowrap">${money(custom?(c.overbuyDiscount||0):0)}</span>`,
+    manualDiscount:`<input type="number" min="0" value="${p.manualDiscount}" style="width:90px;min-width:0" onchange="setP(${i},'manualDiscount',this.value)">`,
+    totalDiscount:`<b style="white-space:nowrap">${money(c.totalDiscount||0)}</b>`,
+    paid:`<span style="white-space:nowrap">${money(c.paid)}</span>`,
+    action:`<button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button>`
+   }};
+ });
+ $('playerRows').innerHTML=rowData.map(r=>`<tr>${cols.map(c=>`<td>${r.vals[c[0]]}</td>`).join('')}</tr>`).join('');
+
+ const totals=rowData.reduce((a,r)=>{
+   const c=r.c,custom=(currentEvent().pricingMode||'standard')==='custom';
+   a.groups+=c.groups||0;
+   a.rebuyDiscount+=custom?(c.rebuyDiscount||0):(c.auto||0);
+   a.overbuyDiscount+=custom?(c.overbuyDiscount||0):0;
+   a.manualDiscount+=c.manual||(+r.p.manualDiscount||0);
+   a.totalDiscount+=c.totalDiscount||0;
+   a.paid+=c.paid||0;
+   return a;
+ },{groups:0,rebuyDiscount:0,overbuyDiscount:0,manualDiscount:0,totalDiscount:0,paid:0});
+ const totalVals={
+  name:'<b style="white-space:nowrap">本場總計</b>',memberId:'',nickname:'',buyin:'',rebuy:'',
+  groups:`<b>${totals.groups.toLocaleString()}</b>`,
+  rebuyDiscount:`<b>${money(totals.rebuyDiscount)}</b>`,
+  overbuyDiscount:`<b>${money(totals.overbuyDiscount)}</b>`,
+  manualDiscount:`<b>${money(totals.manualDiscount)}</b>`,
+  totalDiscount:`<b>${money(totals.totalDiscount)}</b>`,
+  paid:`<b>${money(totals.paid)}</b>`,action:''
+ };
+ if($('eventPlayerTotals'))$('eventPlayerTotals').innerHTML=cols.map(c=>`<td style="white-space:nowrap">${totalVals[c[0]]||''}</td>`).join('');
  let info=poolInfo(), totalGroups=currentEvent().players.reduce((s,p)=>s+calcPlayer(p).groups,0), expected=totalGroups*currentEvent().chips, actual=currentEvent().players.reduce((s,p)=>s+(+p.stack||0),0), chipDiff=actual-expected;
  let settledEvents=db.events.filter(x=>x.status==='已結算');
  let settledJP=settledEvents.reduce((sum,x)=>sum+(+x.finalJP||0),0);
