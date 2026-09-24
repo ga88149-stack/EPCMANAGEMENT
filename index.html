@@ -941,7 +941,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.14 Web · Verified Cloud</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.15 Web · JP Round Up</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1111,7 +1111,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
     </div>
   </div>
 <div class="small" style="margin-top:8px">在下方直接輸入每位玩家的「下桌籌碼」。只有籌碼差異 = 0 時，才能計算 ICM 與正式結算。</div>
-  <div class="small">JP = 總獎池 × 3% 後依設定單位向下取整；被捨去的餘數自然留在 ICM 可發獎池。</div>
+  <div class="small">JP = 總獎池 × 3% 後依設定單位向上取整；不足一個取整單位的餘數一併計入 JP。</div>
  </div>
  <div class="card no-print">
 <h3>顯示設定</h3>
@@ -1835,7 +1835,7 @@ function calcPlayer(p){
 function poolInfo(){
  let e=currentEvent(); if(!e)return {pool:0,jp:0,avail:0};
  let pool=e.players.reduce((sum,p)=>sum+calcPlayer(p).pool,0);
- let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=Math.floor(raw/unit)*unit;
+ let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=raw>0?Math.ceil(raw/unit)*unit:0;
  return {pool,jp,avail:pool-jp};
 }
 // Exact ICM for payout positions; recursive memoized enumeration. Suitable for typical final tables.
@@ -2010,7 +2010,7 @@ function poolInfoForEvent(e){
  const pool=players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).pool,0);
  const raw=pool*((+e.jp||0)/100);
  const unit=Math.max(1,+e.jpRound||1);
- const jp=Math.floor(raw/unit)*unit;
+ const jp=raw>0?Math.ceil(raw/unit)*unit:0;
  return {pool,jp,avail:pool-jp};
 }
 function eventOwnJP(e){
@@ -2382,7 +2382,7 @@ function renderEventList(){
  body.innerHTML=rows.map(({e,eventIndex})=>{
    let groups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
    let pool=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).pool,0);
-   let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=Math.floor(raw/unit)*unit;
+   let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=raw>0?Math.ceil(raw/unit)*unit:0;
    let reportBtn=`<button type="button" onclick="openEventReportById('${e.id}')">列印報表</button>`;
    return `<tr><td>${businessDateForEvent(e)}</td><td>第 ${e.seq||1} 場</td><td>${e.level}</td><td>${e.players.length}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} <button type="button" class="danger" onclick="deleteEventByIndex(${eventIndex})">刪除</button></td></tr>`;
  }).join('') || '<tr><td colspan="9" style="text-align:center;color:#91a0b2">此營業日尚無賽事</td></tr>';
