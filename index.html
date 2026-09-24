@@ -941,7 +941,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.21 Web · Report Group Filter</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.22 Web · Multi Group Filter</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1313,12 +1313,12 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
    <div class="card kpi"><div class="l">當日總獎金</div><div class="v" id="dPrize">$0</div></div>
   </div>
   <div class="card no-print" style="margin-bottom:12px;padding:12px 14px">
- <label style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0">
+ <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
   <strong>查看群組</strong>
-  <select id="settlementGroupFilter" onchange="renderDailySettlement()" style="min-width:200px">
-   <option value="ALL">全部群組</option>
-  </select>
- </label>
+  <button type="button" class="secondary" onclick="selectAllSettlementGroups(true)">全選</button>
+  <button type="button" class="secondary" onclick="selectAllSettlementGroups(false)">清除</button>
+ </div>
+ <div id="settlementGroupFilter" style="display:flex;gap:8px 16px;flex-wrap:wrap"></div>
 </div>
 <div id="dailyGroupDetail"></div>
  </div>
@@ -2674,7 +2674,7 @@ function createDailySettlementReport(){
  persist();
  openDailySettlementReport(date);
 }
-function openDailySettlementReport(date){ const groupFilter=$('settlementGroupFilter');if(groupFilter)groupFilter.value='ALL';
+function openDailySettlementReport(date){ const groupFilter=$('settlementGroupFilter');if(groupFilter){groupFilter.innerHTML='';delete groupFilter.dataset.ready;}
  ensureSettlementReportStore();
  db.currentSettlementDate=date;
  localStorage.setItem('epcV1',JSON.stringify(db));
@@ -2804,25 +2804,29 @@ function renderDailySettlement(){
  if(!box)return;
  if(!d.groups.length){
    const filter=$('settlementGroupFilter');
-   if(filter)filter.innerHTML='<option value="ALL">全部群組</option>';
+   if(filter){filter.innerHTML='';delete filter.dataset.ready;}
    box.innerHTML='<div class="card">此日期尚無已正式結算賽事</div>';
    return;
  }
 
- // 群組篩選只控制畫面，不修改分帳數字或資料。
+ // 多群組篩選只控制畫面，不修改分帳數字或資料。
  const filter=$('settlementGroupFilter');
- let selected=filter?.value||'ALL';
+ const names=d.groups.map(g=>g.name);
+ let selectedGroups=Array.from(document.querySelectorAll('#settlementGroupFilter input[type="checkbox"]:checked')).map(x=>x.value);
+ // 第一次進入報表時預設全選。
+ if(!filter?.dataset.ready)selectedGroups=[...names];
+ selectedGroups=selectedGroups.filter(name=>names.includes(name));
  if(filter){
-   const names=d.groups.map(g=>g.name);
-   if(selected!=='ALL'&&!names.includes(selected))selected='ALL';
-   filter.innerHTML='<option value="ALL">全部群組</option>'+
-    names.map(name=>{
-      const safe=String(name).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      return `<option value="${safe}"${selected===name?' selected':''}>${name==='未分組'?'未分組':'群組 '+name}</option>`;
-    }).join('');
-   filter.value=selected;
+   filter.innerHTML=names.map(name=>{
+     const safe=String(name).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+     return `<label style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer">
+       <input type="checkbox" value="${safe}" ${selectedGroups.includes(name)?'checked':''} onchange="renderDailySettlement()">
+       <span>${name==='未分組'?'未分組':'群組 '+name}</span>
+     </label>`;
+   }).join('');
+   filter.dataset.ready='1';
  }
- const visibleGroups=selected==='ALL'?d.groups:d.groups.filter(g=>g.name===selected);
+ const visibleGroups=d.groups.filter(g=>selectedGroups.includes(g.name));
 
  box.innerHTML=visibleGroups.map(g=>`
   <div class="card settlement-group-card" style="margin-bottom:22px">
@@ -2862,6 +2866,10 @@ function renderDailySettlement(){
      </div>`).join('')}
    </div>
   </div>`).join('');
+}
+function selectAllSettlementGroups(checked){
+ document.querySelectorAll('#settlementGroupFilter input[type="checkbox"]').forEach(x=>x.checked=checked);
+ renderDailySettlement();
 }
 function printDailySettlement(){
  renderDailySettlement();
