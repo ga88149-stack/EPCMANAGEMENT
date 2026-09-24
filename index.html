@@ -941,7 +941,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.16 Web · Chip Net Win</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.17 Web · Custom Re-entry Pricing</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1030,8 +1030,13 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
  <div><label>開賽時間</label><input id="eStartTime" inputmode="numeric" placeholder="例如 16:00"></div>
  <div><label>預計截止買入時間</label><input id="eRegCloseTime" inputmode="numeric" placeholder="例如 18:30"></div>
    <div><label>級別</label><input id="eLevel" type="number" min="0" step="100" inputmode="numeric" placeholder="例如 1200、3400、6600、11000"></div>
-   <div><label>每組進獎池</label><input type="number" id="ePoolUnit"></div>
-   <div><label>每組行政費</label><input type="number" id="eAdmin"></div>
+   <div><label>計價方式</label><select id="ePricingMode" onchange="togglePricingMode()"><option value="standard">標準行政費折扣</option><option value="custom">自訂首購 / 重買</option></select></div>
+   <div class="standardPricing"><label>每組進獎池</label><input type="number" id="ePoolUnit"></div>
+   <div class="standardPricing"><label>每組行政費</label><input type="number" id="eAdmin"></div>
+   <div class="customPricing" style="display:none"><label>首購總額</label><input type="number" id="eBuyinTotal" placeholder="例如 6900"></div>
+   <div class="customPricing" style="display:none"><label>首購行政費</label><input type="number" id="eBuyinAdmin" placeholder="例如 900"></div>
+   <div class="customPricing" style="display:none"><label>重買總額</label><input type="number" id="eRebuyTotal" placeholder="例如 6500"></div>
+   <div class="customPricing" style="display:none"><label>重買行政費</label><input type="number" id="eRebuyAdmin" placeholder="例如 500"></div>
    <div><label>起始籌碼 / 組</label><input type="number" id="eChips" value="300000"></div>
    <div><label>JP %</label><input type="number" step=".1" id="eJP" value="3"></div>
    <div><label>JP 取整單位</label><input type="number" id="eJPRound" value="100"></div>
@@ -1054,7 +1059,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
  <div class="card tablewrap">
   <table><thead><tr><th>玩家</th><th>買入</th><th>重買</th><th>總組數</th><th>折扣計算</th><th>額外優惠</th><th>實收</th><th>結帳群組</th><th>操作</th></tr></thead><tbody id="playerRows"></tbody></table>
  </div>
- <div class="notice">組數優惠：第 1 組行政費原價；第 2～10 組行政費半價；第 11 組起免行政費。系統會自動加總「組數優惠」；其他招待、活動折扣請填在「額外優惠」。</div>
+ <div class="notice" id="pricingNotice">標準模式：第 1 組行政費原價；第 2～10 組行政費半價；第 11 組起免行政費。自訂模式：首購與重買依賽事設定固定計價，不套用組數行政費折扣；其他招待、活動折扣仍填在「額外優惠」。</div>
 </section>
 
 <section id="settle" class="page">
@@ -1609,7 +1614,7 @@ function openEventReportById(id){
 }
 
 function blankEvent(){
- return {id:'EV'+Date.now()+Math.floor(Math.random()*90+10),date:new Date().toISOString().slice(0,10),seq:1,level:3400,poolUnit:3000,admin:400,chips:300000,jp:3,jpRound:100,payout:'50,30,20',players:[],status:'進行中',accounting:{otherIncome:0,venueIncome:0,laborExpense:0,otherExpense:0},createdAt:Date.now()};
+ return {id:'EV'+Date.now()+Math.floor(Math.random()*90+10),date:new Date().toISOString().slice(0,10),seq:1,level:3400,poolUnit:3000,admin:400,pricingMode:'standard',buyinTotal:3400,buyinAdmin:400,rebuyTotal:3400,rebuyAdmin:400,chips:300000,jp:3,jpRound:100,payout:'50,30,20',players:[],status:'進行中',accounting:{otherIncome:0,venueIncome:0,laborExpense:0,otherExpense:0},createdAt:Date.now()};
 }
 // Migration from V1.1 single-event data to V1.2 multi-event data.
 if(!Array.isArray(db.events)){
@@ -1751,6 +1756,11 @@ function cancelMemberEdit(){
  $('memberSaveBtn').onclick=addMember;
  $('memberCancelBtn').style.display='none';
 }
+function togglePricingMode(){
+ const mode=$('ePricingMode')?.value||'standard';
+ document.querySelectorAll('.standardPricing').forEach(el=>el.style.display=mode==='standard'?'':'none');
+ document.querySelectorAll('.customPricing').forEach(el=>el.style.display=mode==='custom'?'':'none');
+}
 function levelChanged(){let lv=+$('eLevel').value;if(lv===3400){$('ePoolUnit').value=3000;$('eAdmin').value=400}else{$('ePoolUnit').value=6000;$('eAdmin').value=600}}
 function saveEvent(){
  let e=requireEvent();if(!e)return;
@@ -1759,8 +1769,18 @@ function saveEvent(){
  e.startTime=($('eStartTime')?.value||'').trim();
  e.regCloseTime=($('eRegCloseTime')?.value||'').trim();
  e.level=+$('eLevel').value;
+ e.pricingMode=$('ePricingMode')?.value||'standard';
  e.poolUnit=+$('ePoolUnit').value;
  e.admin=+$('eAdmin').value;
+ e.buyinTotal=+$('eBuyinTotal').value;
+ e.buyinAdmin=+$('eBuyinAdmin').value;
+ e.rebuyTotal=+$('eRebuyTotal').value;
+ e.rebuyAdmin=+$('eRebuyAdmin').value;
+ if(e.pricingMode==='custom'){
+   if(e.buyinTotal<e.buyinAdmin || e.rebuyTotal<e.rebuyAdmin){alert('總額不能小於行政費');return;}
+   e.poolUnit=Math.max(0,e.buyinTotal-e.buyinAdmin);
+   e.admin=e.buyinAdmin;
+ }
  e.chips=+$('eChips').value;
  e.jp=+$('eJP').value;
  e.jpRound=+$('eJPRound').value;
@@ -2029,10 +2049,10 @@ function dailyAccountingInfo(date){
    eventPlayers.forEach(p=>{
      const c=calcPlayerForEvent(p,e);
      groups+=c.groups;
-     gross+=c.groups*(+e.admin||0);
+     gross+=c.grossAdmin||0;
      auto+=c.auto||0;
      manual+=c.manual||0;
-     netAdmin+=Math.max(0,c.groups*(+e.admin||0)-(c.auto||0)-(c.manual||0));
+     netAdmin+=c.netAdmin||0;
    });
    jp+=eventOwnJP(e);
  });
@@ -2194,7 +2214,7 @@ function renderDailyAccountingDetail(){
  $('aNet').className='v '+(ai.net>=0?'pos':'neg');
  $('accountingEventRows').innerHTML=ai.events.map(e=>{
    let g=0,gross=0,disc=0,net=0;
-   (Array.isArray(e.players)?e.players:[]).forEach(p=>{const c=calcPlayerForEvent(p,e);g+=c.groups;gross+=c.groups*(+e.admin||0);disc+=(c.auto||0)+(c.manual||0);net+=Math.max(0,c.groups*(+e.admin||0)-(c.auto||0)-(c.manual||0));});
+   (Array.isArray(e.players)?e.players:[]).forEach(p=>{const c=calcPlayerForEvent(p,e);g+=c.groups;gross+=c.grossAdmin||0;disc+=(c.auto||0)+(c.manual||0);net+=c.netAdmin||0;});
    return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td>${g}</td><td>${money(gross)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td></tr>`;
  }).join('');
 }
@@ -2213,9 +2233,9 @@ function printDailyAccounting(){
    (Array.isArray(e.players)?e.players:[]).forEach(p=>{
      const c=calcPlayerForEvent(p,e);
      g+=c.groups;
-     gross+=c.groups*(+e.admin||0);
+     gross+=c.grossAdmin||0;
      disc+=(c.auto||0)+(c.manual||0);
-     net+=Math.max(0,c.groups*(+e.admin||0)-(c.auto||0)-(c.manual||0));
+     net+=c.netAdmin||0;
    });
    return `<tr>
     <td>第${e.seq||i+1}場</td>
@@ -2302,11 +2322,11 @@ function accountingInfo(e){
  let gross=0,auto=0,manual=0,netAdmin=0;
  e.players.forEach(p=>{
    let c=calcPlayerForEvent(p,e);
-   gross+=c.groups*e.admin;
+   gross+=c.grossAdmin||0;
    auto+=c.auto;
    manual+=c.manual||0;
    // manual discounts are assumed to reduce EPC receipts after group discount.
-   netAdmin+=Math.max(0,c.groups*e.admin-c.auto-(c.manual||0));
+   netAdmin+=c.netAdmin||0;
  });
  let a=ensureAccounting(e);
  let revenue=netAdmin+a.otherIncome+a.venueIncome;
@@ -2390,27 +2410,35 @@ function renderEventList(){
  }).join('') || '<tr><td colspan="9" style="text-align:center;color:#91a0b2">此營業日尚無賽事</td></tr>';
 }
 function calcPlayerForEvent(p,e){
- let groups=(+p.buyin||0)+(+p.rebuy||0)+(+p.addon||0);
- let base=groups*(e.poolUnit+e.admin);
+ let buyin=(+p.buyin||0), rebuy=(+p.rebuy||0), addon=(+p.addon||0);
+ let groups=buyin+rebuy+addon;
+ let manual=(+p.manualDiscount||0);
 
- // EPC 組數行政費優惠：
- // 第1組：行政費原價
- // 第2～10組：行政費半價 => 每組優惠 admin * 50%
- // 第11組起：免行政費 => 每組優惠 admin * 100%
+ if((e.pricingMode||'standard')==='custom'){
+   let buyinTotal=(+e.buyinTotal||0), buyinAdmin=(+e.buyinAdmin||0);
+   let rebuyTotal=(+e.rebuyTotal||0), rebuyAdmin=(+e.rebuyAdmin||0);
+   let rebuyGroups=rebuy+addon;
+   let base=buyin*buyinTotal + rebuyGroups*rebuyTotal;
+   let grossAdmin=buyin*buyinAdmin + rebuyGroups*rebuyAdmin;
+   let pool=buyin*Math.max(0,buyinTotal-buyinAdmin) + rebuyGroups*Math.max(0,rebuyTotal-rebuyAdmin);
+   return {
+     groups, auto:0, manual, totalDiscount:manual,
+     original:base, paid:Math.max(0,base-manual), pool,
+     grossAdmin, netAdmin:Math.max(0,grossAdmin-manual)
+   };
+ }
+
+ let base=groups*((+e.poolUnit||0)+(+e.admin||0));
  let halfPriceGroups=Math.max(0,Math.min(groups,10)-1);
  let freeAdminGroups=Math.max(0,groups-10);
- let auto=halfPriceGroups*e.admin*0.5 + freeAdminGroups*e.admin;
-
- let manual=(+p.manualDiscount||0);
+ let auto=halfPriceGroups*(+e.admin||0)*0.5 + freeAdminGroups*(+e.admin||0);
  let disc=auto+manual;
+ let grossAdmin=groups*(+e.admin||0);
  return {
-   groups,
-   auto,
-   manual,
-   totalDiscount:disc,
-   original:base,
-   paid:Math.max(0,base-disc),
-   pool:groups*e.poolUnit
+   groups, auto, manual, totalDiscount:disc,
+   original:base, paid:Math.max(0,base-disc),
+   pool:groups*(+e.poolUnit||0),
+   grossAdmin, netAdmin:Math.max(0,grossAdmin-disc)
  };
 }
 
@@ -2522,11 +2550,23 @@ function render(){
  }
  $('currentEventLabel').textContent=`${ev.date} · 第${ev.seq||1}場 · ${ev.level}｜開賽 ${ev.startTime||'--:--'}｜預計截止買入 ${ev.regCloseTime||'--:--'}`;
  if($('settleEventTitle'))$('settleEventTitle').textContent=`${ev.date}｜第 ${ev.seq||1} 場｜${Number(ev.level).toLocaleString()} 賽事`;
- if($('settleEventMeta'))$('settleEventMeta').textContent=`每組獎池 ${money(ev.poolUnit)}＋行政費 ${money(ev.admin)}｜每組籌碼 ${Number(ev.chips).toLocaleString()}｜狀態：${ev.status}`;
+ if($('settleEventMeta')){
+   const priceText=(ev.pricingMode||'standard')==='custom'
+     ? `首購 ${money(ev.buyinTotal)}（行政費 ${money(ev.buyinAdmin)}）｜重買 ${money(ev.rebuyTotal)}（行政費 ${money(ev.rebuyAdmin)}）`
+     : `每組獎池 ${money(ev.poolUnit)}＋行政費 ${money(ev.admin)}`;
+   $('settleEventMeta').textContent=`${priceText}｜每組籌碼 ${Number(ev.chips).toLocaleString()}｜狀態：${ev.status}`;
+ }
  if($('settleStartTime'))$('settleStartTime').value=ev.startTime||'';
  if($('settleRegCloseTime'))$('settleRegCloseTime').value=ev.regCloseTime||'';
  if($('settleEndTime'))$('settleEndTime').value=ev.endTime||'';
- $('eDate').value=ev.date;if($('eStartTime'))$('eStartTime').value=ev.startTime||'';if($('eRegCloseTime'))$('eRegCloseTime').value=ev.regCloseTime||'';$('eLevel').value=currentEvent().level;$('ePoolUnit').value=currentEvent().poolUnit;$('eAdmin').value=currentEvent().admin;$('eChips').value=currentEvent().chips;$('eJP').value=currentEvent().jp;$('eJPRound').value=currentEvent().jpRound;$('ePayout').value=currentEvent().payout;
+ $('eDate').value=ev.date;if($('eStartTime'))$('eStartTime').value=ev.startTime||'';if($('eRegCloseTime'))$('eRegCloseTime').value=ev.regCloseTime||'';$('eLevel').value=ev.level;$('ePoolUnit').value=ev.poolUnit;$('eAdmin').value=ev.admin;
+ if($('ePricingMode'))$('ePricingMode').value=ev.pricingMode||'standard';
+ if($('eBuyinTotal'))$('eBuyinTotal').value=ev.buyinTotal??((+ev.poolUnit||0)+(+ev.admin||0));
+ if($('eBuyinAdmin'))$('eBuyinAdmin').value=ev.buyinAdmin??(+ev.admin||0);
+ if($('eRebuyTotal'))$('eRebuyTotal').value=ev.rebuyTotal??((+ev.poolUnit||0)+(+ev.admin||0));
+ if($('eRebuyAdmin'))$('eRebuyAdmin').value=ev.rebuyAdmin??(+ev.admin||0);
+ togglePricingMode();
+ $('eChips').value=ev.chips;$('eJP').value=ev.jp;$('eJPRound').value=ev.jpRound;$('ePayout').value=ev.payout;
  filterAddPlayerMembers($('addPlayerSearch')?.value||'');
  {
  const q=String($('memberSearch')?.value||'').trim().toLowerCase();
@@ -2542,7 +2582,7 @@ function render(){
  $('playerRows').innerHTML=currentEvent().players.map((p,i)=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p);return `<tr><td>${m.name}</td>
  <td><input type="number" min="0" value="${p.buyin}" onchange="setP(${i},'buyin',this.value)"></td>
  <td><input type="number" min="0" value="${p.rebuy}" onchange="setP(${i},'rebuy',this.value)"></td>
- <td>${c.groups}</td><td>${c.auto>0?(c.auto/currentEvent().admin).toFixed(1).replace('.0',''):0} 組 / ${money(c.auto)}</td>
+ <td>${c.groups}</td><td>${(currentEvent().pricingMode||'standard')==='custom'?'固定重買價':(c.auto>0?(c.auto/currentEvent().admin).toFixed(1).replace('.0',''):0)+' 組 / '+money(c.auto)}</td>
  <td><input type="number" min="0" value="${p.manualDiscount}" onchange="setP(${i},'manualDiscount',this.value)"></td>
  <td>${money(c.paid)}</td>
  <td><input value="${p.group||''}" onchange="setP(${i},'group',this.value)"></td><td><button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button></td></tr>`}).join('');
