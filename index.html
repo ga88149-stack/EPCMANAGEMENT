@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.28 Web · Seat & Player Columns</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.29 Web · Phone Chip Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1108,6 +1108,10 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 <button onclick="showPage('event')">← 返回賽事帳務</button>
 </div>
  <div class="card" style="margin-bottom:12px">
+  <div class="toolbar no-print" style="margin-bottom:10px">
+   <button type="button" class="primary" onclick="syncPhoneStacksOnly()">同步手機籌碼</button>
+   <span class="small">只更新本場玩家的下桌籌碼，不載入會員、買入、重買、優惠、賽事設定或其他帳務資料。</span>
+  </div>
   <div class="small">目前結算賽事</div>
   <div style="font-size:20px;font-weight:800;margin-top:5px" id="settleEventTitle">尚未選擇賽事</div>
   <div class="small" id="settleEventMeta" style="margin-top:5px"></div>
@@ -1573,6 +1577,47 @@ async function manualCloudSync(){
  const ok=await saveCloudNow(false);
  if(!ok && confirm('雲端可能有另一台電腦的新版本。\n\n要以「這台電腦目前的資料」覆蓋雲端嗎？\n\n按「確定」才會強制上傳；按「取消」不會改動雲端。')){
    await saveCloudNow(true);
+ }
+}
+async function syncPhoneStacksOnly(){
+ const localEvent=currentEvent();
+ if(!localEvent)return alert('請先選擇要結算的賽事');
+ if(localEvent.status==='已結算')return alert('此賽事已正式結算，不能再同步籌碼。');
+
+ try{
+   setCloudState('☁ 正在讀取手機籌碼…');
+   // 只讀雲端快照，不以雲端 DB 取代本機 db。
+   const res=await cloudGet('load');
+   const cloudDb=res.data;
+   if(!cloudDb||!Array.isArray(cloudDb.events))throw new Error('CLOUD_EMPTY');
+
+   const cloudEvent=cloudDb.events.find(e=>String(e.id)===String(localEvent.id));
+   if(!cloudEvent)throw new Error('EVENT_NOT_FOUND');
+
+   const cloudPlayers=Array.isArray(cloudEvent.players)?cloudEvent.players:[];
+   let updated=0, unchanged=0, missing=0;
+
+   (localEvent.players||[]).forEach(lp=>{
+     const cp=cloudPlayers.find(p=>String(p.memberId)===String(lp.memberId));
+     if(!cp){missing++;return;}
+     // 空白代表手機尚未輸入，不用空白覆蓋電腦原本的籌碼。
+     if(cp.stack===undefined||cp.stack===null||String(cp.stack).trim()===''){missing++;return;}
+     const stack=Number(cp.stack);
+     if(!Number.isFinite(stack)||stack<0){missing++;return;}
+     if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;
+   });
+
+   // 這裡刻意不修改 cloudRevision、不替換 db，也不碰任何其他欄位。
+   // persist() 只保存目前電腦資料 + 剛同步進來的 stack。
+   if(updated>0)persist();
+   else render();
+
+   actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入/找不到 ${missing} 人`);
+   setCloudState(`☁ 手機籌碼已讀取｜只更新下桌籌碼`);
+ }catch(err){
+   console.error('phone stack sync failed',err);
+   setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
+   alert('同步手機籌碼失敗：'+String(err.message||err));
  }
 }
 async function manualCloudLoad(){
