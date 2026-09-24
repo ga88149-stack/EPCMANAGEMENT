@@ -941,7 +941,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.15 Web · JP Round Up</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.16 Web · Chip Net Win</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1857,7 +1857,7 @@ function icmEquities(stacks,payouts){
 
 const REPORT_COLUMNS=[
  ['player','玩家'],['groups','總組數'],['paid','總支付'],['stack','下桌籌碼'],
- ['prize','ICM獎金'],['chipNet','籌碼增長率'],['cashNet','個人盈虧'],['group','結帳群組']
+ ['prize','ICM獎金'],['chipNet','籌碼淨勝值'],['cashNet','個人盈虧'],['group','結帳群組']
 ];
 function ensureReportColumns(){
  if(!db.reportColumns)db.reportColumns={};
@@ -1878,9 +1878,11 @@ function goICM(){
  render();window.scrollTo(0,0);
 }
 function chipGrowthFor(p,e){
- let c=calcPlayerForEvent(p,e), invested=c.groups*(+e.chips||0);
- if(invested<=0)return 0;
- return (+p.stack||0)/invested;
+ let c=calcPlayerForEvent(p,e);
+ let original=(+e.chips||0);
+ if(original<=0)return 0;
+ let invested=c.groups*original;
+ return ((+p.stack||0)-invested)/original;
 }
 
 function calculateICM(){
@@ -2862,7 +2864,7 @@ function applySettledLock(){
 
 const EVENT_REPORT_FIELDS=[
  ['player','玩家'],['memberId','會員ID'],['groups','總組數'],['paid','總支付'],
- ['stack','最終籌碼'],['growth','籌碼增長率'],['prize','ICM獎金'],['net','個人盈虧'],['signature','簽名'],['note','備註']
+ ['stack','最終籌碼'],['growth','籌碼淨勝值'],['prize','ICM獎金'],['net','個人盈虧'],['signature','簽名'],['note','備註']
 ];
 function ensureEventReportSettings(e){
  if(!e.reportFields)e.reportFields={};
