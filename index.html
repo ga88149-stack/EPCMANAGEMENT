@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.37 Web · STACK API Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38 Web · STACK API Stable Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1582,11 +1582,19 @@ async function manualCloudSync(){
 }
 let __phoneStackSyncBusy=false;
 async function readPhoneStacksApi(eventId){
- const r=await fetch(STACK_API+'?action=loadStacks&eventId='+encodeURIComponent(eventId)+'&_='+Date.now(),{
-   cache:'no-store',redirect:'follow'
+ // V1.38：改用 POST 讀取，避免 GitHub Pages -> Apps Script GET 偶發 404。
+ // 只讀 PHONE_STACKS；失敗時不修改任何本機/雲端賽事資料。
+ const r=await fetch(STACK_API,{
+   method:'POST',
+   headers:{'Content-Type':'text/plain;charset=utf-8'},
+   body:JSON.stringify({action:'loadStacks',eventId:String(eventId||'')}),
+   cache:'no-store',
+   redirect:'follow'
  });
  if(!r.ok)throw new Error('STACK_API_HTTP_'+r.status);
- const j=await r.json();
+ const text=await r.text();
+ let j;
+ try{j=JSON.parse(text);}catch(_){throw new Error('STACK_API_BAD_RESPONSE');}
  if(!j||j.ok!==true)throw new Error((j&&j.error)||'STACK_API_ERROR');
  return j;
 }
