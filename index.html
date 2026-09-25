@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.32 Web · Native Cloud Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.33 Web · Phone Stack Refresh Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1615,8 +1615,10 @@ async function syncPhoneStacksOnly(){
    });
 
    // 唯一允許寫入的欄位是目前賽事玩家的 stack。
-   // 不更新 cloudRevision，不整份載入雲端，不碰其他賽事/會員/帳務欄位。
-   if(updated>0)persist(); else render();
+   // 手機已經把 stack 寫進雲端，因此這裡只更新電腦本機快照並立即重繪畫面。
+   // 不呼叫 persist()，避免因同步籌碼而觸發「整份電腦 DB」回寫雲端。
+   if(updated>0)localStorage.setItem('epcV1',JSON.stringify(db));
+   render();
 
    actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入/找不到 ${missing} 人`);
    setCloudState('☁ 手機籌碼已同步｜只更新下桌籌碼');
