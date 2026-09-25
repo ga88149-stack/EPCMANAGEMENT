@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.36 Web · PHONE_STACKS Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.37 Web · STACK API Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1410,7 +1410,7 @@ const $=id=>document.getElementById(id);
 const money=n=>'$'+Math.round(Number(n||0)).toLocaleString('zh-TW');
 const uid=()=>String(Date.now()).slice(-8)+Math.floor(Math.random()*90+10);
 const CLOUD_API='https://script.google.com/macros/s/AKfycby1YCXllpyYOFEN60N-jR6kAk-Y2hOYpIa2GlS74cBFDK-Dt4mDa4sCd80MR6ZSxpbQ6A/exec';
-const PHONE_BRIDGE_API='https://script.google.com/macros/s/AKfycbxCJPhfBu-MhejXDxOo_Kh2WC_xVBxyEfhow47oo3_9YgXh6-EAohrZR69L2UDzzXGwKA/exec';
+const STACK_API='https://script.google.com/macros/s/AKfycbwJgutjAat9guTMsUgLYymwP0CbOUKpVzWyg5bKe65xa51ysBJas2QMbkjB5B2wpDeJVQ/exec';
 let db=JSON.parse(localStorage.getItem('epcV1')||'null')||{members:[],jpBalance:0,events:[],currentEventId:null};
 let cloudRevision=Number(localStorage.getItem('epcCloudRevision')||0);
 let cloudReady=false,cloudSaving=false,cloudSaveTimer=null,cloudPending=false;
@@ -1581,25 +1581,49 @@ async function manualCloudSync(){
  }
 }
 let __phoneStackSyncBusy=false;
-function readPhoneStacksBridge(eventId){
- return new Promise((resolve,reject)=>{
-  const nonce='ps_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),iframe=document.createElement('iframe');iframe.style.display='none';let done=false;
-  const finish=(err,data)=>{if(done)return;done=true;clearTimeout(timer);window.removeEventListener('message',onMsg);try{iframe.remove()}catch(_){}err?reject(err):resolve(data);};
-  const onMsg=(ev)=>{if(ev.source!==iframe.contentWindow)return;const d=ev.data||{};if(d.type!=='EPC_PHONE_STACKS'||d.nonce!==nonce)return;d.error?finish(new Error(d.error)):finish(null,d.result);};
-  window.addEventListener('message',onMsg);const timer=setTimeout(()=>finish(new Error('PHONE_STACKS_TIMEOUT')),12000);
-  iframe.src=PHONE_BRIDGE_API+'?mode=stackbridge&eventId='+encodeURIComponent(eventId)+'&nonce='+encodeURIComponent(nonce)+'&_='+Date.now();document.body.appendChild(iframe);
+async function readPhoneStacksApi(eventId){
+ const r=await fetch(STACK_API+'?action=loadStacks&eventId='+encodeURIComponent(eventId)+'&_='+Date.now(),{
+   cache:'no-store',redirect:'follow'
  });
+ if(!r.ok)throw new Error('STACK_API_HTTP_'+r.status);
+ const j=await r.json();
+ if(!j||j.ok!==true)throw new Error((j&&j.error)||'STACK_API_ERROR');
+ return j;
 }
 async function syncPhoneStacksOnly(){
- const localEvent=currentEvent();if(!localEvent)return alert('請先選擇要結算的賽事');if(localEvent.status==='已結算')return alert('此賽事已正式結算，不能再同步籌碼。');if(__phoneStackSyncBusy)return;
- const btn=(typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;__phoneStackSyncBusy=true;if(btn){btn.disabled=true;btn.dataset.oldText=btn.textContent;btn.textContent='同步中…';}
+ const localEvent=currentEvent();
+ if(!localEvent)return alert('請先選擇要結算的賽事');
+ if(localEvent.status==='已結算')return alert('此賽事已正式結算，不能再同步籌碼。');
+ if(__phoneStackSyncBusy)return;
+ const btn=(typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;
+ __phoneStackSyncBusy=true;
+ if(btn){btn.disabled=true;btn.dataset.oldText=btn.textContent;btn.textContent='同步中…';}
  try{
-  setCloudState('☁ 正在讀取 PHONE_STACKS…');const res=await readPhoneStacksBridge(localEvent.id);if(!res||res.ok!==true)throw new Error((res&&res.error)||'PHONE_STACKS_ERROR');
-  const map={};(res.stacks||[]).forEach(x=>map[String(x.memberId)]=x.stack);let updated=0,unchanged=0,missing=0;
-  (localEvent.players||[]).forEach(lp=>{const k=String(lp.memberId);if(!Object.prototype.hasOwnProperty.call(map,k)){missing++;return;}const stack=Number(map[k]);if(!Number.isFinite(stack)||stack<0){missing++;return;}if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;});
-  if(updated>0)localStorage.setItem('epcV1',JSON.stringify(db));render();actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);setCloudState('☁ PHONE_STACKS 已同步｜只更新下桌籌碼');
- }catch(err){console.error(err);setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);alert('同步手機籌碼失敗：'+String(err.message||err));}
- finally{__phoneStackSyncBusy=false;if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步手機籌碼';}}
+  setCloudState('☁ 正在讀取手機籌碼…');
+  const res=await readPhoneStacksApi(localEvent.id);
+  const map={};
+  (res.stacks||[]).forEach(x=>map[String(x.memberId)]=x.stack);
+  let updated=0,unchanged=0,missing=0;
+  (localEvent.players||[]).forEach(lp=>{
+    const k=String(lp.memberId);
+    if(!Object.prototype.hasOwnProperty.call(map,k)){missing++;return;}
+    const stack=Number(map[k]);
+    if(!Number.isFinite(stack)||stack<0){missing++;return;}
+    if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;
+  });
+  // 安全原則：只更新本機 stack，不自動呼叫 persist() 或覆寫 EPC_DATA 雲端。
+  if(updated>0)localStorage.setItem('epcV1',JSON.stringify(db));
+  render();
+  actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
+  setCloudState('☁ 手機籌碼已同步｜只更新下桌籌碼');
+ }catch(err){
+  console.error(err);
+  setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
+  alert('同步手機籌碼失敗：'+String(err.message||err));
+ }finally{
+  __phoneStackSyncBusy=false;
+  if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步手機籌碼';}
+ }
 }
 async function manualCloudLoad(){
  if(localDirty){
