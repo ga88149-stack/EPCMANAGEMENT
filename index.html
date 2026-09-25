@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.1 Web · Emergency Backup</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px;border-color:#d6b35a" onclick="exportEmergencyBackup()">匯出完整備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38 Web · STACK API Stable Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1409,7 +1409,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 const $=id=>document.getElementById(id);
 const money=n=>'$'+Math.round(Number(n||0)).toLocaleString('zh-TW');
 const uid=()=>String(Date.now()).slice(-8)+Math.floor(Math.random()*90+10);
-const CLOUD_API='https://script.google.com/macros/s/AKfycby1YCXllpyYOFEN60N-jR6kAk-Y2hOYpIa2GlS74cBFDK-Dt4mDa4sCd80MR6ZSxpbQ6A/exec';
+const CLOUD_API='https://script.google.com/macros/s/AKfycbwj-jLaSTiljcw15_UnhUFv4QxVq5HbNyers3ybU-6IAkwSj_A5X36x-852Xu5MxobS/exec';
 const STACK_API='https://script.google.com/macros/s/AKfycbwJgutjAat9guTMsUgLYymwP0CbOUKpVzWyg5bKe65xa51ysBJas2QMbkjB5B2wpDeJVQ/exec';
 let db=JSON.parse(localStorage.getItem('epcV1')||'null')||{members:[],jpBalance:0,events:[],currentEventId:null};
 let cloudRevision=Number(localStorage.getItem('epcCloudRevision')||0);
@@ -3286,58 +3286,5 @@ function printEventReport(){
 render();
 initializeCloud();
 setInterval(()=>{if(cloudReady)refreshFormMembers(true)},120000);
-
-
-/* V1.38.1 Emergency Backup
-   Read-only export: does not call cloud APIs and does not modify localStorage. */
-function exportEmergencyBackup(){
-  try{
-    const allLocalStorage={};
-    for(let i=0;i<localStorage.length;i++){
-      const key=localStorage.key(i);
-      allLocalStorage[key]=localStorage.getItem(key);
-    }
-
-    const backup={
-      format:'EPC_EMERGENCY_BACKUP',
-      version:'1.38.1',
-      exportedAt:new Date().toISOString(),
-      page:location.href,
-      localStorage:allLocalStorage
-    };
-
-    // Include current in-memory DB when available, without changing it.
-    try{
-      if(typeof db!=='undefined'){
-        backup.currentDb=JSON.parse(JSON.stringify(db));
-      }
-    }catch(_){}
-
-    try{
-      if(typeof revision!=='undefined') backup.revision=revision;
-    }catch(_){}
-
-    const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json;charset=utf-8'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    const stamp=new Date().toISOString().replace(/[:.]/g,'-');
-    a.href=url;
-    a.download='EPC_EMERGENCY_BACKUP_'+stamp+'.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-
-    if(typeof showActionMsg==='function'){
-      showActionMsg('完整備份已匯出。請保留 JSON 檔，不要修改內容。');
-    }else{
-      alert('完整備份已匯出。請保留 JSON 檔，不要修改內容。');
-    }
-  }catch(err){
-    console.error(err);
-    alert('備份匯出失敗：'+(err&&err.message?err.message:String(err)));
-  }
-}
-
 </script>
 </body></html>
