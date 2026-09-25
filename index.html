@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.34 Web · Reliable Phone Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.35 Web · PHONE_STACKS Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1581,73 +1581,25 @@ async function manualCloudSync(){
  }
 }
 let __phoneStackSyncBusy=false;
+function readPhoneStacksBridge(eventId){
+ return new Promise((resolve,reject)=>{
+  const nonce='ps_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),iframe=document.createElement('iframe');iframe.style.display='none';let done=false;
+  const finish=(err,data)=>{if(done)return;done=true;clearTimeout(timer);window.removeEventListener('message',onMsg);try{iframe.remove()}catch(_){}err?reject(err):resolve(data);};
+  const onMsg=(ev)=>{if(ev.source!==iframe.contentWindow)return;const d=ev.data||{};if(d.type!=='EPC_PHONE_STACKS'||d.nonce!==nonce)return;d.error?finish(new Error(d.error)):finish(null,d.result);};
+  window.addEventListener('message',onMsg);const timer=setTimeout(()=>finish(new Error('PHONE_STACKS_TIMEOUT')),12000);
+  iframe.src=PHONE_BRIDGE_API+'?mode=stackbridge&eventId='+encodeURIComponent(eventId)+'&nonce='+encodeURIComponent(nonce)+'&_='+Date.now();document.body.appendChild(iframe);
+ });
+}
 async function syncPhoneStacksOnly(){
- const localEvent=currentEvent();
- if(!localEvent)return alert('請先選擇要結算的賽事');
- if(localEvent.status==='已結算')return alert('此賽事已正式結算，不能再同步籌碼。');
- if(__phoneStackSyncBusy)return;
-
- const btn=(typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;
- __phoneStackSyncBusy=true;
- if(btn){btn.disabled=true;btn.dataset.oldText=btn.textContent;btn.textContent='同步中…';}
-
+ const localEvent=currentEvent();if(!localEvent)return alert('請先選擇要結算的賽事');if(localEvent.status==='已結算')return alert('此賽事已正式結算，不能再同步籌碼。');if(__phoneStackSyncBusy)return;
+ const btn=(typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;__phoneStackSyncBusy=true;if(btn){btn.disabled=true;btn.dataset.oldText=btn.textContent;btn.textContent='同步中…';}
  try{
-   setCloudState('☁ 正在同步手機籌碼…');
-   let bestCloudDb=null, bestRevision=-1, lastErr=null;
-
-   // 使用者只按一次；程式自動讀取 3 次，降低第一次抓到舊快照/暫時失敗的機率。
-   for(let attempt=1;attempt<=3;attempt++){
-     try{
-       const res=await cloudGet('load');
-       const cloudDb=res&&res.data;
-       if(cloudDb&&Array.isArray(cloudDb.events)){
-         const rev=Number((res&&res.revision) ?? cloudDb.revision ?? -1);
-         if(bestCloudDb===null || rev>=bestRevision){
-           bestCloudDb=cloudDb;
-           bestRevision=rev;
-         }
-       }
-     }catch(err){ lastErr=err; }
-
-     if(attempt<3){
-       setCloudState(`☁ 正在確認最新手機籌碼… ${attempt}/3`);
-       await new Promise(r=>setTimeout(r,700));
-     }
-   }
-
-   if(!bestCloudDb)throw lastErr || new Error('CLOUD_EMPTY');
-
-   const cloudEvent=bestCloudDb.events.find(e=>String(e.id)===String(localEvent.id));
-   if(!cloudEvent)throw new Error('EVENT_NOT_FOUND');
-
-   const cloudPlayers=Array.isArray(cloudEvent.players)?cloudEvent.players:[];
-   let updated=0, unchanged=0, missing=0;
-
-   (localEvent.players||[]).forEach(lp=>{
-     const cp=cloudPlayers.find(p=>String(p.memberId)===String(lp.memberId));
-     if(!cp || cp.stack===undefined || cp.stack===null || String(cp.stack).trim()===''){
-       missing++; return;
-     }
-     const stack=Number(cp.stack);
-     if(!Number.isFinite(stack)||stack<0){missing++;return;}
-     if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}
-     else unchanged++;
-   });
-
-   // 只更新本機下桌籌碼並立即重繪；不載入雲端其他欄位。
-   if(updated>0)localStorage.setItem('epcV1',JSON.stringify(db));
-   render();
-
-   actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入/找不到 ${missing} 人`);
-   setCloudState(`☁ 手機籌碼已同步｜Revision ${bestRevision>=0?bestRevision:'最新'}｜只更新下桌籌碼`);
- }catch(err){
-   console.error('phone stack sync failed',err);
-   setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
-   alert('同步手機籌碼失敗：'+String(err.message||err));
- }finally{
-   __phoneStackSyncBusy=false;
-   if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步手機籌碼';}
- }
+  setCloudState('☁ 正在讀取 PHONE_STACKS…');const res=await readPhoneStacksBridge(localEvent.id);if(!res||res.ok!==true)throw new Error((res&&res.error)||'PHONE_STACKS_ERROR');
+  const map={};(res.stacks||[]).forEach(x=>map[String(x.memberId)]=x.stack);let updated=0,unchanged=0,missing=0;
+  (localEvent.players||[]).forEach(lp=>{const k=String(lp.memberId);if(!Object.prototype.hasOwnProperty.call(map,k)){missing++;return;}const stack=Number(map[k]);if(!Number.isFinite(stack)||stack<0){missing++;return;}if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;});
+  if(updated>0)localStorage.setItem('epcV1',JSON.stringify(db));render();actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);setCloudState('☁ PHONE_STACKS 已同步｜只更新下桌籌碼');
+ }catch(err){console.error(err);setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);alert('同步手機籌碼失敗：'+String(err.message||err));}
+ finally{__phoneStackSyncBusy=false;if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步手機籌碼';}}
 }
 async function manualCloudLoad(){
  if(localDirty){
