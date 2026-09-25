@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.31 Web · Safe Phone Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.32 Web · Native Cloud Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1580,14 +1580,6 @@ async function manualCloudSync(){
    await saveCloudNow(true);
  }
 }
-async function phoneBridgeFetch(action){
- const url=PHONE_BRIDGE_API+'?action='+encodeURIComponent(action)+'&_='+Date.now();
- const r=await fetch(url,{method:'GET',redirect:'follow',cache:'no-store'});
- if(!r.ok)throw new Error('PHONE_BRIDGE_HTTP_'+r.status);
- const data=await r.json();
- if(!data||data.ok!==true)throw new Error((data&&data.error)||'PHONE_BRIDGE_ERROR');
- return data;
-}
 async function syncPhoneStacksOnly(){
  const localEvent=currentEvent();
  if(!localEvent)return alert('請先選擇要結算的賽事');
@@ -1595,9 +1587,11 @@ async function syncPhoneStacksOnly(){
 
  try{
    setCloudState('☁ 正在讀取手機籌碼…');
-   // 經 EPC PHONE bridge 讀取雲端；不把整份雲端 DB 載入電腦。
-   const res=await phoneBridgeFetch('stacks');
-   const cloudDb=res.data;
+
+   // 沿用 EPCMANAGEMENT 原本已正常運作的雲端讀取通道。
+   // 只讀取回傳快照來比對 stack；絕不以 cloudDb 取代本機 db。
+   const res=await cloudGet('load');
+   const cloudDb=res&&res.data;
    if(!cloudDb||!Array.isArray(cloudDb.events))throw new Error('CLOUD_EMPTY');
 
    const cloudEvent=cloudDb.events.find(e=>String(e.id)===String(localEvent.id));
@@ -1605,16 +1599,25 @@ async function syncPhoneStacksOnly(){
 
    const cloudPlayers=Array.isArray(cloudEvent.players)?cloudEvent.players:[];
    let updated=0, unchanged=0, missing=0;
+
    (localEvent.players||[]).forEach(lp=>{
      const cp=cloudPlayers.find(p=>String(p.memberId)===String(lp.memberId));
-     if(!cp || cp.stack===undefined || cp.stack===null || String(cp.stack).trim()===''){missing++;return;}
+     if(!cp || cp.stack===undefined || cp.stack===null || String(cp.stack).trim()===''){
+       missing++; return;
+     }
      const stack=Number(cp.stack);
      if(!Number.isFinite(stack)||stack<0){missing++;return;}
-     if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;
+     if(Number(lp.stack)!==stack){
+       lp.stack=stack; updated++;
+     }else{
+       unchanged++;
+     }
    });
 
-   // 只改本機玩家 stack；其他欄位完全不從手機覆蓋。
+   // 唯一允許寫入的欄位是目前賽事玩家的 stack。
+   // 不更新 cloudRevision，不整份載入雲端，不碰其他賽事/會員/帳務欄位。
    if(updated>0)persist(); else render();
+
    actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入/找不到 ${missing} 人`);
    setCloudState('☁ 手機籌碼已同步｜只更新下桌籌碼');
  }catch(err){
