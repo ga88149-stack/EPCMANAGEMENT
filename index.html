@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.35 Web · PHONE_STACKS Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.36 Web · PHONE_STACKS Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1410,7 +1410,7 @@ const $=id=>document.getElementById(id);
 const money=n=>'$'+Math.round(Number(n||0)).toLocaleString('zh-TW');
 const uid=()=>String(Date.now()).slice(-8)+Math.floor(Math.random()*90+10);
 const CLOUD_API='https://script.google.com/macros/s/AKfycby1YCXllpyYOFEN60N-jR6kAk-Y2hOYpIa2GlS74cBFDK-Dt4mDa4sCd80MR6ZSxpbQ6A/exec';
-const PHONE_BRIDGE_API='https://script.google.com/macros/s/AKfycbyCxNxPmXhdfDragzrfHE8TnobTYUaLTbG6xod8uEMku8elOM2MCKsJ31paZmEXu6D2/exec';
+const PHONE_BRIDGE_API='https://script.google.com/macros/s/AKfycbxCJPhfBu-MhejXDxOo_Kh2WC_xVBxyEfhow47oo3_9YgXh6-EAohrZR69L2UDzzXGwKA/exec';
 let db=JSON.parse(localStorage.getItem('epcV1')||'null')||{members:[],jpBalance:0,events:[],currentEventId:null};
 let cloudRevision=Number(localStorage.getItem('epcCloudRevision')||0);
 let cloudReady=false,cloudSaving=false,cloudSaveTimer=null,cloudPending=false;
