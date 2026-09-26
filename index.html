@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.5 Web · Accounting Discount Stats</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.6 Web · Separate Membership Fee</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1202,7 +1202,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   </div>
   <div class="card tablewrap">
    <table>
-    <thead><tr><th>營業日</th><th>賽事數</th><th>入會費收入</th><th>折扣支出</th><th>其他收入</th><th>其他支出</th><th>淨收入</th><th>狀態</th><th>操作</th></tr></thead>
+    <thead><tr><th>營業日</th><th>賽事數</th><th>行政費收入</th><th>入會費收入</th><th>折扣支出</th><th>其他收入</th><th>其他支出</th><th>淨收入</th><th>狀態</th><th>操作</th></tr></thead>
     <tbody id="accountingDayRows"></tbody>
    </table>
   </div>
@@ -1223,12 +1223,13 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   <div id="dailyAccountingPaper">
    <div class="card">
     <div class="grid">
-     <div class="kpi"><div class="l">入會費收入</div><div class="v" id="aAdminGross">$0</div></div>
+     <div class="kpi"><div class="l">行政費收入</div><div class="v" id="aAdminGross">$0</div></div>
+     <div class="kpi"><div class="l">入會費收入</div><div class="v" id="aMembershipIncome">$0</div></div>
      <div class="kpi"><div class="l">重買優惠</div><div class="v" id="aRebuyDiscount">$0</div></div>
      <div class="kpi"><div class="l">組數優惠</div><div class="v" id="aGroupDiscount">$0</div></div>
      <div class="kpi"><div class="l">手動優惠</div><div class="v" id="aManualDiscount">$0</div></div>
      <div class="kpi"><div class="l">折扣支出</div><div class="v neg" id="aDiscountExpense">$0</div></div>
-     <div class="kpi"><div class="l">實收入會費</div><div class="v" id="aAdminNet">$0</div></div>
+     <div class="kpi"><div class="l">實收行政費</div><div class="v" id="aAdminNet">$0</div></div>
      <div class="kpi"><div class="l">其他收入</div><div class="v" id="aOtherIncomeTotal">$0</div></div>
      <div class="kpi"><div class="l">其他支出</div><div class="v" id="aOtherExpenseTotal">$0</div></div>
     </div>
@@ -1244,6 +1245,9 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
         <label>常用項目</label>
         <select id="accountingItemPreset" onchange="useAccountingPreset()">
           <option value="">自行輸入</option>
+          <optgroup label="入會費">
+            <option value="membership|入會費">入會費收入</option>
+          </optgroup>
           <optgroup label="收入">
             <option value="income|場地 / 包廂費">場地 / 包廂費</option>
             <option value="income|飲料 / 餐飲收入">飲料 / 餐飲收入</option>
@@ -1282,7 +1286,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
    <div class="card tablewrap">
     <h3>當日賽事明細</h3>
-    <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>入會費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收入會費</th><th>JP</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
+    <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
    </div>
   </div>
  </div>
@@ -2164,19 +2168,11 @@ function dailyAccountingInfo(date){
    const eventPlayers=Array.isArray(e.players)?e.players:[];
    eventPlayers.forEach(p=>{
      const c=calcPlayerForEvent(p,e);
-     groups+=c.groups;
-     gross+=c.grossAdmin||0;
-     auto+=c.auto||0;
-     manual+=c.manual||0;
-     netAdmin+=c.netAdmin||0;
-
+     groups+=c.groups; gross+=c.grossAdmin||0; auto+=c.auto||0;
+     manual+=c.manual||0; netAdmin+=c.netAdmin||0;
      const custom=(e.pricingMode||'standard')==='custom';
-     if(custom){
-       rebuyDiscount+=c.rebuyDiscount||0;
-       groupDiscount+=c.overbuyDiscount||0;
-     }else{
-       groupDiscount+=c.auto||0;
-     }
+     if(custom){rebuyDiscount+=c.rebuyDiscount||0;groupDiscount+=c.overbuyDiscount||0;}
+     else groupDiscount+=c.auto||0;
    });
    jp+=eventOwnJP(e);
  });
@@ -2189,20 +2185,13 @@ function dailyAccountingInfo(date){
    if(+rec.laborExpense)rec.items.push({id:'legacy_labor_expense',type:'expense',name:'人事支出',amount:+rec.laborExpense});
    if(+rec.otherExpense)rec.items.push({id:'legacy_other_expense',type:'expense',name:'其他支出',amount:+rec.otherExpense});
  }
+ const membershipIncome=rec.items.filter(x=>x.type==='membership').reduce((n,x)=>n+(+x.amount||0),0);
  const itemIncome=rec.items.filter(x=>x.type==='income').reduce((n,x)=>n+(+x.amount||0),0);
  const itemExpense=rec.items.filter(x=>x.type==='expense').reduce((n,x)=>n+(+x.amount||0),0);
-
- // Accounting presentation:
- // gross admin fee = membership-fee income;
- // rebuy/group/manual discounts = discount expense.
- // This changes presentation only; net income remains mathematically identical.
- const revenue=gross+itemIncome;
+ const revenue=gross+membershipIncome+itemIncome;
  const expense=discountExpense+itemExpense;
- return {
-   events,gross,auto,manual,netAdmin,jp,groups,
-   rebuyDiscount,groupDiscount,discountExpense,
-   itemIncome,itemExpense,revenue,expense,net:revenue-expense,rec
- };
+ return {events,gross,auto,manual,netAdmin,jp,groups,rebuyDiscount,groupDiscount,discountExpense,
+   membershipIncome,itemIncome,itemExpense,revenue,expense,net:revenue-expense,rec};
 }
 
 function bindAccountingControls(){
@@ -2282,7 +2271,8 @@ function addAccountingItem(){
  let type=$('accountingItemType')?.value||'income';
  const preset=$('accountingItemPreset')?.value||'';
  if(!preset){
-   type=/薪資|工資|餐費|水電|耗材|維修|租金|支出|費用/.test(name)?'expense':'income';
+   if(/入會費/.test(name))type='membership';
+   else type=/薪資|工資|餐費|水電|耗材|維修|租金|支出|費用/.test(name)?'expense':'income';
  }
  if(!name)return alert('請輸入收支項目名稱');
  if(amount<=0)return alert('請輸入大於 0 的金額');
@@ -2322,7 +2312,7 @@ function renderAccountingManager(){
  tbody.innerHTML=(db.dailyAccounting||[]).filter(rec=>rec&&rec.date&&(!af||rec.date>=af)&&(!at||rec.date<=at)).map(rec=>{
    const ai=dailyAccountingInfo(rec.date);
    return `<tr>
-    <td>${rec.date}</td><td>${ai.events.length}</td><td>${money(ai.gross)}</td>
+    <td>${rec.date}</td><td>${ai.events.length}</td><td>${money(ai.gross)}</td><td>${money(ai.membershipIncome)}</td>
     <td>${money(ai.discountExpense)}</td><td>${money(ai.itemIncome)}</td><td>${money(ai.itemExpense)}</td>
     <td class="${ai.net>=0?'pos':'neg'}">${money(ai.net)}</td><td><span class="badge">已建立</span></td>
     <td><button onclick="openDailyAccounting('${rec.date}')">進入</button>
@@ -2337,11 +2327,12 @@ function renderDailyAccountingDetail(){
  const ai=dailyAccountingInfo(date),rec=ai.rec;
  if($('accountingDetailDate'))$('accountingDetailDate').textContent=`營業日：${date}｜共 ${ai.events.length} 場賽事`;
  if($('accountingItemRows'))$('accountingItemRows').innerHTML=(rec.items||[]).map(x=>`<tr>
-   <td>${x.type==='income'?'<span class="pos">收入</span>':'<span class="neg">支出</span>'}</td>
+   <td>${x.type==='membership'?'<span class="pos">入會費收入</span>':(x.type==='income'?'<span class="pos">其他收入</span>':'<span class="neg">其他支出</span>')}</td>
    <td>${x.name}</td><td>${money(+x.amount||0)}</td>
    <td><button class="danger" onclick="deleteAccountingItem('${x.id}')">刪除</button></td>
- </tr>`).join('') || '<tr><td colspan="4" class="small">尚未新增其他收支</td></tr>';
+ </tr>`).join('') || '<tr><td colspan="4" class="small">尚未新增入會費／其他收支</td></tr>';
  $('aAdminGross').textContent=money(ai.gross);
+ $('aMembershipIncome').textContent=money(ai.membershipIncome);
  $('aRebuyDiscount').textContent=money(ai.rebuyDiscount);
  $('aGroupDiscount').textContent=money(ai.groupDiscount);
  $('aManualDiscount').textContent=money(ai.manual);
@@ -2372,7 +2363,7 @@ function printDailyAccounting(){
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
  const itemRows=(ai.rec.items||[]).map(x=>`
- <tr><td>${x.type==='income'?'收入':'支出'}</td><td>${esc(x.name)}</td><td class="num">${money(+x.amount||0)}</td></tr>`
+ <tr><td>${x.type==='membership'?'入會費收入':(x.type==='income'?'其他收入':'其他支出')}</td><td>${esc(x.name)}</td><td class="num">${money(+x.amount||0)}</td></tr>`
  ).join('') || '<tr><td colspan="3">無其他收支</td></tr>';
 
  const eventRows=ai.events.map((e,i)=>{
@@ -2426,12 +2417,13 @@ function printDailyAccounting(){
  <div class="page">
   <div class="title"><h1>EPC 當日帳務報表</h1><div class="date">營業日：${esc(date)}</div></div>
   <div class="kpis">
-   <div><span>入會費收入</span><strong>${money(ai.gross)}</strong></div>
+   <div><span>行政費收入</span><strong>${money(ai.gross)}</strong></div>
+   <div><span>入會費收入</span><strong>${money(ai.membershipIncome)}</strong></div>
    <div><span>重買優惠</span><strong>${money(ai.rebuyDiscount)}</strong></div>
    <div><span>組數優惠</span><strong>${money(ai.groupDiscount)}</strong></div>
    <div><span>手動優惠</span><strong>${money(ai.manual)}</strong></div>
    <div><span>折扣支出</span><strong>${money(ai.discountExpense)}</strong></div>
-   <div><span>實收入會費</span><strong>${money(ai.netAdmin)}</strong></div>
+   <div><span>實收行政費</span><strong>${money(ai.netAdmin)}</strong></div>
    <div><span>其他收入</span><strong>${money(ai.itemIncome)}</strong></div>
    <div><span>其他支出</span><strong>${money(ai.itemExpense)}</strong></div>
    <div><span>EPC 總收入</span><strong>${money(ai.revenue)}</strong></div>
@@ -2442,7 +2434,7 @@ function printDailyAccounting(){
   <h2>其他收支</h2>
   <table><thead><tr><th>類型</th><th>項目</th><th>金額</th></tr></thead><tbody>${itemRows}</tbody></table>
   <h2>當日賽事明細</h2>
-  <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>入會費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收入會費</th><th>JP</th></tr></thead><tbody>${eventRows}</tbody></table>
+  <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody>${eventRows}</tbody></table>
   <div class="sign"><div>製表：____________________</div><div>覆核：____________________</div></div>
  </div></body></html>`;
 
