@@ -786,8 +786,8 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   #eventPrintOnly #eventReportHeader>div,
   #eventPrintOnly #eventReportHeader strong{font-size:15.5px!important}
   #eventPrintOnly #eventReportRule{font-size:12px!important}
-  #eventPrintOnly th{font-size:10px!important}
-  #eventPrintOnly td{font-size:10.5px!important}
+  #eventPrintOnly th{font-size:var(--report-head-font,12px)!important}
+  #eventPrintOnly td{font-size:var(--report-body-font,12px)!important}
 }
 </style>
 
@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.3 Web · Auto Member Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.4 Web · Nickname + Adaptive Print</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1984,7 +1984,7 @@ function icmEquities(stacks,payouts){
 }
 
 const REPORT_COLUMNS=[
- ['player','玩家'],['groups','總組數'],['paid','總支付'],['stack','下桌籌碼'],
+ ['player','玩家'],['nickname','綽號'],['groups','總組數'],['paid','總支付'],['stack','下桌籌碼'],
  ['prize','ICM獎金'],['chipNet','籌碼淨勝值'],['cashNet','個人盈虧'],['group','結帳群組']
 ];
 function ensureReportColumns(){
@@ -2802,6 +2802,7 @@ function render(){
  $('settleRows').innerHTML=settleSorted.map(({p,i})=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p),cash=(p.prize||0)-c.paid,chip=chipGrowthFor(p,currentEvent());
   let cells={
    player:`<td>${m.name}</td>`,
+   nickname:`<td>${p.nickname||m.nickname||''}</td>`,
    groups:`<td>${c.groups}</td>`,
    paid:`<td>${money(c.paid)}</td>`,
    stack:`<td><input type="number" min="0" value="${p.stack||0}" onchange="setP(${i},'stack',this.value)" style="min-width:110px"></td>`,
@@ -3134,7 +3135,7 @@ function applySettledLock(){
 }
 
 const EVENT_REPORT_FIELDS=[
- ['player','玩家'],['memberId','會員ID'],['groups','總組數'],['paid','總支付'],
+ ['player','玩家'],['nickname','綽號'],['memberId','會員ID'],['groups','總組數'],['paid','總支付'],
  ['stack','最終籌碼'],['growth','籌碼淨勝值'],['prize','ICM獎金'],['net','個人盈虧'],['signature','簽名'],['note','備註']
 ];
 function ensureEventReportSettings(e){
@@ -3192,6 +3193,7 @@ function renderEventReport(){
    let c=calcPlayerForEvent(p,e), growth=chipGrowthFor(p,e);
    let vals={
      player:m.name||'未知',
+     nickname:p.nickname||m.nickname||'',
      memberId:m.id||p.memberId||'',
      groups:c.groups,
      paid:money(c.paid),
@@ -3258,6 +3260,15 @@ function printEventReport(){
  if(clonedPaper){
    clonedPaper.style.setProperty('--rule-h',ruleMm+'mm');
    clonedPaper.style.setProperty('--player-row-h',rowMm+'mm');
+
+   // V1.38.4: report text automatically uses 12-13px.
+   // Fewer/shorter columns use 13px; dense reports fall back to 12px.
+   const visibleCols=clonedPaper.querySelectorAll('#eventReportHead th').length;
+   const bodyText=(clonedPaper.querySelector('#eventReportRows')?.textContent||'').trim();
+   const denseReport=visibleCols>=9 || bodyText.length>900;
+   const reportFont=denseReport?'12px':'13px';
+   clonedPaper.style.setProperty('--report-head-font',reportFont);
+   clonedPaper.style.setProperty('--report-body-font',reportFont);
  }
 
  document.body.classList.add('printing-event-report');
@@ -3285,7 +3296,7 @@ function printEventReport(){
 
 render();
 initializeCloud();
-// V1.38.3: automatically detect newly added members without reloading event/accounting data.
+// V1.38.4: nickname columns + 12-13px adaptive event-report print; auto member sync preserved.
 // This only refreshes the member list from MAIN API; it never calls full cloud load.
 let __memberAutoRefreshBusy=false;
 async function autoRefreshMembers(){
