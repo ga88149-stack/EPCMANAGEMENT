@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.6 Web · Separate Membership Fee</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.7 Web · Member Date Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2638,12 +2638,35 @@ function dashboardDefaultRange(){
  return {first,end};
 }
 function memberCreatedBusinessDate(m){
- if(m.createdDate)return String(m.createdDate).slice(0,10);
- if(m.createdAt){
-   const d=new Date(m.createdAt);
-   if(!isNaN(d))return d.toISOString().slice(0,10);
+ const raw=String(m.createdDate||m.createdAt||'').trim();
+ if(!raw)return '';
+
+ let d=null;
+
+ // Google Form format: M/D/YYYY H:mm:ss
+ let hit=raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+ if(hit){
+   d=new Date(+hit[3],+hit[1]-1,+hit[2],+(hit[4]||0),+(hit[5]||0),+(hit[6]||0));
+ }else{
+   // ISO / YYYY-MM-DD formats used by desktop/mobile/API records.
+   hit=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+   if(hit){
+     d=new Date(+hit[1],+hit[2]-1,+hit[3],+(hit[4]||0),+(hit[5]||0),+(hit[6]||0));
+   }else{
+     const parsed=new Date(raw);
+     if(!isNaN(parsed))d=parsed;
+   }
  }
- return '';
+ if(!d||isNaN(d))return '';
+
+ // EPC business day: records created after midnight and before 07:00
+ // belong to the previous business date.
+ if(d.getHours()<7)d.setDate(d.getDate()-1);
+
+ const y=d.getFullYear();
+ const mo=String(d.getMonth()+1).padStart(2,'0');
+ const day=String(d.getDate()).padStart(2,'0');
+ return `${y}-${mo}-${day}`;
 }
 function renderDashboardSummary(){
  const def=dashboardDefaultRange();
