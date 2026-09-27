@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.0 Web · Mobile Responsive</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.1 Web · Settlement Admin Summary</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1233,6 +1233,8 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   <div class="card kpi"><div class="l">人次</div><div class="v" id="sEntrants">0</div></div>
 <div class="card kpi"><div class="l">起始籌碼</div><div class="v" id="sStartingChips">0</div></div>
 <div class="card kpi"><div class="l">JP 提撥</div><div class="v" id="sJP">$0</div></div>
+  <div class="card kpi"><div class="l">折扣總額</div><div class="v" id="sTotalDiscount">$0</div></div>
+  <div class="card kpi"><div class="l">實收行政費</div><div class="v" id="sNetAdmin">$0</div></div>
   <div class="card kpi"><div class="l">ICM 可發獎金</div><div class="v" id="sAvail">$0</div></div>
   <div class="card kpi"><div class="l">籌碼差異</div><div class="v" id="sChipDiff">0</div></div>
  </div>
@@ -2097,7 +2099,7 @@ function icmEquities(stacks,payouts){
 }
 
 const REPORT_COLUMNS=[
- ['player','玩家'],['nickname','綽號'],['groups','總組數'],['paid','總支付'],['stack','下桌籌碼'],
+ ['seat','座位'],['player','玩家'],['nickname','綽號'],['groups','總組數'],['paid','總支付'],['stack','下桌籌碼'],
  ['prize','ICM獎金'],['chipNet','籌碼淨勝值'],['cashNet','個人盈虧'],['group','結帳群組']
 ];
 function ensureReportColumns(){
@@ -2956,7 +2958,7 @@ function render(){
  $('kMembers').textContent=db.members.length;
  $('kProfit').textContent=money(totalProfit);$('kProfit').className='v '+(totalProfit>=0?'pos':'neg');
  $('kJP').textContent=money(settledJP);
- $('sPool').textContent=money(info.pool);$('sJP').textContent=money(info.jp);$('sAvail').textContent=money(info.avail);if($('sEntrants'))$('sEntrants').textContent=ev.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,ev).groups,0);if($('sStartingChips'))$('sStartingChips').textContent=Number(ev.chips||0).toLocaleString();$('sChipDiff').textContent=chipDiff.toLocaleString();$('sChipDiff').className='v '+(chipDiff===0?'pos':'neg');
+ $('sPool').textContent=money(info.pool);$('sJP').textContent=money(info.jp);const settleTotals=ev.players.reduce((a,p)=>{const c=calcPlayerForEvent(p,ev);a.discount+=(+c.totalDiscount||0);a.netAdmin+=(+c.netAdmin||0);return a;},{discount:0,netAdmin:0});if($('sTotalDiscount'))$('sTotalDiscount').textContent=money(settleTotals.discount);if($('sNetAdmin'))$('sNetAdmin').textContent=money(settleTotals.netAdmin);$('sAvail').textContent=money(info.avail);if($('sEntrants'))$('sEntrants').textContent=ev.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,ev).groups,0);if($('sStartingChips'))$('sStartingChips').textContent=Number(ev.chips||0).toLocaleString();$('sChipDiff').textContent=chipDiff.toLocaleString();$('sChipDiff').className='v '+(chipDiff===0?'pos':'neg');
  if($('btnCalcICM')){$('btnCalcICM').disabled=chipDiff!==0;$('btnCalcICM').style.opacity=$('btnCalcICM').disabled?'.45':'1';}
  if($('btnConfirmSettlement')){$('btnConfirmSettlement').disabled=false;$('btnConfirmSettlement').style.opacity='1';}
  renderReportSettings();
@@ -2965,6 +2967,7 @@ function render(){
  let settleSorted=currentEvent().players.map((p,i)=>({p,i,g:chipGrowthFor(p,currentEvent())})).sort((a,b)=>b.g-a.g);
  $('settleRows').innerHTML=settleSorted.map(({p,i})=>{let m=db.members.find(x=>x.id===p.memberId)||{name:'未知'},c=calcPlayer(p),cash=(p.prize||0)-c.paid,chip=chipGrowthFor(p,currentEvent());
   let cells={
+   seat:`<td>${p.seat||''}</td>`,
    player:`<td>${m.name}</td>`,
    nickname:`<td>${p.nickname||m.nickname||''}</td>`,
    groups:`<td>${c.groups}</td>`,
