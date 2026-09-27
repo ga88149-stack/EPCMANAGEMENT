@@ -962,7 +962,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.7 Web · Member Date Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.8 Web · Receipt Column Toggle</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1089,8 +1089,9 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
    <label class="player-col-chip"><input type="checkbox" data-player-col="overbuyDiscount" onchange="render()">超買優惠</label>
    <label class="player-col-chip"><input type="checkbox" data-player-col="manualDiscount" onchange="render()">手動優惠</label>
    <label class="player-col-chip"><input type="checkbox" data-player-col="totalDiscount" onchange="render()">總優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="paid" onchange="render()">實收</label>
   </div>
-  <div class="small" style="margin-top:8px">座位、玩家可自行勾選顯示；買入、重買、總組數、實收固定顯示；結帳群組僅供後台分帳使用。</div>
+  <div class="small" style="margin-top:8px">座位、玩家、實收可自行勾選顯示；買入、重買、總組數固定顯示；結帳群組僅供後台分帳使用。</div>
  </div>
  <div class="card">
   <table id="eventPlayerTable" style="width:100%;table-layout:auto">
@@ -2722,9 +2723,9 @@ function renderDashboardSummary(){
  if($('kLevelBreakdown'))$('kLevelBreakdown').textContent=levelText;
 }
 
-const PLAYER_OPTIONAL_COLS=['seat','name','memberId','nickname','rebuyDiscount','overbuyDiscount','manualDiscount','totalDiscount'];
+const PLAYER_OPTIONAL_COLS=['seat','name','memberId','nickname','rebuyDiscount','overbuyDiscount','manualDiscount','totalDiscount','paid'];
 function playerVisibleCols(){
- if(!window.__playerVisibleCols)window.__playerVisibleCols=new Set(['name']);
+ if(!window.__playerVisibleCols)window.__playerVisibleCols=new Set(['name','paid']);
  document.querySelectorAll('[data-player-col]').forEach(cb=>{
    if(cb.checked)window.__playerVisibleCols.add(cb.dataset.playerCol);
    else window.__playerVisibleCols.delete(cb.dataset.playerCol);
@@ -2785,7 +2786,7 @@ function render(){
   ['buyin','買入',true],['rebuy','重買',true],['groups','總組數',true],
   ['rebuyDiscount','重買優惠',visible.has('rebuyDiscount')],['overbuyDiscount','超買優惠',visible.has('overbuyDiscount')],
   ['manualDiscount','手動優惠',visible.has('manualDiscount')],['totalDiscount','總優惠',visible.has('totalDiscount')],
-  ['paid','實收',true],['action','操作',true]
+  ['paid','實收',visible.has('paid')],['action','操作',true]
  ].filter(x=>x[2]);
  // 依目前勾選的欄位重新分配整張表寬度，不需要左右滑動。
  const baseWeights={
