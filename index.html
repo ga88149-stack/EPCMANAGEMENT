@@ -1064,9 +1064,28 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 }
 </style>
 
+<style>
+/* V1.42.3: single-event accounting uses the same dashboard panel geometry as daily accounting. */
+#eventAccountingEditor .l{
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  gap:12px !important;
+  align-items:stretch !important;
+}
+#eventAccountingEditor .kpi{
+  min-width:0 !important;
+  width:auto !important;
+}
+@media(max-width:900px){
+  #eventAccountingEditor .l{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+}
+@media(max-width:520px){
+  #eventAccountingEditor .l{grid-template-columns:1fr !important;}
+}
+</style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.2 Web · Event Accounting Layout</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.3 Web · Matched Event Accounting Panels</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1402,7 +1421,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
      <div><h3 id="eventAccountingTitle">單場帳務</h3><div class="small" id="eventAccountingSub"></div></div>
      <button type="button" onclick="closeEventAccounting()">關閉</button>
     </div>
-    <div class="kpis" style="margin-top:12px">
+    <div class="l" style="margin-top:12px">
      <div class="kpi"><span>行政費收入</span><b id="eaGross">$0</b></div>
      <div class="kpi"><span>入會費收入</span><b id="eaMembership">$0</b></div>
      <div class="kpi"><span>重買優惠</span><b id="eaRebuyDiscount">$0</b></div>
@@ -1423,7 +1442,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
      <thead><tr><th>類型</th><th>項目</th><th>金額</th><th>操作</th></tr></thead>
      <tbody id="eaItemRows"></tbody>
     </table></div>
-    <div class="kpis" style="margin-top:14px">
+    <div class="l" style="margin-top:14px">
      <div class="kpi"><span>EPC 總收入</span><b id="eaRevenue">$0</b></div>
      <div class="kpi"><span>EPC 總支出</span><b id="eaExpense">$0</b></div>
      <div class="kpi"><span>單場淨收入</span><b id="eaNet">$0</b></div>
