@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.6 Web · Column Render Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.7 Web · Checkbox Handler Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1185,15 +1185,15 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
  <div class="card" style="margin-bottom:10px">
   <div class="player-col-controls">
    <span class="control-title">顯示欄位</span>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="seat" onchange="setPlayerColumnPreference(\'seat\',this.checked)">座位</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="name" onchange="setPlayerColumnPreference(\'name\',this.checked)">玩家</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="memberId" onchange="setPlayerColumnPreference(\'memberId\',this.checked)">會員編號</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="nickname" onchange="setPlayerColumnPreference(\'nickname\',this.checked)">綽號</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="rebuyDiscount" onchange="setPlayerColumnPreference(\'rebuyDiscount\',this.checked)">重買優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="overbuyDiscount" onchange="setPlayerColumnPreference(\'overbuyDiscount\',this.checked)">超買優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="manualDiscount" onchange="setPlayerColumnPreference(\'manualDiscount\',this.checked)">手動優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="totalDiscount" onchange="setPlayerColumnPreference(\'totalDiscount\',this.checked)">總優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="paid" onchange="setPlayerColumnPreference(\'paid\',this.checked)">實收</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="seat" onchange="setPlayerColumnPreference('seat',this.checked)">座位</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="name" onchange="setPlayerColumnPreference('name',this.checked)">玩家</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="memberId" onchange="setPlayerColumnPreference('memberId',this.checked)">會員編號</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="nickname" onchange="setPlayerColumnPreference('nickname',this.checked)">綽號</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="rebuyDiscount" onchange="setPlayerColumnPreference('rebuyDiscount',this.checked)">重買優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="overbuyDiscount" onchange="setPlayerColumnPreference('overbuyDiscount',this.checked)">超買優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="manualDiscount" onchange="setPlayerColumnPreference('manualDiscount',this.checked)">手動優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="totalDiscount" onchange="setPlayerColumnPreference('totalDiscount',this.checked)">總優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="paid" onchange="setPlayerColumnPreference('paid',this.checked)">實收</label>
   </div>
   <div class="small" style="margin-top:8px">座位、玩家、實收可自行勾選顯示；買入、重買、總組數固定顯示；結帳群組僅供後台分帳使用。</div>
  </div>
