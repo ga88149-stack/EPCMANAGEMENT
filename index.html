@@ -960,9 +960,113 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   border-top:2px solid #52677b!important;
 }
 </style>
+
+<style id="v1390MobileResponsive">
+/* V1.39.0: presentation-only responsive layer. No business/API logic changed. */
+@media (max-width: 800px){
+  html,body{max-width:100%;overflow-x:hidden}
+  body{font-size:15px}
+  header{
+    position:sticky;top:0;padding:10px 12px;gap:8px;
+    align-items:flex-start;flex-direction:column
+  }
+  header>div:first-child{width:100%}
+  header>div:last-child{
+    width:100%;display:grid!important;grid-template-columns:1fr 1fr;gap:7px!important
+  }
+  header .brand{font-size:19px;line-height:1.25}
+  header .brand-version{display:block;margin:3px 0 0;font-size:11px}
+  header #saveState{grid-column:1/-1;font-size:11px}
+  header button{width:100%;min-height:38px}
+
+  nav{
+    position:sticky;top:112px;z-index:4;
+    padding:8px 10px;gap:7px;background:#0b0f14f2;
+    overflow-x:auto;-webkit-overflow-scrolling:touch
+  }
+  nav button{flex:0 0 auto;min-height:40px;padding:9px 13px}
+
+  main{width:100%;max-width:none;padding:10px}
+  .card{padding:12px;border-radius:12px;margin-bottom:10px}
+  h2{font-size:22px!important;margin-bottom:10px}
+  h3{font-size:18px}
+
+  .grid,.formgrid{grid-template-columns:1fr 1fr!important;gap:8px}
+  .kpi{min-width:0}
+  .kpi .v{font-size:22px}
+  .kpi[style*="grid-column"]{grid-column:1/-1!important}
+
+  /* Inline desktop grids must yield to mobile. */
+  #dashboard>div:first-child{align-items:stretch!important}
+  #dashboard>div:first-child>.formgrid{
+    min-width:0!important;width:100%!important;grid-template-columns:1fr 1fr!important
+  }
+  #events .formgrid,
+  #event .formgrid,
+  #settle .formgrid{min-width:0!important}
+
+  input,select,textarea{
+    min-height:42px;font-size:16px!important;padding:9px 10px
+  }
+  select[size]{min-height:145px}
+  button,.btn{min-height:40px;font-size:14px}
+  .toolbar{gap:7px}
+  .toolbar button{flex:1 1 auto}
+
+  .player-col-controls{gap:6px}
+  .player-col-controls .control-title{width:100%;margin-bottom:2px}
+  .player-col-chip{padding:8px 9px;font-size:12px}
+  .player-col-chip input{min-height:0;width:16px;height:16px}
+
+  /* Data tables remain complete; swipe horizontally instead of crushing columns. */
+  .tablewrap,
+  #event>.card:has(#eventPlayerTable),
+  #settle .card,
+  #dailysettle .card,
+  #accounting .card{
+    max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch
+  }
+  table{font-size:13px}
+  th,td{padding:8px 7px;white-space:nowrap}
+  #eventPlayerTable{min-width:720px!important;table-layout:auto!important}
+  #eventPlayerTable input{min-width:72px}
+  #memberRows{font-size:13px}
+
+  #eventreport{padding:10px 0 28px}
+  #eventreport>.report-topbar{padding:0 4px}
+  #eventreport #eventReportPaper{
+    width:100%!important;max-width:100%!important;padding:14px 10px!important
+  }
+  #eventreport #eventReportHeader{grid-template-columns:1fr 1fr!important}
+  #eventreport #eventReportPaper .tablewrap{overflow-x:auto!important}
+  #eventreport #eventReportPaper table{min-width:700px}
+
+  #actionMsg{top:150px!important}
+}
+
+@media (max-width: 520px){
+  header>div:last-child{grid-template-columns:1fr 1fr}
+  nav{top:112px}
+  main{padding:8px}
+  .grid,.formgrid{grid-template-columns:1fr!important}
+  #dashboard>div:first-child>.formgrid{grid-template-columns:1fr 1fr!important}
+  #dashboard .grid{grid-template-columns:1fr 1fr!important}
+  #dashboard .kpi[style*="grid-column"]{grid-column:1/-1!important}
+  #events .formgrid[style],
+  #event .formgrid[style]{grid-template-columns:1fr!important}
+  .card{padding:10px}
+  .toolbar{display:grid;grid-template-columns:1fr 1fr}
+  .toolbar>*{min-width:0}
+  .toolbar .small{grid-column:1/-1}
+  .player-col-chip{font-size:12px}
+  #eventPlayerTable{min-width:680px!important}
+  #eventreport #eventReportHeader{grid-template-columns:1fr!important}
+}
+</style>
+
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.38.8 Web · Receipt Column Toggle</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.0 Web · Mobile Responsive</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
