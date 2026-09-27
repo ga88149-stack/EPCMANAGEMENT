@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.3 Web · Business Date Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.4 Web · Persistent Column Preferences</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1185,15 +1185,15 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
  <div class="card" style="margin-bottom:10px">
   <div class="player-col-controls">
    <span class="control-title">顯示欄位</span>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="seat" onchange="render()">座位</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="name" checked onchange="render()">玩家</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="memberId" onchange="render()">會員編號</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="nickname" onchange="render()">綽號</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="rebuyDiscount" onchange="render()">重買優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="overbuyDiscount" onchange="render()">超買優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="manualDiscount" onchange="render()">手動優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="totalDiscount" onchange="render()">總優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="paid" onchange="render()">實收</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="seat" onchange="setPlayerColumnPreference(\'seat\',this.checked)">座位</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="name" onchange="setPlayerColumnPreference(\'name\',this.checked)">玩家</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="memberId" onchange="setPlayerColumnPreference(\'memberId\',this.checked)">會員編號</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="nickname" onchange="setPlayerColumnPreference(\'nickname\',this.checked)">綽號</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="rebuyDiscount" onchange="setPlayerColumnPreference(\'rebuyDiscount\',this.checked)">重買優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="overbuyDiscount" onchange="setPlayerColumnPreference(\'overbuyDiscount\',this.checked)">超買優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="manualDiscount" onchange="setPlayerColumnPreference(\'manualDiscount\',this.checked)">手動優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="totalDiscount" onchange="setPlayerColumnPreference(\'totalDiscount\',this.checked)">總優惠</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="paid" onchange="setPlayerColumnPreference(\'paid\',this.checked)">實收</label>
   </div>
   <div class="small" style="margin-top:8px">座位、玩家、實收可自行勾選顯示；買入、重買、總組數固定顯示；結帳群組僅供後台分帳使用。</div>
  </div>
@@ -2840,15 +2840,30 @@ function renderDashboardSummary(){
 }
 
 const PLAYER_OPTIONAL_COLS=['seat','name','memberId','nickname','rebuyDiscount','overbuyDiscount','manualDiscount','totalDiscount','paid'];
-function playerVisibleCols(){
- if(!window.__playerVisibleCols)window.__playerVisibleCols=new Set(['name','paid']);
- document.querySelectorAll('[data-player-col]').forEach(cb=>{
-   if(cb.checked)window.__playerVisibleCols.add(cb.dataset.playerCol);
-   else window.__playerVisibleCols.delete(cb.dataset.playerCol);
- });
+const PLAYER_COL_PREF_KEY='epcPlayerVisibleColsV1';
+function loadPlayerVisibleCols(){
+ if(window.__playerVisibleCols)return window.__playerVisibleCols;
+ let saved=null;
+ try{saved=JSON.parse(localStorage.getItem(PLAYER_COL_PREF_KEY)||'null')}catch(_){}
+ const valid=Array.isArray(saved)?saved.filter(k=>PLAYER_OPTIONAL_COLS.includes(k)):null;
+ window.__playerVisibleCols=new Set(valid||['name','paid']);
  return window.__playerVisibleCols;
 }
+function syncPlayerColumnCheckboxes(){
+ const visible=loadPlayerVisibleCols();
+ document.querySelectorAll('[data-player-col]').forEach(cb=>{cb.checked=visible.has(cb.dataset.playerCol)});
+}
+function setPlayerColumnPreference(k,v){
+ const visible=loadPlayerVisibleCols();
+ if(v)visible.add(k);else visible.delete(k);
+ try{localStorage.setItem(PLAYER_COL_PREF_KEY,JSON.stringify([...visible]))}catch(_){}
+ render();
+}
+function playerVisibleCols(){
+ return loadPlayerVisibleCols();
+}
 function render(){
+ syncPlayerColumnCheckboxes();
  renderDashboardSummary();
  syncAccountingBusinessHours();
  let ev=currentEvent();
