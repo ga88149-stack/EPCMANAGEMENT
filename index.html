@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.2 Web · Unified Main Ledger</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.3 Web · Manual Prize Adjustment</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1339,7 +1339,10 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 <div class="small" style="margin-bottom:10px">勾選後可立即控制下方 ICM 結算表要顯示的欄位；設定也會保留。</div>
 <div id="reportColumnSettings" style="display:flex;gap:14px;flex-wrap:wrap"></div>
 </div>
-<div class="card tablewrap"><table id="settleTable"><thead><tr id="settleHead"></tr></thead><tbody id="settleRows"></tbody></table></div>
+<div class="card tablewrap">
+ <div class="small" style="margin-bottom:10px"><b>獎金確認：</b>計算 ICM 後，可在「ICM獎金」欄直接手動修改。獎金合計必須等於 ICM 可發獎金，且下桌籌碼為 0 的玩家獎金必須為 0。</div>
+ <table id="settleTable"><thead><tr id="settleHead"></tr></thead><tbody id="settleRows"></tbody><tfoot><tr><td id="manualPrizeTotalCell" colspan="99" style="text-align:right;font-weight:800"></td></tr></tfoot></table>
+</div>
  <div class="card tablewrap"><h3>合併結帳</h3><table><thead><tr><th>結帳群組</th><th>成員</th><th>合計輸贏</th></tr></thead><tbody id="groupRows"></tbody></table></div>
 </section>
 
@@ -2289,6 +2292,26 @@ function chipGrowthFor(p,e){
  return ((+p.stack||0)-invested)/original;
 }
 
+function manualPrizeValidation(e=currentEvent()){
+ if(!e)return {ok:false,total:0,target:0,diff:0,message:'找不到目前賽事'};
+ const info=poolInfo(e);
+ const total=(e.players||[]).reduce((s,p)=>s+(+p.prize||0),0);
+ const badZero=(e.players||[]).some(p=>(+p.stack||0)<=0 && (+p.prize||0)!==0);
+ const negative=(e.players||[]).some(p=>(+p.prize||0)<0);
+ const diff=Math.round((+info.avail||0)-total);
+ if(negative)return {ok:false,total,target:+info.avail||0,diff,message:'獎金不可小於 0'};
+ if(badZero)return {ok:false,total,target:+info.avail||0,diff,message:'下桌籌碼為 0 的玩家，獎金必須為 $0'};
+ if(diff!==0)return {ok:false,total,target:+info.avail||0,diff,message:`獎金合計必須等於 ICM 可發獎金，目前差額 ${money(Math.abs(diff))}${diff>0?'（尚未分配）':'（超出）'}`};
+ return {ok:true,total,target:+info.avail||0,diff:0,message:'獎金總額正確'};
+}
+function setManualPrize(i,value){
+ const e=currentEvent();if(!e||!e.players[i])return;
+ const p=e.players[i];
+ let v=Math.max(0,Math.round(+value||0));
+ if((+p.stack||0)<=0)v=0;
+ p.prize=v;
+ persist();render();
+}
 function calculateICM(){
  let e=currentEvent();if(!e)return;
  let totalGroups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
@@ -3019,6 +3042,8 @@ function validateSettlement(){
 }
 function confirmSettlement(){
  let e=requireEvent();if(!e){actionMsg('尚未選擇賽事',true);return;}
+ const prizeCheck=manualPrizeValidation(e);
+ if(!prizeCheck.ok)return alert('無法正式結算：\n'+prizeCheck.message);
  
  let v=validateSettlement();
  if(!v.ok){actionMsg(v.msg,true);return;}
@@ -3480,7 +3505,11 @@ function render(){
  $('kJP').textContent=money(settledJP);
  $('sPool').textContent=money(info.pool);$('sJP').textContent=money(info.jp);const settleTotals=ev.players.reduce((a,p)=>{const c=calcPlayerForEvent(p,ev);a.discount+=(+c.totalDiscount||0);a.netAdmin+=(+c.netAdmin||0);return a;},{discount:0,netAdmin:0});if($('sTotalDiscount'))$('sTotalDiscount').textContent=money(settleTotals.discount);if($('sNetAdmin'))$('sNetAdmin').textContent=money(settleTotals.netAdmin);$('sAvail').textContent=money(info.avail);if($('sEntrants'))$('sEntrants').textContent=ev.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,ev).groups,0);if($('sStartingChips'))$('sStartingChips').textContent=Number(ev.chips||0).toLocaleString();$('sChipDiff').textContent=chipDiff.toLocaleString();$('sChipDiff').className='v '+(chipDiff===0?'pos':'neg');
  if($('btnCalcICM')){$('btnCalcICM').disabled=chipDiff!==0;$('btnCalcICM').style.opacity=$('btnCalcICM').disabled?'.45':'1';}
- if($('btnConfirmSettlement')){$('btnConfirmSettlement').disabled=false;$('btnConfirmSettlement').style.opacity='1';}
+ const prizeCheck=manualPrizeValidation(ev);
+ if($('manualPrizeTotalCell')){
+   $('manualPrizeTotalCell').innerHTML=`手動獎金合計：${money(prizeCheck.total)} ／ 可發獎金：${money(prizeCheck.target)}　<span class="${prizeCheck.ok?'pos':'neg'}">${prizeCheck.message}</span>`;
+ }
+ if($('btnConfirmSettlement')){$('btnConfirmSettlement').disabled=!prizeCheck.ok;$('btnConfirmSettlement').style.opacity=$('btnConfirmSettlement').disabled?'.45':'1';}
  renderReportSettings();
  let reportCols=visibleReportCols();
  $('settleHead').innerHTML=reportCols.map(([,label])=>`<th>${label}</th>`).join('');
@@ -3494,7 +3523,7 @@ function render(){
    groups:`<td>${c.groups}</td>`,
    paid:`<td>${money(c.paid)}</td>`,
    stack:`<td><input type="number" min="0" value="${p.stack||0}" onchange="setP(${i},'stack',this.value)" style="min-width:110px"></td>`,
-   prize:`<td>${money(p.prize||0)}</td>`,
+   prize:`<td><input type="number" min="0" step="100" value="${Math.round(+p.prize||0)}" onchange="setManualPrize(${i},this.value)" style="min-width:105px;text-align:right" ${(+p.stack||0)<=0?'disabled':''}></td>`,
    chipNet:`<td>${chip.toFixed(1)}</td>`,
    cashNet:`<td class="${cash>=0?'pos':'neg'}">${money(cash)}</td>`,
    group:`<td>${p.group||m.name}</td>`
