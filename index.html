@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.40.0 Web · ICM Member ID</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.41.0 Web · Accounting Groups</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1394,7 +1394,13 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
    <div class="card tablewrap">
     <h3>當日賽事明細</h3>
-    <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
+    <div class="small" style="margin-bottom:10px">帳務群組留白＝列入當日一般帳；輸入相同群組名稱的賽事會合併成同一份獨立帳。此設定只影響 EPC 帳務與 JP，不影響分帳報表。</div>
+    <table><thead><tr><th>場次</th><th>賽事</th><th>帳務群組</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
+   </div>
+   <div class="card tablewrap">
+    <h3>獨立帳務群組</h3>
+    <div class="small" style="margin-bottom:10px">同一群組內的賽事會合併計算；不同群組各自獨立。</div>
+    <table><thead><tr><th>帳務群組</th><th>場次</th><th>組數</th><th>行政費收入</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody id="accountingGroupRows"></tbody></table>
    </div>
   </div>
  </div>
@@ -2261,8 +2267,44 @@ function ensureDailyAccountingStore(){
  db.dailyAccounting.forEach(x=>{if(!Array.isArray(x.items))x.items=[];});
  if(db.currentAccountingDate===undefined)db.currentAccountingDate=null;
 }
-function accountingEventsForDate(date){
+function accountingAllEventsForDate(date){
  return (db.events||[]).filter(e=>businessDateForEvent(e)===date);
+}
+function accountingGroupForEvent(e){
+ return String(e&&e.accountingGroup||'').trim();
+}
+function accountingEventsForDate(date){
+ return accountingAllEventsForDate(date).filter(e=>!accountingGroupForEvent(e));
+}
+function setEventAccountingGroup(eventId,value){
+ const e=(db.events||[]).find(x=>x.id===eventId);
+ if(!e)return;
+ e.accountingGroup=String(value||'').trim();
+ persist();
+ renderDailyAccountingDetail();
+}
+function accountingTotalsForEvents(events){
+ let gross=0,auto=0,manual=0,netAdmin=0,jp=0,groups=0,rebuyDiscount=0,groupDiscount=0;
+ (events||[]).forEach(e=>{
+   (Array.isArray(e.players)?e.players:[]).forEach(p=>{
+     const c=calcPlayerForEvent(p,e);
+     groups+=c.groups; gross+=c.grossAdmin||0; auto+=c.auto||0; manual+=c.manual||0; netAdmin+=c.netAdmin||0;
+     const custom=(e.pricingMode||'standard')==='custom';
+     if(custom){rebuyDiscount+=c.rebuyDiscount||0;groupDiscount+=c.overbuyDiscount||0;}
+     else groupDiscount+=c.auto||0;
+   });
+   jp+=eventOwnJP(e);
+ });
+ const discountExpense=rebuyDiscount+groupDiscount+manual;
+ return {gross,auto,manual,netAdmin,jp,groups,rebuyDiscount,groupDiscount,discountExpense};
+}
+function accountingIndependentGroups(date){
+ const map={};
+ accountingAllEventsForDate(date).forEach(e=>{
+   const g=accountingGroupForEvent(e); if(!g)return;
+   (map[g]||(map[g]=[])).push(e);
+ });
+ return Object.entries(map).map(([name,events])=>({name,events,...accountingTotalsForEvents(events)}));
 }
 
 function poolInfoForEvent(e){
@@ -2282,21 +2324,8 @@ function eventOwnJP(e){
 function dailyAccountingInfo(date){
  ensureDailyAccountingStore();
  const events=accountingEventsForDate(date);
- let gross=0,auto=0,manual=0,netAdmin=0,jp=0,groups=0;
- let rebuyDiscount=0,groupDiscount=0;
- events.forEach(e=>{
-   const eventPlayers=Array.isArray(e.players)?e.players:[];
-   eventPlayers.forEach(p=>{
-     const c=calcPlayerForEvent(p,e);
-     groups+=c.groups; gross+=c.grossAdmin||0; auto+=c.auto||0;
-     manual+=c.manual||0; netAdmin+=c.netAdmin||0;
-     const custom=(e.pricingMode||'standard')==='custom';
-     if(custom){rebuyDiscount+=c.rebuyDiscount||0;groupDiscount+=c.overbuyDiscount||0;}
-     else groupDiscount+=c.auto||0;
-   });
-   jp+=eventOwnJP(e);
- });
- const discountExpense=rebuyDiscount+groupDiscount+manual;
+ const totals=accountingTotalsForEvents(events);
+ const {gross,auto,manual,netAdmin,jp,groups,rebuyDiscount,groupDiscount,discountExpense}=totals;
  const rec=db.dailyAccounting.find(x=>x.date===date)||{items:[]};
  if(!Array.isArray(rec.items)){
    rec.items=[];
@@ -2445,7 +2474,8 @@ function renderDailyAccountingDetail(){
  ensureDailyAccountingStore();
  const date=db.currentAccountingDate;if(!date)return;
  const ai=dailyAccountingInfo(date),rec=ai.rec;
- if($('accountingDetailDate'))$('accountingDetailDate').textContent=`營業日：${date}｜共 ${ai.events.length} 場賽事`;
+ const allEvents=accountingAllEventsForDate(date);
+ if($('accountingDetailDate'))$('accountingDetailDate').textContent=`營業日：${date}｜一般帳 ${ai.events.length} 場｜全部 ${allEvents.length} 場`;
  if($('accountingItemRows'))$('accountingItemRows').innerHTML=(rec.items||[]).map(x=>`<tr>
    <td>${x.type==='membership'?'<span class="pos">入會費收入</span>':(x.type==='income'?'<span class="pos">其他收入</span>':'<span class="neg">其他支出</span>')}</td>
    <td>${x.name}</td><td>${money(+x.amount||0)}</td>
@@ -2463,7 +2493,7 @@ function renderDailyAccountingDetail(){
  $('aRevenue').textContent=money(ai.revenue);$('aExpense').textContent=money(ai.expense);
  $('aNet').textContent=money(ai.net);$('aJP').textContent=money(ai.jp);
  $('aNet').className='v '+(ai.net>=0?'pos':'neg');
- $('accountingEventRows').innerHTML=ai.events.map(e=>{
+ $('accountingEventRows').innerHTML=allEvents.map(e=>{
    let g=0,gross=0,rebuy=0,group=0,manual=0,net=0;
    (Array.isArray(e.players)?e.players:[]).forEach(p=>{
      const c=calcPlayerForEvent(p,e);
@@ -2473,8 +2503,15 @@ function renderDailyAccountingDetail(){
      else group+=c.auto||0;
    });
    const disc=rebuy+group+manual;
-   return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td>${g}</td><td>${money(gross)}</td><td>${money(rebuy)}</td><td>${money(group)}</td><td>${money(manual)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td></tr>`;
+   const ag=accountingGroupForEvent(e);
+   return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td><input value="${ag}" placeholder="一般帳" style="min-width:110px" onchange="setEventAccountingGroup('${e.id}',this.value)"></td><td>${g}</td><td>${money(gross)}</td><td>${money(rebuy)}</td><td>${money(group)}</td><td>${money(manual)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td></tr>`;
  }).join('');
+ const independent=accountingIndependentGroups(date);
+ if($('accountingGroupRows'))$('accountingGroupRows').innerHTML=independent.map(g=>`<tr>
+   <td><b>${g.name}</b></td>
+   <td>${g.events.map(e=>`第${e.seq||1}場`).join('、')}</td>
+   <td>${g.groups}</td><td>${money(g.gross)}</td><td>${money(g.discountExpense)}</td><td>${money(g.netAdmin)}</td><td>${money(g.jp)}</td>
+ </tr>`).join('')||'<tr><td colspan="7" class="small">目前沒有獨立帳務群組</td></tr>';
 }
 function printDailyAccounting(){
  const date=db.currentAccountingDate;
