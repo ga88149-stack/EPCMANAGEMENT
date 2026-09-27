@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.4 Web · Accounting Presets</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.43.1 Web · Main Ledger Reports</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1114,6 +1114,42 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   <div class="card kpi"><div class="l">總 JP 累計</div><div class="v" id="kJP">$0</div></div>
   <div class="card kpi"><div class="l">區間總支出</div><div class="v" id="kMonthExpense">$0</div></div>
   <div class="card kpi" style="grid-column:span 2"><div class="l">區間賽事場次</div><div class="v" id="kMonthEvents">0 場</div><div class="small" id="kLevelBreakdown">尚無賽事</div></div>
+ </div>
+
+ <div class="card" style="margin-top:14px">
+  <div class="report-topbar" style="margin-bottom:10px">
+   <div><h3 style="margin:0">日報表</h3><div class="small">查看指定營業日的 EPC 總帳收支；獨立帳務不納入。</div></div>
+   <div style="min-width:220px"><label>營業日</label><input type="date" id="dashboardDailyDate" onchange="renderDashboardDailyReport()"></div>
+  </div>
+  <div class="grid">
+   <div class="card kpi"><div class="l">賽事數</div><div class="v" id="drEvents">0 場</div></div>
+   <div class="card kpi"><div class="l">行政費收入</div><div class="v" id="drAdmin">$0</div></div>
+   <div class="card kpi"><div class="l">入會費收入</div><div class="v" id="drMembership">$0</div></div>
+   <div class="card kpi"><div class="l">折扣支出</div><div class="v" id="drDiscount">$0</div></div>
+   <div class="card kpi"><div class="l">其他收入</div><div class="v" id="drOtherIncome">$0</div></div>
+   <div class="card kpi"><div class="l">其他支出</div><div class="v" id="drOtherExpense">$0</div></div>
+   <div class="card kpi"><div class="l">淨收入</div><div class="v" id="drNet">$0</div></div>
+   <div class="card kpi"><div class="l">JP</div><div class="v" id="drJP">$0</div></div>
+  </div>
+  <div class="tablewrap" style="margin-top:12px">
+   <table><thead><tr><th>方向</th><th>分類</th><th>項目名稱</th><th>金額</th><th>來源</th></tr></thead><tbody id="dashboardDailyItemRows"></tbody></table>
+  </div>
+ </div>
+
+ <div class="card" style="margin-top:14px">
+  <div class="report-topbar" style="margin-bottom:10px">
+   <div><h3 style="margin:0">收支明細查詢</h3><div class="small">查詢 EPC 總帳明細；獨立帳務不納入。可搜尋「兼職薪資」或「方大哥飲料」自動加總。</div></div>
+   <div class="kpi" style="min-width:180px"><div class="l">符合項目合計</div><div class="v" id="ledgerSearchTotal">$0</div></div>
+  </div>
+  <div class="formgrid" style="grid-template-columns:1fr 1fr 1fr 1.4fr">
+   <div><label>開始營業日</label><input type="date" id="ledgerDateFrom" onchange="renderLedgerAnalysis()"></div>
+   <div><label>結束營業日</label><input type="date" id="ledgerDateTo" onchange="renderLedgerAnalysis()"></div>
+   <div><label>收支方向</label><select id="ledgerDirection" onchange="renderLedgerAnalysis()"><option value="">全部</option><option value="income">收入</option><option value="expense">支出</option></select></div>
+   <div><label>分類 / 項目名稱</label><input id="ledgerKeyword" type="search" placeholder="例如：兼職薪資、餐飲、方大哥飲料" oninput="renderLedgerAnalysis()"></div>
+  </div>
+  <div class="tablewrap" style="margin-top:12px">
+   <table><thead><tr><th>營業日</th><th>方向</th><th>分類</th><th>項目名稱</th><th>金額</th><th>來源</th></tr></thead><tbody id="ledgerAnalysisRows"></tbody></table>
+  </div>
  </div>
 </section>
 
@@ -1331,6 +1367,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
    <table>
     <thead><tr><th>營業日</th><th>賽事數</th><th>行政費收入</th><th>入會費收入</th><th>折扣支出</th><th>其他收入</th><th>其他支出</th><th>淨收入</th><th>狀態</th><th>操作</th></tr></thead>
     <tbody id="accountingDayRows"></tbody>
+    <tfoot id="accountingDayTotals"></tfoot>
    </table>
   </div>
  </div>
@@ -2662,8 +2699,12 @@ function renderAccountingManager(){
  }
  const tbody=$('accountingDayRows');if(!tbody)return;
  let af=$('accountingDateFrom')?.value||'',at=$('accountingDateTo')?.value||'';
- tbody.innerHTML=(db.dailyAccounting||[]).filter(rec=>rec&&rec.date&&(!af||rec.date>=af)&&(!at||rec.date<=at)).map(rec=>{
+ const rows=(db.dailyAccounting||[]).filter(rec=>rec&&rec.date&&(!af||rec.date>=af)&&(!at||rec.date<=at));
+ let totalEvents=0,totalGross=0,totalMembership=0,totalDiscount=0,totalIncome=0,totalExpense=0,totalNet=0;
+ tbody.innerHTML=rows.map(rec=>{
    const ai=dailyAccountingInfo(rec.date);
+   totalEvents+=ai.events.length; totalGross+=+ai.gross||0; totalMembership+=+ai.membershipIncome||0;
+   totalDiscount+=+ai.discountExpense||0; totalIncome+=+ai.itemIncome||0; totalExpense+=+ai.itemExpense||0; totalNet+=+ai.net||0;
    return `<tr>
     <td>${rec.date}</td><td>${ai.events.length}</td><td>${money(ai.gross)}</td><td>${money(ai.membershipIncome)}</td>
     <td>${money(ai.discountExpense)}</td><td>${money(ai.itemIncome)}</td><td>${money(ai.itemExpense)}</td>
@@ -2673,6 +2714,12 @@ function renderAccountingManager(){
     <button class="danger" onclick="deleteDailyAccounting('${rec.date}')">刪除</button></td>
    </tr>`;
  }).join('');
+ const foot=$('accountingDayTotals');
+ if(foot)foot.innerHTML=`<tr style="font-weight:800;border-top:2px solid #52677b">
+   <td>期間合計</td><td>${totalEvents}</td><td>${money(totalGross)}</td><td>${money(totalMembership)}</td>
+   <td>${money(totalDiscount)}</td><td>${money(totalIncome)}</td><td>${money(totalExpense)}</td>
+   <td class="${totalNet>=0?'pos':'neg'}">${money(totalNet)}</td><td colspan="2">${rows.length} 個營業日</td>
+ </tr>`;
 }
 function renderDailyAccountingDetail(){
  ensureDailyAccountingStore();
@@ -2999,6 +3046,89 @@ function clearMemberSearch(){
  if($('memberSearch'))$('memberSearch').value='';
  renderMemberRows();
 }
+
+function reportingCategory(item){
+ if(item&&item.category)return String(item.category);
+ if(item&&item.type==='membership')return '入會費收入';
+ if(item&&item.type==='expense')return '其他支出';
+ return '其他收入';
+}
+function reportingDirection(item){
+ return item&&item.type==='expense'?'expense':'income';
+}
+function reportingLedgerEntries(){
+ const out=[];
+ const pushItem=(date,item,source)=>{
+   if(!item)return;
+   const amount=+item.amount||0;if(!amount)return;
+   out.push({
+     date:String(date||''),direction:reportingDirection(item),type:item.type||'income',
+     category:reportingCategory(item),name:String(item.name||reportingCategory(item)),
+     amount,source:String(source||'')
+   });
+ };
+ // Daily accounting items.
+ (db.dailyAccounting||[]).forEach(rec=>{
+   if(!rec||!rec.date)return;
+   (Array.isArray(rec.items)?rec.items:[]).forEach(item=>pushItem(rec.date,item,'當日帳務'));
+ });
+ // Event-level items are included only for normal/general-ledger events.
+ // Events assigned to an independent accounting group stay outside the main ledger and reports.
+ (db.events||[]).forEach(e=>{
+   if(accountingGroupForEvent(e))return;
+   const date=businessDateForEvent(e);
+   (Array.isArray(e.accountingItems)?e.accountingItems:[]).forEach(item=>{
+     pushItem(date,item,`第${e.seq||1}場｜${Number(e.level||0).toLocaleString()} 賽事`);
+   });
+ });
+ return out;
+}
+function reportingDayInfo(date){
+ const allEvents=accountingAllEventsForDate(date).filter(e=>!accountingGroupForEvent(e));
+ const base=accountingTotalsForEvents(allEvents);
+ const entries=reportingLedgerEntries().filter(x=>x.date===date);
+ const membership=entries.filter(x=>x.type==='membership').reduce((n,x)=>n+x.amount,0);
+ const otherIncome=entries.filter(x=>x.type==='income').reduce((n,x)=>n+x.amount,0);
+ const otherExpense=entries.filter(x=>x.type==='expense').reduce((n,x)=>n+x.amount,0);
+ const revenue=base.gross+membership+otherIncome;
+ const expense=base.discountExpense+otherExpense;
+ return {date,events:allEvents,entries,...base,membership,otherIncome,otherExpense,revenue,expense,net:revenue-expense};
+}
+function renderDashboardDailyReport(){
+ const def=dashboardDefaultRange();
+ const el=$('dashboardDailyDate'); if(!el)return;
+ if(!el.value){
+   const candidates=[...(db.dailyAccounting||[]).map(x=>x&&x.date).filter(Boolean),...(db.events||[]).map(e=>businessDateForEvent(e)).filter(Boolean)].sort();
+   el.value=candidates[candidates.length-1]||def.first;
+ }
+ const d=reportingDayInfo(el.value);
+ $('drEvents').textContent=`${d.events.length} 場`;
+ $('drAdmin').textContent=money(d.gross);
+ $('drMembership').textContent=money(d.membership);
+ $('drDiscount').textContent=money(d.discountExpense);
+ $('drOtherIncome').textContent=money(d.otherIncome);
+ $('drOtherExpense').textContent=money(d.otherExpense);
+ $('drNet').textContent=money(d.net); $('drNet').className='v '+(d.net>=0?'pos':'neg');
+ $('drJP').textContent=money(d.jp);
+ const rows=$('dashboardDailyItemRows'); if(rows)rows.innerHTML=d.entries.map(x=>`<tr>
+   <td>${x.direction==='expense'?'<span class="neg">支出</span>':'<span class="pos">收入</span>'}</td>
+   <td>${x.category}</td><td>${x.name}</td><td>${money(x.amount)}</td><td>${x.source}</td>
+ </tr>`).join('')||'<tr><td colspan="5" class="small">本日尚無另外新增的收支明細</td></tr>';
+}
+function renderLedgerAnalysis(){
+ const def=dashboardDefaultRange();
+ const fromEl=$('ledgerDateFrom'),toEl=$('ledgerDateTo'); if(!fromEl||!toEl)return;
+ if(!fromEl.value)fromEl.value=$('dashboardDateFrom')?.value||def.first;
+ if(!toEl.value)toEl.value=$('dashboardDateTo')?.value||def.end;
+ const from=fromEl.value,to=toEl.value,dir=$('ledgerDirection')?.value||'',kw=String($('ledgerKeyword')?.value||'').trim().toLowerCase();
+ const rows=reportingLedgerEntries().filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)&&(!dir||x.direction===dir)&&(!kw||`${x.category} ${x.name} ${x.source}`.toLowerCase().includes(kw)));
+ const total=rows.reduce((n,x)=>n+x.amount,0);
+ if($('ledgerSearchTotal'))$('ledgerSearchTotal').textContent=money(total);
+ if($('ledgerAnalysisRows'))$('ledgerAnalysisRows').innerHTML=rows.sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<tr>
+   <td>${x.date}</td><td>${x.direction==='expense'?'<span class="neg">支出</span>':'<span class="pos">收入</span>'}</td>
+   <td>${x.category}</td><td>${x.name}</td><td>${money(x.amount)}</td><td>${x.source}</td>
+ </tr>`).join('')||'<tr><td colspan="6" class="small">找不到符合條件的收支明細</td></tr>';
+}
 function dashboardDefaultRange(){
  const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
  const first=`${y}-${m}-01`;
@@ -3088,6 +3218,10 @@ function renderDashboardSummary(){
  if($('kJP'))$('kJP').textContent=money(totalJP);
  if($('kMonthExpense'))$('kMonthExpense').textContent=money(rangeExpense);
  if($('kMonthEvents'))$('kMonthEvents').textContent=`${inRange.length} 場`;
+ if($('ledgerDateFrom') && !$('ledgerDateFrom').value)$('ledgerDateFrom').value=from;
+ if($('ledgerDateTo') && !$('ledgerDateTo').value)$('ledgerDateTo').value=to;
+ renderDashboardDailyReport();
+ renderLedgerAnalysis();
  if($('kLevelBreakdown'))$('kLevelBreakdown').textContent=levelText;
 }
 
