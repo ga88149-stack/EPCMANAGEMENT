@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.41.0 Web · Accounting Groups</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.41.1 Web · Accounting Event Edit</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1329,6 +1329,11 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   </div>
 
   <div id="dailyAccountingPaper">
+   <div class="card tablewrap">
+    <h3>當日賽事明細</h3>
+    <div class="small" style="margin-bottom:10px">每一場都可直接修改帳務群組，也可按「編輯賽事」修改該場資料。帳務群組留白＝列入當日一般帳；相同群組名稱會合併成同一份獨立帳。此設定只影響 EPC 帳務與 JP，不影響分帳報表。</div>
+    <table><thead><tr><th>場次</th><th>賽事</th><th>帳務群組</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th><th>操作</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
+   </div>
    <div class="card">
     <div class="grid">
      <div class="kpi"><div class="l">行政費收入</div><div class="v" id="aAdminGross">$0</div></div>
@@ -1392,11 +1397,6 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
     </div>
    </div>
 
-   <div class="card tablewrap">
-    <h3>當日賽事明細</h3>
-    <div class="small" style="margin-bottom:10px">帳務群組留白＝列入當日一般帳；輸入相同群組名稱的賽事會合併成同一份獨立帳。此設定只影響 EPC 帳務與 JP，不影響分帳報表。</div>
-    <table><thead><tr><th>場次</th><th>賽事</th><th>帳務群組</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
-   </div>
    <div class="card tablewrap">
     <h3>獨立帳務群組</h3>
     <div class="small" style="margin-bottom:10px">同一群組內的賽事會合併計算；不同群組各自獨立。</div>
@@ -2504,7 +2504,7 @@ function renderDailyAccountingDetail(){
    });
    const disc=rebuy+group+manual;
    const ag=accountingGroupForEvent(e);
-   return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td><input value="${ag}" placeholder="一般帳" style="min-width:110px" onchange="setEventAccountingGroup('${e.id}',this.value)"></td><td>${g}</td><td>${money(gross)}</td><td>${money(rebuy)}</td><td>${money(group)}</td><td>${money(manual)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td></tr>`;
+   return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td><input value="${ag}" placeholder="一般帳" style="min-width:110px" onchange="setEventAccountingGroup('${e.id}',this.value)"></td><td>${g}</td><td>${money(gross)}</td><td>${money(rebuy)}</td><td>${money(group)}</td><td>${money(manual)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td><td><button type="button" onclick="openEvent('${e.id}')">編輯賽事</button></td></tr>`;
  }).join('');
  const independent=accountingIndependentGroups(date);
  if($('accountingGroupRows'))$('accountingGroupRows').innerHTML=independent.map(g=>`<tr>
