@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.43.3 Web · Independent Group Summary</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.43.4 Web · ICM Minimum Prize</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2288,16 +2288,56 @@ function calculateICM(){
  let chipDiff=actual-expected;
  if(chipDiff!==0)return alert(`籌碼差異必須為 0 才能計算獎金。\n目前差異：${chipDiff.toLocaleString()}`);
  if(actual<=0)return alert('請先輸入下桌籌碼');
+
  let info=poolInfo();
- let raw=e.players.map(p=>info.avail*((+p.stack||0)/actual));
  let unit=100;
- let rounded=raw.map(x=>Math.floor(x/unit)*unit);
+ let raw=e.players.map(p=>info.avail*((+p.stack||0)/actual));
+
+ // EPC rule:
+ // stack == 0 => prize must be 0.
+ // stack > 0  => prize must be at least $100.
+ // Total distributed prize must still equal info.avail.
+ let active=e.players.map((p,i)=>({i,stack:+p.stack||0})).filter(x=>x.stack>0);
+ let minimumRequired=active.length*unit;
+ if(info.avail<minimumRequired){
+   return alert(`可發獎金不足以讓所有仍有籌碼的玩家至少領取 $${unit.toLocaleString()}。\n目前有 ${active.length} 位仍有籌碼，最低需要 ${money(minimumRequired)}。`);
+ }
+
+ // Start from the existing $100 rounding logic.
+ let rounded=raw.map((x,i)=>(+e.players[i].stack||0)>0?Math.floor(x/unit)*unit:0);
+
+ // Enforce the $100 minimum only for players who still have chips.
+ active.forEach(({i})=>{if(rounded[i]<unit)rounded[i]=unit;});
+
+ // If minimum enforcement caused an over-allocation, remove $100 units from
+ // larger active prizes without ever taking an active player below $100.
+ let sum=rounded.reduce((a,b)=>a+b,0);
+ let over=sum-info.avail;
+ while(over>=unit){
+   let donors=active.filter(({i})=>rounded[i]>unit).sort((a,b)=>
+     (rounded[b.i]-raw[b.i])-(rounded[a.i]-raw[a.i]) || rounded[b.i]-rounded[a.i]
+   );
+   if(!donors.length)break;
+   rounded[donors[0].i]-=unit;over-=unit;
+ }
+
+ // Distribute remaining full $100 units by largest remainder, as before.
  let remain=Math.round(info.avail-rounded.reduce((a,b)=>a+b,0));
- let order=raw.map((x,i)=>({i,frac:x-rounded[i]})).sort((a,b)=>b.frac-a.frac);
+ let order=active.map(({i})=>({i,frac:raw[i]-Math.floor(raw[i]/unit)*unit}))
+                 .sort((a,b)=>b.frac-a.frac);
  let k=0;
- while(remain>=unit && k<order.length){rounded[order[k].i]+=unit;remain-=unit;k++;}
- if(remain!==0 && rounded.length)rounded[order[0].i]+=remain;
- e.players.forEach((p,i)=>p.prize=rounded[i]||0);
+ while(remain>=unit && order.length){
+   rounded[order[k%order.length].i]+=unit;remain-=unit;k++;
+ }
+
+ // Any non-$100 residual caused by the prize pool itself goes to the largest
+ // active prize; zero-stack players remain exactly $0.
+ if(remain!==0 && active.length){
+   let target=active.slice().sort((a,b)=>rounded[b.i]-rounded[a.i])[0].i;
+   rounded[target]+=remain;
+ }
+
+ e.players.forEach((p,i)=>p.prize=(+p.stack||0)>0?Math.max(unit,rounded[i]||0):0);
  persist();render();
 }
 
