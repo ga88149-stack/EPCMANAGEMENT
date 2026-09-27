@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.1 Web · Settlement Admin Summary</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.2 Web · Report Seat Column</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3302,6 +3302,7 @@ function applySettledLock(){
 }
 
 const EVENT_REPORT_FIELDS=[
+ ['seat','座位'],
  ['player','玩家'],['nickname','綽號'],['memberId','會員ID'],['groups','總組數'],['paid','總支付'],
  ['stack','最終籌碼'],['growth','籌碼淨勝值'],['prize','ICM獎金'],['net','個人盈虧'],['signature','簽名'],['note','備註']
 ];
@@ -3359,7 +3360,7 @@ function renderEventReport(){
    let m=db.members.find(x=>String(x.id)===String(p.memberId))||{name:'未知',id:p.memberId};
    let c=calcPlayerForEvent(p,e), growth=chipGrowthFor(p,e);
    let vals={
-     player:m.name||'未知',
+     seat:p.seat||'',player:m.name||'未知',
      nickname:p.nickname||m.nickname||'',
      memberId:m.id||p.memberId||'',
      groups:c.groups,
