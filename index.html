@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.2 Web · Report Seat Column</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.3 Web · Business Date Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1804,13 +1804,22 @@ function shiftDate(dateStr,days){
  return x.toISOString().slice(0,10);
 }
 function businessDateForEvent(e){
- const date=e.date||new Date().toISOString().slice(0,10);
- const mins=hmMinutes(e.startTime,'16:00');
- const start=hmMinutes(db.settings.businessStart,'16:00');
- const end=hmMinutes(db.settings.businessEnd,'07:00');
- // Overnight business window: start (16:00) through midnight and next-day until end (07:00).
- if(start>end && mins<end)return shiftDate(date,-1);
- return date;
+ if(!e)return '';
+ const stored=String(e.date||'').trim();
+ if(/^\d{4}-\d{2}-\d{2}$/.test(stored))return stored;
+
+ const raw=String(e.createdAt||e.startDateTime||'').trim();
+ if(!raw)return '';
+ const d=new Date(raw);
+ if(isNaN(d))return '';
+
+ // EPC business day runs from configured opening time through the next morning.
+ // Only timestamps after midnight and before businessEnd belong to previous date.
+ const end=hmMinutes(db.settings?.businessEnd||'07:00','07:00');
+ const mins=d.getHours()*60+d.getMinutes();
+ if(mins<end)d.setDate(d.getDate()-1);
+
+ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function saveAccountingBusinessHours(){
  if($('accountBusinessStartTime'))db.settings.businessStart=$('accountBusinessStartTime').value||'16:00';
@@ -2645,8 +2654,9 @@ function renderEventList(){
  if($('businessStartTime'))$('businessStartTime').value=db.settings.businessStart||'16:00';
  if($('businessEndTime'))$('businessEndTime').value=db.settings.businessEnd||'07:00';
  if($('eventBusinessDate') && !$('eventBusinessDate').value){
-   let today=new Date().toISOString().slice(0,10);
-   let now=new Date(),mins=now.getHours()*60+now.getMinutes(),end=hmMinutes(db.settings.businessEnd,'07:00');
+   let now=new Date();
+   let today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+   let mins=now.getHours()*60+now.getMinutes(),end=hmMinutes(db.settings.businessEnd,'07:00');
    $('eventBusinessDate').value=(mins<end)?shiftDate(today,-1):today;
  }
  let selected=$('eventBusinessDate')?.value||'';
