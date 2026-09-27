@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.43.4 Web · ICM Minimum Prize</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.0 Web · Member Period Analytics</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1167,12 +1167,20 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
    <button id="memberCancelBtn" style="display:none" onclick="cancelMemberEdit()">取消編輯</button>
   </div>
  </div>
- <div class="toolbar" style="margin:12px 0">
-  <input id="memberSearch" type="search" autocomplete="off" placeholder="搜尋姓名、會員 ID 或結帳群組" oninput="renderMemberRows()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();renderMemberRows();}" style="max-width:360px">
-  <button type="button" onclick="renderMemberRows()">搜尋</button>
-  <button type="button" onclick="clearMemberSearch()">清除搜尋</button>
+ <div class="card" style="margin-top:12px">
+  <div class="formgrid" style="grid-template-columns:1fr 1fr 1.5fr auto auto">
+   <div><label>查詢開始營業日</label><input type="date" id="memberDateFrom" onchange="renderMemberRows()"></div>
+   <div><label>查詢結束營業日</label><input type="date" id="memberDateTo" onchange="renderMemberRows()"></div>
+   <div><label>搜尋會員</label><input id="memberSearch" type="search" autocomplete="off" placeholder="姓名、會員 ID 或結帳群組" oninput="renderMemberRows()"></div>
+   <button type="button" style="align-self:end" onclick="setMemberRangeThisMonth()">本月</button>
+   <button type="button" style="align-self:end" onclick="clearMemberSearch()">清除搜尋</button>
+  </div>
+  <div class="small" style="margin-top:8px">消費占比＝該會員區間實際買入 ÷ 全部會員區間實際買入。</div>
  </div>
- <div class="card tablewrap"><table><thead><tr><th>會員</th><th>ID</th><th>結帳群組</th><th>累積買入</th><th>累積領回</th><th>累積盈虧</th><th>操作</th></tr></thead><tbody id="memberRows"></tbody></table></div>
+ <div class="card tablewrap" style="margin-top:12px"><table>
+  <thead><tr><th>會員</th><th>ID</th><th>結帳群組</th><th>參賽場次</th><th>消費占比</th><th>買入</th><th>領回</th><th>盈虧</th><th>操作</th></tr></thead>
+  <tbody id="memberRows"></tbody><tfoot id="memberTotals"></tfoot>
+ </table></div>
 </section>
 
 
@@ -2368,7 +2376,7 @@ function actionMsg(msg,isError=false){
  window.__actionMsgTimer=setTimeout(()=>{el.style.display='none'},3000);
 }
 
-function showPage(id){if(id==='eventreport')setTimeout(()=>renderEventReport(),0);
+function showPage(id){if(id==='members' && $('memberDateFrom') && !$('memberDateFrom').value && !$('memberDateTo').value){const now=new Date(),y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),last=new Date(y,now.getMonth()+1,0).getDate();$('memberDateFrom').value=`${y}-${m}-01`;$('memberDateTo').value=`${y}-${m}-${String(last).padStart(2,'0')}`;}if(id==='eventreport')setTimeout(()=>renderEventReport(),0);
  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));
  render();
@@ -3125,24 +3133,20 @@ function calcPlayerForEvent(p,e){
  };
 }
 
-function renderMemberRows(){
- const tbody=$('memberRows'); if(!tbody)return;
- const q=String($('memberSearch')?.value||'').trim().toLowerCase();
- const memberList=(db.members||[]).filter(m=>{
-   if(!q)return true;
-   const name=String(m.name||'').toLowerCase();
-   const id=String(m.id||'').toLowerCase();
-   const group=String(m.group||m.settleGroup||m.settlementGroup||m.accountGroup||'').toLowerCase();
-   return name.includes(q)||id.includes(q)||group.includes(q);
- });
- tbody.innerHTML=memberList.map(m=>{
-   const h=Array.isArray(m.history)?m.history:[];
-   const bi=h.reduce((sum,x)=>sum+(+x.paid||0),0);
-   const pr=h.reduce((sum,x)=>sum+(+x.prize||0),0);
-   const net=pr-bi;
-   return `<tr><td>${m.name||''}</td><td>${m.id||''}</td><td>${m.group||'-'}</td><td>${money(bi)}</td><td>${money(pr)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`;
- }).join('')||'<tr><td colspan="7" class="small">找不到符合條件的會員</td></tr>';
+function memberHistoryInRange(m,from,to){
+ const h=Array.isArray(m&&m.history)?m.history:[];
+ return h.filter(x=>{const d=String(x.date||'');return d&&(!from||d>=from)&&(!to||d<=to);});
 }
+function renderMemberRows(){
+ const tbody=$('memberRows');if(!tbody)return;
+ const q=String($('memberSearch')?.value||'').trim().toLowerCase(),from=$('memberDateFrom')?.value||'',to=$('memberDateTo')?.value||'';
+ const stats=(db.members||[]).map(m=>{const h=memberHistoryInRange(m,from,to);const events=new Set(h.map(x=>x.eventId||`${x.date}|${x.eventSeq||''}|${x.level||''}`)).size;const paid=h.reduce((s,x)=>s+(+x.paid||0),0),prize=h.reduce((s,x)=>s+(+x.prize||0),0);return {m,events,paid,prize,net:prize-paid};});
+ const totalPaid=stats.reduce((s,x)=>s+x.paid,0),totalPrize=stats.reduce((s,x)=>s+x.prize,0),totalNet=totalPrize-totalPaid,totalEntries=stats.reduce((s,x)=>s+x.events,0);
+ const list=stats.filter(({m})=>!q||String(m.name||'').toLowerCase().includes(q)||String(m.id||'').toLowerCase().includes(q)||String(m.group||'').toLowerCase().includes(q));
+ tbody.innerHTML=list.map(({m,events,paid,prize,net})=>{const share=totalPaid>0?paid/totalPaid*100:0;return `<tr><td>${m.name||''}</td><td>${m.id||''}</td><td>${m.group||'-'}</td><td>${events}</td><td>${share.toFixed(1)}%</td><td>${money(paid)}</td><td>${money(prize)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`;}).join('')||'<tr><td colspan="9" class="small">找不到符合條件的會員</td></tr>';
+ const foot=$('memberTotals');if(foot)foot.innerHTML=`<tr style="font-weight:800;border-top:2px solid #52677b"><td>區間總計</td><td colspan="2">${from||'全部'} ～ ${to||'全部'}</td><td>${totalEntries}</td><td>${totalPaid>0?'100.0%':'0.0%'}</td><td>${money(totalPaid)}</td><td>${money(totalPrize)}</td><td class="${totalNet>=0?'pos':'neg'}">${money(totalNet)}</td><td></td></tr>`;
+}
+function setMemberRangeThisMonth(){const now=new Date(),y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),last=new Date(y,now.getMonth()+1,0).getDate();$('memberDateFrom').value=`${y}-${m}-01`;$('memberDateTo').value=`${y}-${m}-${String(last).padStart(2,'0')}`;renderMemberRows();}
 function clearMemberSearch(){
  if($('memberSearch'))$('memberSearch').value='';
  renderMemberRows();
@@ -3389,17 +3393,7 @@ function render(){
  togglePricingMode();
  $('eChips').value=ev.chips;$('eJP').value=ev.jp;$('eJPRound').value=ev.jpRound;$('ePayout').value=ev.payout;
  filterAddPlayerMembers($('addPlayerSearch')?.value||'');
- {
- const q=String($('memberSearch')?.value||'').trim().toLowerCase();
- const memberList=db.members.filter(m=>{
-   if(!q)return true;
-   const name=String(m.name||'').toLowerCase();
-   const id=String(m.id||'').toLowerCase();
-   const group=String(m.group||m.settleGroup||m.settlementGroup||m.accountGroup||'').toLowerCase();
-   return name.includes(q)||id.includes(q)||group.includes(q);
- });
- $('memberRows').innerHTML=memberList.map(m=>{let h=m.history||[],bi=h.reduce((s,x)=>s+x.paid,0),pr=h.reduce((s,x)=>s+x.prize,0),net=pr-bi;return `<tr><td>${m.name}</td><td>${m.id}</td><td>${m.group||'-'}</td><td>${money(bi)}</td><td>${money(pr)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`}).join('');
-}
+ renderMemberRows();
  const visible=playerVisibleCols();
  const cols=[
   ['seat','座位',visible.has('seat')],['name','玩家',visible.has('name')],['memberId','會員編號',visible.has('memberId')],['nickname','綽號',visible.has('nickname')],
