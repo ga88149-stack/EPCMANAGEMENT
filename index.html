@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.4 Web · Persistent Column Preferences</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.5 Web · Column Toggle Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2854,8 +2854,11 @@ function syncPlayerColumnCheckboxes(){
  document.querySelectorAll('[data-player-col]').forEach(cb=>{cb.checked=visible.has(cb.dataset.playerCol)});
 }
 function setPlayerColumnPreference(k,v){
- const visible=loadPlayerVisibleCols();
+ let saved=null;
+ try{saved=JSON.parse(localStorage.getItem(PLAYER_COL_PREF_KEY)||'null')}catch(_){}
+ const visible=new Set(Array.isArray(saved)?saved.filter(x=>PLAYER_OPTIONAL_COLS.includes(x)):[...loadPlayerVisibleCols()]);
  if(v)visible.add(k);else visible.delete(k);
+ window.__playerVisibleCols=visible;
  try{localStorage.setItem(PLAYER_COL_PREF_KEY,JSON.stringify([...visible]))}catch(_){}
  render();
 }
@@ -2863,7 +2866,6 @@ function playerVisibleCols(){
  return loadPlayerVisibleCols();
 }
 function render(){
- syncPlayerColumnCheckboxes();
  renderDashboardSummary();
  syncAccountingBusinessHours();
  let ev=currentEvent();
@@ -2911,7 +2913,7 @@ function render(){
  $('memberRows').innerHTML=memberList.map(m=>{let h=m.history||[],bi=h.reduce((s,x)=>s+x.paid,0),pr=h.reduce((s,x)=>s+x.prize,0),net=pr-bi;return `<tr><td>${m.name}</td><td>${m.id}</td><td>${m.group||'-'}</td><td>${money(bi)}</td><td>${money(pr)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`}).join('');
 }
  const visible=playerVisibleCols();
- document.querySelectorAll('[data-player-col]').forEach(cb=>cb.checked=visible.has(cb.dataset.playerCol));
+ syncPlayerColumnCheckboxes();
  const cols=[
   ['seat','座位',visible.has('seat')],['name','玩家',visible.has('name')],['memberId','會員編號',visible.has('memberId')],['nickname','綽號',visible.has('nickname')],
   ['buyin','買入',true],['rebuy','重買',true],['groups','總組數',true],
