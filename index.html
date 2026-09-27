@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.3 Web · Matched Event Accounting Panels</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.4 Web · Accounting Presets</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1421,7 +1421,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
      <div><h3 id="eventAccountingTitle">單場帳務</h3><div class="small" id="eventAccountingSub"></div></div>
      <button type="button" onclick="closeEventAccounting()">關閉</button>
     </div>
-    <div class="l" style="margin-top:12px">
+    <div class="grid" style="margin-top:12px">
      <div class="kpi"><span>行政費收入</span><b id="eaGross">$0</b></div>
      <div class="kpi"><span>入會費收入</span><b id="eaMembership">$0</b></div>
      <div class="kpi"><span>重買優惠</span><b id="eaRebuyDiscount">$0</b></div>
@@ -1432,17 +1432,41 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
      <div class="kpi"><span>其他收入</span><b id="eaOtherIncome">$0</b></div>
      <div class="kpi"><span>其他支出</span><b id="eaOtherExpense">$0</b></div>
     </div>
-    <div class="grid" style="grid-template-columns:1fr 1fr 1fr auto;gap:10px;margin-top:14px">
-     <label>類型<select id="eaItemType"><option value="income">其他收入</option><option value="expense">其他支出</option><option value="membership">入會費收入</option></select></label>
-     <label>項目<input id="eaItemName" placeholder="例如：場地費、餐費、兼職薪資"></label>
-     <label>金額<input id="eaItemAmount" type="number" min="0" step="1" value="0"></label>
-     <button type="button" style="align-self:end" onclick="addEventAccountingItem()">＋ 新增</button>
+    <div class="report-topbar" style="margin:14px 0 10px">
+      <div><h3 style="margin:0">其他收支</h3><div class="small">與當日帳務相同：可從常用項目選擇，也可自行輸入。</div></div>
+      <button type="button" class="primary" onclick="addEventAccountingItem()">＋ 新增收支</button>
+    </div>
+    <div class="formgrid" style="align-items:end">
+      <div>
+       <label>常用項目</label>
+       <select id="eaItemPreset" onchange="useEventAccountingPreset()">
+        <option value="">自行輸入</option>
+        <optgroup label="入會費"><option value="membership|入會費">入會費收入</option></optgroup>
+        <optgroup label="收入">
+         <option value="income|場地 / 包廂費">場地 / 包廂費</option>
+         <option value="income|飲料 / 餐飲收入">飲料 / 餐飲收入</option>
+         <option value="income|其他收入">其他收入</option>
+        </optgroup>
+        <optgroup label="支出">
+         <option value="expense|人事薪資">人事薪資</option>
+         <option value="expense|兼職薪資">兼職薪資</option>
+         <option value="expense|餐費">餐費</option>
+         <option value="expense|水電">水電</option>
+         <option value="expense|耗材">耗材</option>
+         <option value="expense|設備維修">設備維修</option>
+         <option value="expense|其他支出">其他支出</option>
+        </optgroup>
+       </select>
+      </div>
+      <input id="eaItemType" type="hidden" value="income">
+      <div><label>項目名稱</label><input id="eaItemName" type="text" placeholder="例如：飲料收入、晚班薪資"></div>
+      <div><label>金額</label><input id="eaItemAmount" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
     </div>
     <div class="tablewrap" style="margin-top:12px"><table>
      <thead><tr><th>類型</th><th>項目</th><th>金額</th><th>操作</th></tr></thead>
      <tbody id="eaItemRows"></tbody>
     </table></div>
-    <div class="l" style="margin-top:14px">
+    <div class="grid" style="margin-top:14px">
      <div class="kpi"><span>EPC 總收入</span><b id="eaRevenue">$0</b></div>
      <div class="kpi"><span>EPC 總支出</span><b id="eaExpense">$0</b></div>
      <div class="kpi"><span>單場淨收入</span><b id="eaNet">$0</b></div>
@@ -2397,16 +2421,31 @@ function renderEventAccountingEditor(){
  $('eaExpense').textContent=money(ai.expense);
  $('eaJP').textContent=money(ai.jp);
  $('eaNet').textContent=money(ai.net);
- $('eaItemRows').innerHTML=ai.items.map((x,i)=>`<tr><td>${x.type==='membership'?'入會費收入':x.type==='income'?'其他收入':'其他支出'}</td><td>${x.name||''}</td><td>${money(+x.amount||0)}</td><td><button type="button" class="danger" onclick="deleteEventAccountingItem(${i})">刪除</button></td></tr>`).join('')||'<tr><td colspan="4" class="small">本場目前沒有其他收支</td></tr>';
+ $('eaItemRows').innerHTML=ai.items.map((x,i)=>`<tr><td>${x.category||(x.type==='membership'?'入會費收入':x.type==='income'?'其他收入':'其他支出')}</td><td>${x.name||''}</td><td>${money(+x.amount||0)}</td><td><button type="button" class="danger" onclick="deleteEventAccountingItem(${i})">刪除</button></td></tr>`).join('')||'<tr><td colspan="4" class="small">本場目前沒有其他收支</td></tr>';
+}
+function useEventAccountingPreset(){
+ const raw=$('eaItemPreset')?.value||'';
+ if(!raw)return;
+ const parts=raw.split('|');
+ const type=parts.shift()||'income';
+ const name=parts.join('|');
+ if($('eaItemType'))$('eaItemType').value=type;
+ if($('eaItemName'))$('eaItemName').value=name;
 }
 function addEventAccountingItem(){
  const e=(db.events||[]).find(x=>x.id===editingAccountingEventId); if(!e)return;
- const type=$('eaItemType').value==='expense'?'expense':$('eaItemType').value==='membership'?'membership':'income';
+ const preset=$('eaItemPreset')?.value||'';
  const name=$('eaItemName').value.trim(); const amount=Math.max(0,+$('eaItemAmount').value||0);
+ let type=$('eaItemType')?.value||'income';
+ if(!preset){
+   if(/入會費/.test(name))type='membership';
+   else type=/薪資|工資|餐費|水電|耗材|維修|租金|支出|費用/.test(name)?'expense':'income';
+ }
  if(!name)return alert('請輸入項目名稱');
  if(amount<=0)return alert('請輸入金額');
- ensureEventAccountingItems(e).push({id:uid(),type,name,amount});
- $('eaItemName').value=''; $('eaItemAmount').value='0';
+ const category=preset?name:(type==='membership'?'入會費收入':type==='expense'?'其他支出':'其他收入');
+ ensureEventAccountingItems(e).push({id:uid(),type,name,category,amount});
+ $('eaItemName').value=''; $('eaItemAmount').value=''; if($('eaItemPreset'))$('eaItemPreset').value=''; if($('eaItemType'))$('eaItemType').value='income';
  persist(); renderDailyAccountingDetail(); renderEventAccountingEditor();
 }
 function deleteEventAccountingItem(i){
@@ -2591,7 +2630,8 @@ function addAccountingItem(){
  if(amount<=0)return alert('請輸入大於 0 的金額');
  let rec=db.dailyAccounting.find(x=>x.date===date);if(!rec)return;
  if(!Array.isArray(rec.items))rec.items=[];
- rec.items.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),type,name,amount});
+ const category=preset?name:(type==='membership'?'入會費收入':type==='expense'?'其他支出':'其他收入');
+ rec.items.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),type,name,category,amount});
  persist();
  $('accountingItemName').value='';$('accountingItemAmount').value='';$('accountingItemPreset').value='';$('accountingItemType').value='income';
  renderDailyAccountingDetail();
@@ -2641,7 +2681,7 @@ function renderDailyAccountingDetail(){
  const allEvents=accountingAllEventsForDate(date);
  if($('accountingDetailDate'))$('accountingDetailDate').textContent=`營業日：${date}｜一般帳 ${ai.events.length} 場｜全部 ${allEvents.length} 場`;
  if($('accountingItemRows'))$('accountingItemRows').innerHTML=(rec.items||[]).map(x=>`<tr>
-   <td>${x.type==='membership'?'<span class="pos">入會費收入</span>':(x.type==='income'?'<span class="pos">其他收入</span>':'<span class="neg">其他支出</span>')}</td>
+   <td>${x.category?`<span class="${x.type==='expense'?'neg':'pos'}">${x.category}</span>`:(x.type==='membership'?'<span class="pos">入會費收入</span>':(x.type==='income'?'<span class="pos">其他收入</span>':'<span class="neg">其他支出</span>'))}</td>
    <td>${x.name}</td><td>${money(+x.amount||0)}</td>
    <td><button class="danger" onclick="deleteAccountingItem('${x.id}')">刪除</button></td>
  </tr>`).join('') || '<tr><td colspan="4" class="small">尚未新增入會費／其他收支</td></tr>';
