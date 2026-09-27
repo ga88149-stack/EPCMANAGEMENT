@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.1 Web · Member Ranking</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.2 Web · Unified Main Ledger</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3291,51 +3291,55 @@ function renderDashboardSummary(){
    return (!from||d>=from)&&(!to||d<=to);
  });
 
- const totalProfit=settled.reduce((sum,e)=>sum+(+e.finalAccounting?.net||0),0);
- const rangeProfit=inRange.reduce((sum,e)=>sum+(+e.finalAccounting?.net||0),0);
- const totalJP=settled.reduce((sum,e)=>sum+(+e.finalJP||0),0);
+ // IMPORTANT: dashboard accounting KPIs use the SAME source as EPC 帳務.
+ // Only established normal daily-accounting records are included.
+ // Independent-accounting groups remain excluded by dailyAccountingInfo().
+ const allLedgerDates=[...new Set((db.dailyAccounting||[]).map(r=>r&&r.date).filter(Boolean))];
+ const rangeLedgerDates=allLedgerDates.filter(d=>(!from||d>=from)&&(!to||d<=to));
 
- // 區間總支出必須直接沿用「EPC 帳務」的正式計算邏輯，
- // dailyAccountingInfo() 會正確讀取 items 中 type='expense' 的支出。
- let rangeExpense=0;
- const expenseDates=new Set();
- (db.dailyAccounting||[]).forEach(r=>{
-   if(r&&r.date&&r.date>=from&&r.date<=to)expenseDates.add(r.date);
- });
- expenseDates.forEach(date=>{
+ const ledgerTotals=dates=>dates.reduce((a,date)=>{
    const ai=dailyAccountingInfo(date);
-   rangeExpense+=(+ai.expense||0);
- });
+   a.net+=+ai.net||0;
+   a.expense+=+ai.expense||0;
+   a.jp+=+ai.jp||0;
+   a.events+=Array.isArray(ai.events)?ai.events.length:0;
+   return a;
+ },{net:0,expense:0,jp:0,events:0});
+
+ const allLedger=ledgerTotals(allLedgerDates);
+ const rangeLedger=ledgerTotals(rangeLedgerDates);
 
  const newMembers=(db.members||[]).filter(m=>{
    const d=memberCreatedBusinessDate(m);
    return d && d>=from && d<=to;
  }).length;
 
+ // Event breakdown remains descriptive, but excludes independent-accounting events
+ // so it represents the same normal-ledger population as the accounting KPIs.
+ const normalInRange=inRange.filter(e=>!accountingGroupForEvent(e));
  const levels={};
- inRange.forEach(e=>{
+ normalInRange.forEach(e=>{
    const lv=Number(e.level||0);
    const key=lv?lv.toLocaleString():'未設定';
    levels[key]=(levels[key]||0)+1;
  });
  const levelText=Object.entries(levels)
    .sort((a,b)=>(parseInt(a[0].replace(/,/g,''))||999999)-(parseInt(b[0].replace(/,/g,''))||999999))
-   .map(([lv,n])=>`${lv}：${n} 場`).join('　｜　')||'尚無已結算賽事';
+   .map(([lv,n])=>`${lv}：${n} 場`).join('　｜　')||'尚無一般帳已結算賽事';
 
  if($('kMembers'))$('kMembers').textContent=(db.members||[]).length;
  if($('kNewMembers'))$('kNewMembers').textContent=newMembers;
- if($('kProfit')){$('kProfit').textContent=money(totalProfit);$('kProfit').className='v '+(totalProfit>=0?'pos':'neg');}
- if($('kMonthProfit')){$('kMonthProfit').textContent=money(rangeProfit);$('kMonthProfit').className='v '+(rangeProfit>=0?'pos':'neg');}
- if($('kJP'))$('kJP').textContent=money(totalJP);
- if($('kMonthExpense'))$('kMonthExpense').textContent=money(rangeExpense);
- if($('kMonthEvents'))$('kMonthEvents').textContent=`${inRange.length} 場`;
+ if($('kProfit')){$('kProfit').textContent=money(allLedger.net);$('kProfit').className='v '+(allLedger.net>=0?'pos':'neg');}
+ if($('kMonthProfit')){$('kMonthProfit').textContent=money(rangeLedger.net);$('kMonthProfit').className='v '+(rangeLedger.net>=0?'pos':'neg');}
+ if($('kJP'))$('kJP').textContent=money(rangeLedger.jp);
+ if($('kMonthExpense'))$('kMonthExpense').textContent=money(rangeLedger.expense);
+ if($('kMonthEvents'))$('kMonthEvents').textContent=`${rangeLedger.events} 場`;
  if($('ledgerDateFrom') && !$('ledgerDateFrom').value)$('ledgerDateFrom').value=from;
  if($('ledgerDateTo') && !$('ledgerDateTo').value)$('ledgerDateTo').value=to;
  renderDashboardDailyReport();
  renderLedgerAnalysis();
  if($('kLevelBreakdown'))$('kLevelBreakdown').textContent=levelText;
 }
-
 const PLAYER_OPTIONAL_COLS=['seat','name','memberId','nickname','rebuyDiscount','overbuyDiscount','manualDiscount','totalDiscount','paid','settleGroup'];
 const PLAYER_COL_PREF_KEY='epcPlayerVisibleColsV1';
 function loadPlayerVisibleCols(){
