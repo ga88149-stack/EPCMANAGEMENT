@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.0 Web · Per Event Accounting</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.1 Web · Full Independent Accounting</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1422,10 +1422,10 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
      <tbody id="eaItemRows"></tbody>
     </table></div>
    </div>
-   <div class="card tablewrap">
+   <div class="card">
     <h3>獨立帳務群組</h3>
-    <div class="small" style="margin-bottom:10px">同一群組內的賽事會合併計算；不同群組各自獨立。</div>
-    <table><thead><tr><th>帳務群組</th><th>場次</th><th>組數</th><th>行政費收入</th><th>折扣支出</th><th>實收行政費</th><th>其他收入</th><th>其他支出</th><th>淨收入</th><th>JP</th></tr></thead><tbody id="accountingGroupRows"></tbody></table>
+    <div class="small" style="margin-bottom:10px">每個獨立群組使用與正常當日帳務相同的完整帳務版面；同群組賽事合併計算，不同群組各自獨立。</div>
+    <div id="accountingGroupRows"></div>
    </div>
   </div>
  </div>
@@ -2381,6 +2381,34 @@ function deleteEventAccountingItem(i){
  persist(); renderDailyAccountingDetail(); renderEventAccountingEditor();
 }
 
+function ensureIndependentAccountingStore(){
+ if(!db.independentAccounting||typeof db.independentAccounting!=='object'||Array.isArray(db.independentAccounting))db.independentAccounting={};
+}
+function independentAccountingKey(date,name){return `${date}::${name}`;}
+function independentAccountingRecord(date,name){
+ ensureIndependentAccountingStore();
+ const key=independentAccountingKey(date,name);
+ if(!db.independentAccounting[key])db.independentAccounting[key]={items:[]};
+ const rec=db.independentAccounting[key];
+ if(!Array.isArray(rec.items))rec.items=[];
+ return rec;
+}
+function addIndependentAccountingItem(date,name){
+ const typeEl=$(`igType_${safeDomId(name)}`), nameEl=$(`igName_${safeDomId(name)}`), amountEl=$(`igAmount_${safeDomId(name)}`);
+ if(!typeEl||!nameEl||!amountEl)return;
+ const type=typeEl.value==='expense'?'expense':typeEl.value==='membership'?'membership':'income';
+ const itemName=nameEl.value.trim(), amount=Math.max(0,+amountEl.value||0);
+ if(!itemName)return alert('請輸入項目名稱');
+ if(amount<=0)return alert('請輸入金額');
+ independentAccountingRecord(date,name).items.push({id:uid(),type,name:itemName,amount});
+ nameEl.value=''; amountEl.value='0'; persist(); renderDailyAccountingDetail();
+}
+function deleteIndependentAccountingItem(date,name,index){
+ const rec=independentAccountingRecord(date,name);
+ rec.items.splice(index,1); persist(); renderDailyAccountingDetail();
+}
+function safeDomId(s){return String(s||'').replace(/[^a-zA-Z0-9_\u4e00-\u9fff-]/g,'_');}
+
 function accountingIndependentGroups(date){
  const map={};
  accountingAllEventsForDate(date).forEach(e=>{
@@ -2389,12 +2417,18 @@ function accountingIndependentGroups(date){
  });
  return Object.entries(map).map(([name,events])=>{
    const base=accountingTotalsForEvents(events);
-   const otherIncome=events.reduce((n,e)=>n+eventAccountingInfo(e).otherIncome,0);
-   const otherExpense=events.reduce((n,e)=>n+eventAccountingInfo(e).otherExpense,0);
-   return {name,events,...base,otherIncome,otherExpense,
-     revenue:base.gross+otherIncome,
+   const eventOtherIncome=events.reduce((n,e)=>n+eventAccountingInfo(e).otherIncome,0);
+   const eventOtherExpense=events.reduce((n,e)=>n+eventAccountingInfo(e).otherExpense,0);
+   const rec=independentAccountingRecord(date,name);
+   const membershipIncome=rec.items.filter(x=>x.type==='membership').reduce((n,x)=>n+(+x.amount||0),0);
+   const groupOtherIncome=rec.items.filter(x=>x.type==='income').reduce((n,x)=>n+(+x.amount||0),0);
+   const groupOtherExpense=rec.items.filter(x=>x.type==='expense').reduce((n,x)=>n+(+x.amount||0),0);
+   const otherIncome=eventOtherIncome+groupOtherIncome;
+   const otherExpense=eventOtherExpense+groupOtherExpense;
+   return {name,events,...base,rec,membershipIncome,eventOtherIncome,eventOtherExpense,groupOtherIncome,groupOtherExpense,otherIncome,otherExpense,
+     revenue:base.gross+membershipIncome+otherIncome,
      expense:base.discountExpense+otherExpense,
-     net:base.gross+otherIncome-base.discountExpense-otherExpense};
+     net:base.gross+membershipIncome+otherIncome-base.discountExpense-otherExpense};
  });
 }
 
@@ -2603,11 +2637,41 @@ function renderDailyAccountingDetail(){
    return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td><input value="${ag}" placeholder="一般帳" style="min-width:110px" onchange="setEventAccountingGroup('${e.id}',this.value)"></td><td>${g}</td><td>${money(gross)}</td><td>${money(rebuy)}</td><td>${money(group)}</td><td>${money(manual)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td><td><button type="button" onclick="openEventAccounting('${e.id}')">編輯帳務</button></td></tr>`;
  }).join('');
  const independent=accountingIndependentGroups(date);
- if($('accountingGroupRows'))$('accountingGroupRows').innerHTML=independent.map(g=>`<tr>
-   <td><b>${g.name}</b></td>
-   <td>${g.events.map(e=>`第${e.seq||1}場`).join('、')}</td>
-   <td>${g.groups}</td><td>${money(g.gross)}</td><td>${money(g.discountExpense)}</td><td>${money(g.netAdmin)}</td><td>${money(g.otherIncome)}</td><td>${money(g.otherExpense)}</td><td>${money(g.net)}</td><td>${money(g.jp)}</td>
- </tr>`).join('')||'<tr><td colspan="10" class="small">目前沒有獨立帳務群組</td></tr>';
+ if($('accountingGroupRows'))$('accountingGroupRows').innerHTML=independent.map(g=>{
+   const sid=safeDomId(g.name);
+   const items=g.rec.items||[];
+   const itemRows=items.map((x,i)=>`<tr><td class="${x.type==='expense'?'danger':''}">${x.type==='membership'?'入會費收入':x.type==='income'?'其他收入':'其他支出'}</td><td>${x.name||''}</td><td>${money(+x.amount||0)}</td><td><button type="button" class="danger" onclick="deleteIndependentAccountingItem('${date}','${String(g.name).replace(/'/g,"\\'")}',${i})">刪除</button></td></tr>`).join('');
+   return `<div class="card" style="margin:14px 0">
+    <h3>${g.name}｜獨立帳務</h3>
+    <div class="small">包含：${g.events.map(e=>`第${e.seq||1}場 ${Number(e.level||0).toLocaleString()}賽事`).join('、')}</div>
+    <div class="kpis" style="margin-top:12px">
+      <div class="kpi"><span>行政費收入</span><b>${money(g.gross)}</b></div>
+      <div class="kpi"><span>入會費收入</span><b>${money(g.membershipIncome)}</b></div>
+      <div class="kpi"><span>重買優惠</span><b>${money(g.rebuyDiscount)}</b></div>
+      <div class="kpi"><span>組數優惠</span><b>${money(g.groupDiscount)}</b></div>
+      <div class="kpi"><span>手動優惠</span><b>${money(g.manual)}</b></div>
+      <div class="kpi"><span>折扣支出</span><b>${money(g.discountExpense)}</b></div>
+      <div class="kpi"><span>實收行政費</span><b>${money(g.netAdmin)}</b></div>
+      <div class="kpi"><span>其他收入</span><b>${money(g.otherIncome)}</b></div>
+      <div class="kpi"><span>其他支出</span><b>${money(g.otherExpense)}</b></div>
+    </div>
+    <div style="margin-top:14px"><h3>其他收支</h3>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr auto;gap:10px">
+       <label>類型<select id="igType_${sid}"><option value="income">其他收入</option><option value="expense">其他支出</option><option value="membership">入會費收入</option></select></label>
+       <label>項目名稱<input id="igName_${sid}" placeholder="例如：場地 / 包廂費、餐費"></label>
+       <label>金額<input id="igAmount_${sid}" type="number" min="0" step="1" value="0"></label>
+       <button type="button" style="align-self:end" onclick="addIndependentAccountingItem('${date}','${String(g.name).replace(/'/g,"\\'")}')">＋ 新增收支</button>
+      </div>
+      <div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>類型</th><th>項目</th><th>金額</th><th>操作</th></tr></thead><tbody>${itemRows||'<tr><td colspan="4" class="small">目前沒有群組層級的其他收支</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="kpis" style="margin-top:14px">
+      <div class="kpi"><span>EPC 總收入</span><b>${money(g.revenue)}</b></div>
+      <div class="kpi"><span>EPC 總支出</span><b>${money(g.expense)}</b></div>
+      <div class="kpi"><span>淨收入</span><b>${money(g.net)}</b></div>
+      <div class="kpi"><span>JP 提撥（獨立）</span><b>${money(g.jp)}</b></div>
+    </div>
+   </div>`;
+ }).join('')||'<div class="small">目前沒有獨立帳務群組</div>';
 }
 function printDailyAccounting(){
  const date=db.currentAccountingDate;
