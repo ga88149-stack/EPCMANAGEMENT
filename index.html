@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.41.1 Web · Accounting Event Edit</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.42.0 Web · Per Event Accounting</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1331,7 +1331,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   <div id="dailyAccountingPaper">
    <div class="card tablewrap">
     <h3>當日賽事明細</h3>
-    <div class="small" style="margin-bottom:10px">每一場都可直接修改帳務群組，也可按「編輯賽事」修改該場資料。帳務群組留白＝列入當日一般帳；相同群組名稱會合併成同一份獨立帳。此設定只影響 EPC 帳務與 JP，不影響分帳報表。</div>
+    <div class="small" style="margin-bottom:10px">每一場都可直接修改帳務群組，也可按「編輯帳務」新增該場自己的其他收入／其他支出。帳務群組留白＝列入當日一般帳；相同群組名稱會合併成同一份獨立帳。此設定只影響 EPC 帳務與 JP，不影響分帳報表。</div>
     <table><thead><tr><th>場次</th><th>賽事</th><th>帳務群組</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th><th>操作</th></tr></thead><tbody id="accountingEventRows"></tbody></table>
    </div>
    <div class="card">
@@ -1397,10 +1397,35 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
     </div>
    </div>
 
+   <div class="card" id="eventAccountingEditor" style="display:none">
+    <div class="row" style="justify-content:space-between;align-items:center">
+     <div><h3 id="eventAccountingTitle">單場帳務</h3><div class="small" id="eventAccountingSub"></div></div>
+     <button type="button" onclick="closeEventAccounting()">關閉</button>
+    </div>
+    <div class="kpis" style="margin-top:12px">
+     <div class="kpi"><span>行政費收入</span><b id="eaGross">$0</b></div>
+     <div class="kpi"><span>折扣支出</span><b id="eaDiscount">$0</b></div>
+     <div class="kpi"><span>實收行政費</span><b id="eaNetAdmin">$0</b></div>
+     <div class="kpi"><span>其他收入</span><b id="eaOtherIncome">$0</b></div>
+     <div class="kpi"><span>其他支出</span><b id="eaOtherExpense">$0</b></div>
+     <div class="kpi"><span>JP（獨立）</span><b id="eaJP">$0</b></div>
+     <div class="kpi"><span>單場淨收入</span><b id="eaNet">$0</b></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr auto;gap:10px;margin-top:14px">
+     <label>類型<select id="eaItemType"><option value="income">其他收入</option><option value="expense">其他支出</option></select></label>
+     <label>項目<input id="eaItemName" placeholder="例如：場地費、餐費、兼職薪資"></label>
+     <label>金額<input id="eaItemAmount" type="number" min="0" step="1" value="0"></label>
+     <button type="button" style="align-self:end" onclick="addEventAccountingItem()">＋ 新增</button>
+    </div>
+    <div class="tablewrap" style="margin-top:12px"><table>
+     <thead><tr><th>類型</th><th>項目</th><th>金額</th><th>操作</th></tr></thead>
+     <tbody id="eaItemRows"></tbody>
+    </table></div>
+   </div>
    <div class="card tablewrap">
     <h3>獨立帳務群組</h3>
     <div class="small" style="margin-bottom:10px">同一群組內的賽事會合併計算；不同群組各自獨立。</div>
-    <table><thead><tr><th>帳務群組</th><th>場次</th><th>組數</th><th>行政費收入</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody id="accountingGroupRows"></tbody></table>
+    <table><thead><tr><th>帳務群組</th><th>場次</th><th>組數</th><th>行政費收入</th><th>折扣支出</th><th>實收行政費</th><th>其他收入</th><th>其他支出</th><th>淨收入</th><th>JP</th></tr></thead><tbody id="accountingGroupRows"></tbody></table>
    </div>
   </div>
  </div>
@@ -2298,13 +2323,79 @@ function accountingTotalsForEvents(events){
  const discountExpense=rebuyDiscount+groupDiscount+manual;
  return {gross,auto,manual,netAdmin,jp,groups,rebuyDiscount,groupDiscount,discountExpense};
 }
+let editingAccountingEventId=null;
+function ensureEventAccountingItems(e){
+ if(!e)return [];
+ if(!Array.isArray(e.accountingItems))e.accountingItems=[];
+ return e.accountingItems;
+}
+function eventAccountingInfo(e){
+ const base=accountingTotalsForEvents(e?[e]:[]);
+ const items=ensureEventAccountingItems(e);
+ const otherIncome=items.filter(x=>x.type==='income').reduce((n,x)=>n+(+x.amount||0),0);
+ const otherExpense=items.filter(x=>x.type==='expense').reduce((n,x)=>n+(+x.amount||0),0);
+ return {...base,items,otherIncome,otherExpense,
+   revenue:base.gross+otherIncome,
+   expense:base.discountExpense+otherExpense,
+   net:base.gross+otherIncome-base.discountExpense-otherExpense};
+}
+function openEventAccounting(eventId){
+ editingAccountingEventId=eventId;
+ renderEventAccountingEditor();
+ const box=$('eventAccountingEditor'); if(box){box.style.display='block';box.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+function closeEventAccounting(){
+ editingAccountingEventId=null;
+ if($('eventAccountingEditor'))$('eventAccountingEditor').style.display='none';
+}
+function renderEventAccountingEditor(){
+ const e=(db.events||[]).find(x=>x.id===editingAccountingEventId);
+ const box=$('eventAccountingEditor'); if(!box)return;
+ if(!e){box.style.display='none';return;}
+ box.style.display='block';
+ const ai=eventAccountingInfo(e);
+ $('eventAccountingTitle').textContent=`第${e.seq||1}場｜${Number(e.level||0).toLocaleString()} 賽事｜單場帳務`;
+ $('eventAccountingSub').textContent=`帳務群組：${accountingGroupForEvent(e)||'一般帳'}｜此處收支只屬於本場`;
+ $('eaGross').textContent=money(ai.gross);
+ $('eaDiscount').textContent=money(ai.discountExpense);
+ $('eaNetAdmin').textContent=money(ai.netAdmin);
+ $('eaOtherIncome').textContent=money(ai.otherIncome);
+ $('eaOtherExpense').textContent=money(ai.otherExpense);
+ $('eaJP').textContent=money(ai.jp);
+ $('eaNet').textContent=money(ai.net);
+ $('eaItemRows').innerHTML=ai.items.map((x,i)=>`<tr><td>${x.type==='income'?'其他收入':'其他支出'}</td><td>${x.name||''}</td><td>${money(+x.amount||0)}</td><td><button type="button" class="danger" onclick="deleteEventAccountingItem(${i})">刪除</button></td></tr>`).join('')||'<tr><td colspan="4" class="small">本場目前沒有其他收支</td></tr>';
+}
+function addEventAccountingItem(){
+ const e=(db.events||[]).find(x=>x.id===editingAccountingEventId); if(!e)return;
+ const type=$('eaItemType').value==='expense'?'expense':'income';
+ const name=$('eaItemName').value.trim(); const amount=Math.max(0,+$('eaItemAmount').value||0);
+ if(!name)return alert('請輸入項目名稱');
+ if(amount<=0)return alert('請輸入金額');
+ ensureEventAccountingItems(e).push({id:uid(),type,name,amount});
+ $('eaItemName').value=''; $('eaItemAmount').value='0';
+ persist(); renderDailyAccountingDetail(); renderEventAccountingEditor();
+}
+function deleteEventAccountingItem(i){
+ const e=(db.events||[]).find(x=>x.id===editingAccountingEventId); if(!e)return;
+ ensureEventAccountingItems(e).splice(i,1);
+ persist(); renderDailyAccountingDetail(); renderEventAccountingEditor();
+}
+
 function accountingIndependentGroups(date){
  const map={};
  accountingAllEventsForDate(date).forEach(e=>{
    const g=accountingGroupForEvent(e); if(!g)return;
    (map[g]||(map[g]=[])).push(e);
  });
- return Object.entries(map).map(([name,events])=>({name,events,...accountingTotalsForEvents(events)}));
+ return Object.entries(map).map(([name,events])=>{
+   const base=accountingTotalsForEvents(events);
+   const otherIncome=events.reduce((n,e)=>n+eventAccountingInfo(e).otherIncome,0);
+   const otherExpense=events.reduce((n,e)=>n+eventAccountingInfo(e).otherExpense,0);
+   return {name,events,...base,otherIncome,otherExpense,
+     revenue:base.gross+otherIncome,
+     expense:base.discountExpense+otherExpense,
+     net:base.gross+otherIncome-base.discountExpense-otherExpense};
+ });
 }
 
 function poolInfoForEvent(e){
@@ -2335,12 +2426,17 @@ function dailyAccountingInfo(date){
    if(+rec.otherExpense)rec.items.push({id:'legacy_other_expense',type:'expense',name:'其他支出',amount:+rec.otherExpense});
  }
  const membershipIncome=rec.items.filter(x=>x.type==='membership').reduce((n,x)=>n+(+x.amount||0),0);
- const itemIncome=rec.items.filter(x=>x.type==='income').reduce((n,x)=>n+(+x.amount||0),0);
- const itemExpense=rec.items.filter(x=>x.type==='expense').reduce((n,x)=>n+(+x.amount||0),0);
+ const dayItemIncome=rec.items.filter(x=>x.type==='income').reduce((n,x)=>n+(+x.amount||0),0);
+ const dayItemExpense=rec.items.filter(x=>x.type==='expense').reduce((n,x)=>n+(+x.amount||0),0);
+ const eventItemIncome=events.reduce((n,e)=>n+eventAccountingInfo(e).otherIncome,0);
+ const eventItemExpense=events.reduce((n,e)=>n+eventAccountingInfo(e).otherExpense,0);
+ const itemIncome=dayItemIncome+eventItemIncome;
+ const itemExpense=dayItemExpense+eventItemExpense;
  const revenue=gross+membershipIncome+itemIncome;
  const expense=discountExpense+itemExpense;
  return {events,gross,auto,manual,netAdmin,jp,groups,rebuyDiscount,groupDiscount,discountExpense,
-   membershipIncome,itemIncome,itemExpense,revenue,expense,net:revenue-expense,rec};
+   membershipIncome,itemIncome,itemExpense,dayItemIncome,dayItemExpense,eventItemIncome,eventItemExpense,
+   revenue,expense,net:revenue-expense,rec};
 }
 
 function bindAccountingControls(){
@@ -2504,14 +2600,14 @@ function renderDailyAccountingDetail(){
    });
    const disc=rebuy+group+manual;
    const ag=accountingGroupForEvent(e);
-   return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td><input value="${ag}" placeholder="一般帳" style="min-width:110px" onchange="setEventAccountingGroup('${e.id}',this.value)"></td><td>${g}</td><td>${money(gross)}</td><td>${money(rebuy)}</td><td>${money(group)}</td><td>${money(manual)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td><td><button type="button" onclick="openEvent('${e.id}')">編輯賽事</button></td></tr>`;
+   return `<tr><td>第${e.seq||1}場</td><td>${Number(e.level||0).toLocaleString()} 賽事</td><td><input value="${ag}" placeholder="一般帳" style="min-width:110px" onchange="setEventAccountingGroup('${e.id}',this.value)"></td><td>${g}</td><td>${money(gross)}</td><td>${money(rebuy)}</td><td>${money(group)}</td><td>${money(manual)}</td><td>${money(disc)}</td><td>${money(net)}</td><td>${money(eventOwnJP(e))}</td><td><button type="button" onclick="openEventAccounting('${e.id}')">編輯帳務</button></td></tr>`;
  }).join('');
  const independent=accountingIndependentGroups(date);
  if($('accountingGroupRows'))$('accountingGroupRows').innerHTML=independent.map(g=>`<tr>
    <td><b>${g.name}</b></td>
    <td>${g.events.map(e=>`第${e.seq||1}場`).join('、')}</td>
-   <td>${g.groups}</td><td>${money(g.gross)}</td><td>${money(g.discountExpense)}</td><td>${money(g.netAdmin)}</td><td>${money(g.jp)}</td>
- </tr>`).join('')||'<tr><td colspan="7" class="small">目前沒有獨立帳務群組</td></tr>';
+   <td>${g.groups}</td><td>${money(g.gross)}</td><td>${money(g.discountExpense)}</td><td>${money(g.netAdmin)}</td><td>${money(g.otherIncome)}</td><td>${money(g.otherExpense)}</td><td>${money(g.net)}</td><td>${money(g.jp)}</td>
+ </tr>`).join('')||'<tr><td colspan="10" class="small">目前沒有獨立帳務群組</td></tr>';
 }
 function printDailyAccounting(){
  const date=db.currentAccountingDate;
