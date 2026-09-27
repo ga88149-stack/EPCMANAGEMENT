@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.0 Web · Member Period Analytics</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.1 Web · Member Ranking</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1168,10 +1168,11 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   </div>
  </div>
  <div class="card" style="margin-top:12px">
-  <div class="formgrid" style="grid-template-columns:1fr 1fr 1.5fr auto auto">
+  <div class="formgrid" style="grid-template-columns:1fr 1fr 1.35fr .85fr auto auto">
    <div><label>查詢開始營業日</label><input type="date" id="memberDateFrom" onchange="renderMemberRows()"></div>
    <div><label>查詢結束營業日</label><input type="date" id="memberDateTo" onchange="renderMemberRows()"></div>
    <div><label>搜尋會員</label><input id="memberSearch" type="search" autocomplete="off" placeholder="姓名、會員 ID 或結帳群組" oninput="renderMemberRows()"></div>
+   <div><label>排序方式</label><select id="memberSortBy" onchange="renderMemberRows()"><option value="events">參賽場次</option><option value="share">消費占比</option></select></div>
    <button type="button" style="align-self:end" onclick="setMemberRangeThisMonth()">本月</button>
    <button type="button" style="align-self:end" onclick="clearMemberSearch()">清除搜尋</button>
   </div>
@@ -3142,7 +3143,12 @@ function renderMemberRows(){
  const q=String($('memberSearch')?.value||'').trim().toLowerCase(),from=$('memberDateFrom')?.value||'',to=$('memberDateTo')?.value||'';
  const stats=(db.members||[]).map(m=>{const h=memberHistoryInRange(m,from,to);const events=new Set(h.map(x=>x.eventId||`${x.date}|${x.eventSeq||''}|${x.level||''}`)).size;const paid=h.reduce((s,x)=>s+(+x.paid||0),0),prize=h.reduce((s,x)=>s+(+x.prize||0),0);return {m,events,paid,prize,net:prize-paid};});
  const totalPaid=stats.reduce((s,x)=>s+x.paid,0),totalPrize=stats.reduce((s,x)=>s+x.prize,0),totalNet=totalPrize-totalPaid,totalEntries=stats.reduce((s,x)=>s+x.events,0);
- const list=stats.filter(({m})=>!q||String(m.name||'').toLowerCase().includes(q)||String(m.id||'').toLowerCase().includes(q)||String(m.group||'').toLowerCase().includes(q));
+ const sortBy=$('memberSortBy')?.value||'events';
+ const list=stats.filter(({m})=>!q||String(m.name||'').toLowerCase().includes(q)||String(m.id||'').toLowerCase().includes(q)||String(m.group||'').toLowerCase().includes(q)).sort((a,b)=>{
+   const aShare=totalPaid>0?a.paid/totalPaid:0,bShare=totalPaid>0?b.paid/totalPaid:0;
+   if(sortBy==='share')return bShare-aShare||b.events-a.events||String(a.m.name||'').localeCompare(String(b.m.name||''),'zh-Hant');
+   return b.events-a.events||bShare-aShare||String(a.m.name||'').localeCompare(String(b.m.name||''),'zh-Hant');
+ });
  tbody.innerHTML=list.map(({m,events,paid,prize,net})=>{const share=totalPaid>0?paid/totalPaid*100:0;return `<tr><td>${m.name||''}</td><td>${m.id||''}</td><td>${m.group||'-'}</td><td>${events}</td><td>${share.toFixed(1)}%</td><td>${money(paid)}</td><td>${money(prize)}</td><td class="${net>=0?'pos':'neg'}">${money(net)}</td><td><button onclick="editMember('${m.id}')">編輯</button> <button class="danger" onclick="delMember('${m.id}')">刪除</button></td></tr>`;}).join('')||'<tr><td colspan="9" class="small">找不到符合條件的會員</td></tr>';
  const foot=$('memberTotals');if(foot)foot.innerHTML=`<tr style="font-weight:800;border-top:2px solid #52677b"><td>區間總計</td><td colspan="2">${from||'全部'} ～ ${to||'全部'}</td><td>${totalEntries}</td><td>${totalPaid>0?'100.0%':'0.0%'}</td><td>${money(totalPaid)}</td><td>${money(totalPrize)}</td><td class="${totalNet>=0?'pos':'neg'}">${money(totalNet)}</td><td></td></tr>`;
 }
