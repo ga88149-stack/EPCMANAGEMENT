@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.43.1 Web · Main Ledger Reports</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.43.3 Web · Independent Group Summary</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1368,6 +1368,23 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
     <thead><tr><th>營業日</th><th>賽事數</th><th>行政費收入</th><th>入會費收入</th><th>折扣支出</th><th>其他收入</th><th>其他支出</th><th>淨收入</th><th>狀態</th><th>操作</th></tr></thead>
     <tbody id="accountingDayRows"></tbody>
     <tfoot id="accountingDayTotals"></tfoot>
+   </table>
+  </div>
+
+  <div class="card tablewrap" style="margin-top:14px">
+   <div class="report-topbar" style="margin-bottom:10px">
+    <div>
+     <h3 style="margin:0">獨立帳務群組統整</h3>
+     <div class="small">僅統整獨立帳務，不納入上方 EPC 總帳、日報表與收支查詢。</div>
+    </div>
+   </div>
+   <table>
+    <thead><tr>
+     <th>帳務群組</th><th>場次</th><th>組數</th><th>行政費收入</th><th>折扣支出</th>
+     <th>實收行政費</th><th>入會費收入</th><th>其他收入</th><th>其他支出</th><th>淨收入</th><th>JP</th>
+    </tr></thead>
+    <tbody id="independentAccountingSummaryRows"></tbody>
+    <tfoot id="independentAccountingSummaryTotal"></tfoot>
    </table>
   </div>
  </div>
@@ -2692,6 +2709,49 @@ function deleteDailyAccounting(date){
    persist();renderAccountingManager();
  });
 }
+function renderIndependentAccountingSummary(){
+ const tbody=$('independentAccountingSummaryRows'),foot=$('independentAccountingSummaryTotal');
+ if(!tbody)return;
+ const from=$('accountingDateFrom')?.value||'',to=$('accountingDateTo')?.value||'';
+ const map=new Map();
+ (db.events||[]).forEach(e=>{
+   const date=businessDateForEvent(e);
+   const group=accountingGroupForEvent(e);
+   if(!group||!date||from&&date<from||to&&date>to)return;
+   const key=group;
+   if(!map.has(key))map.set(key,{name:group,events:[],dates:new Set()});
+   const g=map.get(key);g.events.push(e);g.dates.add(date);
+ });
+ const groups=[...map.values()].map(g=>{
+   const base=accountingTotalsForEvents(g.events);
+   let membershipIncome=0,otherIncome=0,otherExpense=0;
+   g.events.forEach(e=>{
+     const ai=eventAccountingInfo(e);
+     membershipIncome+=+ai.membershipIncome||0;
+     otherIncome+=+ai.otherIncome||0;
+     otherExpense+=+ai.otherExpense||0;
+   });
+   const revenue=base.gross+membershipIncome+otherIncome;
+   const expense=base.discountExpense+otherExpense;
+   return {...g,...base,membershipIncome,otherIncome,otherExpense,revenue,expense,net:revenue-expense};
+ }).sort((a,b)=>a.name.localeCompare(b.name,'zh-Hant'));
+ tbody.innerHTML=groups.map(g=>`<tr>
+   <td><b>${g.name}</b><div class="small">${[...g.dates].sort().join('、')}</div></td>
+   <td>${g.events.length}</td><td>${g.groups}</td><td>${money(g.gross)}</td><td>${money(g.discountExpense)}</td>
+   <td>${money(g.netAdmin)}</td><td>${money(g.membershipIncome)}</td><td>${money(g.otherIncome)}</td>
+   <td>${money(g.otherExpense)}</td><td class="${g.net>=0?'pos':'neg'}">${money(g.net)}</td><td>${money(g.jp)}</td>
+ </tr>`).join('')||'<tr><td colspan="11" class="small">目前查詢區間沒有獨立帳務群組</td></tr>';
+ const totals=groups.reduce((a,g)=>{
+   a.events+=g.events.length;a.groups+=g.groups;a.gross+=g.gross;a.discount+=g.discountExpense;a.netAdmin+=g.netAdmin;
+   a.membership+=g.membershipIncome;a.income+=g.otherIncome;a.expense+=g.otherExpense;a.net+=g.net;a.jp+=g.jp;return a;
+ },{events:0,groups:0,gross:0,discount:0,netAdmin:0,membership:0,income:0,expense:0,net:0,jp:0});
+ if(foot)foot.innerHTML=groups.length?`<tr style="font-weight:800;border-top:2px solid #52677b">
+   <td>獨立帳務合計</td><td>${totals.events}</td><td>${totals.groups}</td><td>${money(totals.gross)}</td>
+   <td>${money(totals.discount)}</td><td>${money(totals.netAdmin)}</td><td>${money(totals.membership)}</td>
+   <td>${money(totals.income)}</td><td>${money(totals.expense)}</td>
+   <td class="${totals.net>=0?'pos':'neg'}">${money(totals.net)}</td><td>${money(totals.jp)}</td>
+ </tr>`:'';
+}
 function renderAccountingManager(){
  ensureDailyAccountingStore();
  if($('accountingCreateDate') && !$('accountingCreateDate').value){
@@ -2720,6 +2780,7 @@ function renderAccountingManager(){
    <td>${money(totalDiscount)}</td><td>${money(totalIncome)}</td><td>${money(totalExpense)}</td>
    <td class="${totalNet>=0?'pos':'neg'}">${money(totalNet)}</td><td colspan="2">${rows.length} 個營業日</td>
  </tr>`;
+ renderIndependentAccountingSummary();
 }
 function renderDailyAccountingDetail(){
  ensureDailyAccountingStore();
