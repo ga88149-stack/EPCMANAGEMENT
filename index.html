@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.8 Web · Settlement Group Toggle</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.9 Web · Default Settlement Group</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2040,7 +2040,10 @@ function filterAddPlayerMembers(keyword){
 function syncAddPlayerSearch(){
  const sel=$('addPlayerMember'),input=$('addPlayerSearch');if(!sel||!input)return;
  const m=db.members.find(x=>x.id===sel.value);
- if(m)input.value=`${m.name} (${m.id})`;
+ if(m){
+   input.value=`${m.name} (${m.id})`;
+   if($('addPlayerGroup'))$('addPlayerGroup').value=m.group||'';
+ }
 }
 function handleAddPlayerSearchKey(event){
  if(event.key!=='Enter')return;
@@ -2954,7 +2957,7 @@ function render(){
     manualDiscount:`<input type="number" min="0" value="${p.manualDiscount}" style="width:100%;min-width:0" onchange="setP(${i},'manualDiscount',this.value)">`,
     totalDiscount:`<b style="white-space:nowrap">${money(c.totalDiscount||0)}</b>`,
     paid:`<span style="white-space:nowrap">${money(c.paid)}</span>`,
-    settleGroup:`<input value="${p.settleGroup??''}" placeholder="結帳群組" style="width:100%;min-width:0" onchange="setP(${i},'settleGroup',this.value)">`,
+    settleGroup:`<input value="${p.group??''}" placeholder="結帳群組" style="width:100%;min-width:0" onchange="setP(${i},'group',this.value)">`,
     action:`<button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button>`
    }};
  });
