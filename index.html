@@ -1066,7 +1066,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.7 Web · Checkbox Handler Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.39.8 Web · Settlement Group Toggle</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1193,7 +1193,8 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
    <label class="player-col-chip"><input type="checkbox" data-player-col="overbuyDiscount" onchange="setPlayerColumnPreference('overbuyDiscount',this.checked)">超買優惠</label>
    <label class="player-col-chip"><input type="checkbox" data-player-col="manualDiscount" onchange="setPlayerColumnPreference('manualDiscount',this.checked)">手動優惠</label>
    <label class="player-col-chip"><input type="checkbox" data-player-col="totalDiscount" onchange="setPlayerColumnPreference('totalDiscount',this.checked)">總優惠</label>
-   <label class="player-col-chip"><input type="checkbox" data-player-col="paid" onchange="setPlayerColumnPreference('paid',this.checked)">實收</label>
+   <label class="player-col-chip"><input type="checkbox" data-player-col="paid" onchange="setPlayerColumnPreference('paid',this.checked)">實收</label> 
+   <label class="player-col-chip"><input type="checkbox" data-player-col="settleGroup" onchange="setPlayerColumnPreference('settleGroup',this.checked)">結帳群組</label>
   </div>
   <div class="small" style="margin-top:8px">座位、玩家、實收可自行勾選顯示；買入、重買、總組數固定顯示；結帳群組僅供後台分帳使用。</div>
  </div>
@@ -2839,7 +2840,7 @@ function renderDashboardSummary(){
  if($('kLevelBreakdown'))$('kLevelBreakdown').textContent=levelText;
 }
 
-const PLAYER_OPTIONAL_COLS=['seat','name','memberId','nickname','rebuyDiscount','overbuyDiscount','manualDiscount','totalDiscount','paid'];
+const PLAYER_OPTIONAL_COLS=['seat','name','memberId','nickname','rebuyDiscount','overbuyDiscount','manualDiscount','totalDiscount','paid','settleGroup'];
 const PLAYER_COL_PREF_KEY='epcPlayerVisibleColsV1';
 function loadPlayerVisibleCols(){
  if(window.__playerVisibleCols)return window.__playerVisibleCols;
@@ -2919,13 +2920,13 @@ function render(){
   ['buyin','買入',true],['rebuy','重買',true],['groups','總組數',true],
   ['rebuyDiscount','重買優惠',visible.has('rebuyDiscount')],['overbuyDiscount','超買優惠',visible.has('overbuyDiscount')],
   ['manualDiscount','手動優惠',visible.has('manualDiscount')],['totalDiscount','總優惠',visible.has('totalDiscount')],
-  ['paid','實收',visible.has('paid')],['action','操作',true]
+  ['paid','實收',visible.has('paid')],['settleGroup','結帳群組',visible.has('settleGroup')],['action','操作',true]
  ].filter(x=>x[2]);
  // 依目前勾選的欄位重新分配整張表寬度，不需要左右滑動。
  const baseWeights={
    seat:.75,name:2.0,memberId:1.45,nickname:1.35,buyin:1.0,rebuy:1.0,groups:.85,
    rebuyDiscount:1.25,overbuyDiscount:1.25,manualDiscount:1.25,totalDiscount:1.15,
-   paid:1.25,action:.85
+   paid:1.25,settleGroup:1.35,action:.85
  };
  const totalWeight=cols.reduce((sum,c)=>sum+(baseWeights[c[0]]||1),0);
  const colWidths=Object.fromEntries(cols.map(c=>[c[0],((baseWeights[c[0]]||1)/totalWeight*100)]));
@@ -2953,6 +2954,7 @@ function render(){
     manualDiscount:`<input type="number" min="0" value="${p.manualDiscount}" style="width:100%;min-width:0" onchange="setP(${i},'manualDiscount',this.value)">`,
     totalDiscount:`<b style="white-space:nowrap">${money(c.totalDiscount||0)}</b>`,
     paid:`<span style="white-space:nowrap">${money(c.paid)}</span>`,
+    settleGroup:`<input value="${p.settleGroup??''}" placeholder="結帳群組" style="width:100%;min-width:0" onchange="setP(${i},'settleGroup',this.value)">`,
     action:`<button type="button" class="danger" onclick="removePlayerByIndex(${i})">移除</button>`
    }};
  });
@@ -2975,7 +2977,7 @@ function render(){
   overbuyDiscount:`<b>${money(totals.overbuyDiscount)}</b>`,
   manualDiscount:`<b>${money(totals.manualDiscount)}</b>`,
   totalDiscount:`<b>${money(totals.totalDiscount)}</b>`,
-  paid:`<b>${money(totals.paid)}</b>`,action:''
+  paid:`<b>${money(totals.paid)}</b>`,settleGroup:'',action:''
  };
  if($('eventPlayerTotals'))$('eventPlayerTotals').innerHTML=cols.map(c=>`<td class="col-${c[0]}" style="white-space:nowrap">${totalVals[c[0]]||''}</td>`).join('');
  syncPlayerColumnCheckboxes();
