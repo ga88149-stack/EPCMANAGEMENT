@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.5 Web · Discount & Accounting Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.6 Web · Accounting Presentation Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2493,7 +2493,7 @@ function accountingTotalsForEvents(events){
      const c=calcPlayerForEvent(p,e);
      groups+=c.groups; gross+=c.grossAdmin||0; auto+=c.auto||0; manual+=c.manual||0; netAdmin+=c.netAdmin||0;
      const custom=(e.pricingMode||'standard')==='custom';
-     if(custom){rebuyDiscount+=c.rebuyDiscount||0;groupDiscount+=c.overbuyDiscount||0;}
+     if(custom){rebuyDiscount+=c.accountingRebuyDiscount??(c.rebuyDiscount||0);groupDiscount+=c.accountingGroupDiscount??(c.overbuyDiscount||0);}
      else groupDiscount+=c.auto||0;
    });
    jp+=eventOwnJP(e);
@@ -3149,6 +3149,12 @@ function calcPlayerForEvent(p,e){
    let overbuyDiscountPerGroup=Math.max(0,rebuyAdmin-rebuyDiscountPerGroup);
    let overbuyDiscount=overbuyDiscountPerGroup*overbuyGroups;
 
+   // Accounting report presentation: an overbuy group is shown as the FULL waived admin fee.
+   // The player/event table may still show the price discount + extra overbuy waiver split.
+   // Example: 1200 admin, 600 rebuy price discount -> accounting shows 1200 as group discount.
+   let accountingGroupDiscount=rebuyAdmin*overbuyGroups;
+   let accountingRebuyDiscount=Math.max(0,rebuyDiscount-(rebuyDiscountPerGroup*overbuyGroups));
+
    let auto=rebuyDiscount+overbuyDiscount;
    let totalDiscount=auto+manual;
 
@@ -3166,7 +3172,7 @@ function calcPlayerForEvent(p,e){
    return {
      groups, auto, manual, totalDiscount, original, paid, pool,
      grossAdmin, netAdmin,
-     rebuyDiscount, overbuyDiscount, normalRebuyGroups, overbuyGroups
+     rebuyDiscount, overbuyDiscount, accountingRebuyDiscount, accountingGroupDiscount, normalRebuyGroups, overbuyGroups
    };
  }
 
