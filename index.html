@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.8 Web · Dashboard Total Exclusion Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.9 Web · Cloud Connection Optimized</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1706,15 +1706,67 @@ function backupLocal(reason){
    }));
  }catch(err){ console.warn('backup failed',err); }
 }
-async function cloudGet(action){
- const r=await fetch(CLOUD_API+'?action='+encodeURIComponent(action)+'&_='+Date.now(),{cache:'no-store',redirect:'follow'});
- if(!r.ok)throw new Error('HTTP '+r.status);
- const j=await r.json(); if(!j.ok)throw new Error(j.error||'Cloud API error'); return j;
+const CLOUD_RETRY_DELAYS=[0,1800,4500];
+const CLOUD_TIMEOUT_MS=18000;
+let cloudReconnectTimer=null;
+function sleep_(ms){return new Promise(r=>setTimeout(r,ms));}
+function isConflictError_(err){return String(err&&err.message||err||'').includes('CLOUD_CONFLICT');}
+async function fetchWithTimeout_(url,options={}){
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),CLOUD_TIMEOUT_MS);
+ try{return await fetch(url,{...options,signal:controller.signal});}
+ finally{clearTimeout(timer);}
 }
-async function cloudPost(payload){
- const r=await fetch(CLOUD_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),cache:'no-store',redirect:'follow'});
- if(!r.ok)throw new Error('HTTP '+r.status);
- const j=await r.json(); if(!j.ok)throw new Error(j.error||'Cloud API error'); return j;
+async function cloudRequest_(kind,payload){
+ let lastErr=null;
+ for(let i=0;i<CLOUD_RETRY_DELAYS.length;i++){
+   if(CLOUD_RETRY_DELAYS[i]){
+     setCloudState('↻ 雲端暫時無回應｜自動重試 '+(i+1)+'/'+CLOUD_RETRY_DELAYS.length);
+     await sleep_(CLOUD_RETRY_DELAYS[i]);
+   }
+   try{
+     let r;
+     if(kind==='GET'){
+       const action=payload;
+       r=await fetchWithTimeout_(CLOUD_API+'?action='+encodeURIComponent(action)+'&_='+Date.now(),{cache:'no-store',redirect:'follow'});
+     }else{
+       r=await fetchWithTimeout_(CLOUD_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),cache:'no-store',redirect:'follow'});
+     }
+     if(!r.ok)throw new Error('HTTP '+r.status);
+     const j=await r.json();
+     if(!j.ok)throw new Error(j.error||'Cloud API error');
+     cloudReady=true;
+     return j;
+   }catch(err){
+     lastErr=err;
+     if(isConflictError_(err))throw err; // revision conflict is not a network failure; never auto-retry/overwrite it.
+   }
+ }
+ cloudReady=false;
+ scheduleCloudReconnect_();
+ throw lastErr||new Error('CLOUD_UNAVAILABLE');
+}
+async function cloudGet(action){return cloudRequest_('GET',action);}
+async function cloudPost(payload){return cloudRequest_('POST',payload);}
+function scheduleCloudReconnect_(){
+ if(cloudReconnectTimer)return;
+ cloudReconnectTimer=setTimeout(async()=>{
+   cloudReconnectTimer=null;
+   if(cloudSaving)return scheduleCloudReconnect_();
+   try{
+     const ping=await cloudGet('ping');
+     cloudReady=true;
+     if(localDirty){
+       setCloudState('● 雲端已恢復｜正在補同步…');
+       await saveCloudNow(false);
+     }else{
+       setCloudState('☁ 雲端連線已恢復');
+     }
+   }catch(err){
+     setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
+     scheduleCloudReconnect_();
+   }
+ },15000);
 }
 async function initializeCloud(){
  setCloudState('● 本機已儲存｜正在連接雲端…');
@@ -1767,8 +1819,9 @@ async function initializeCloud(){
    }
  }catch(err){
    cloudReady=false;
-   setCloudState('⚠ 雲端連線失敗｜本機資料已保留',true);
+   setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
    console.error('EPC cloud init failed',err);
+   scheduleCloudReconnect_();
    render();
  }
 }
@@ -1787,13 +1840,23 @@ async function refreshFormMembers(saveAfter=true){
  }catch(err){console.error('member refresh failed',err);return false;}
 }
 function scheduleCloudSave(){
- if(!cloudReady)return;
  cloudPending=true;
  clearTimeout(cloudSaveTimer);
+ if(!cloudReady){
+   setCloudState('● 待同步｜本機已儲存｜等待雲端恢復');
+   scheduleCloudReconnect_();
+   return;
+ }
  cloudSaveTimer=setTimeout(saveCloudNow,900);
 }
 async function saveCloudNow(force=false){
- if(!cloudReady||cloudSaving)return false;
+ if(cloudSaving){cloudPending=true;return false;}
+ if(!cloudReady){
+   localDirty=true; localStorage.setItem('epcLocalDirty','1');
+   setCloudState('● 待同步｜本機已儲存｜等待雲端恢復');
+   scheduleCloudReconnect_();
+   return false;
+ }
  cloudSaving=true; cloudPending=false;
  setCloudState('☁ 正在上傳雲端…');
  backupLocal('before-cloud-save');
@@ -1825,7 +1888,9 @@ async function saveCloudNow(force=false){
    }else if(String(err.message||err).includes('CLOUD_VERIFY_FAILED')){
      setCloudState('⚠ 上傳後驗證失敗｜不能視為已同步',true);
    }else{
-     setCloudState('⚠ 雲端儲存失敗｜本機資料已保留',true);
+     cloudReady=false;
+     setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
+     scheduleCloudReconnect_();
    }
    return false;
  }finally{
@@ -1841,8 +1906,8 @@ async function manualCloudSync(){
    return;
  }
  const ok=await saveCloudNow(false);
- if(!ok && confirm('雲端可能有另一台電腦的新版本。\n\n要以「這台電腦目前的資料」覆蓋雲端嗎？\n\n按「確定」才會強制上傳；按「取消」不會改動雲端。')){
-   await saveCloudNow(true);
+ if(!ok && !cloudReady){
+   setCloudState('● 待同步｜本機已儲存｜恢復連線後自動補傳');
  }
 }
 let __phoneStackSyncBusy=false;
@@ -2020,8 +2085,7 @@ function persist(){
  localStorage.setItem('epcV1',JSON.stringify(db));
  localDirty=true;
  localStorage.setItem('epcLocalDirty','1');
- if(cloudReady)scheduleCloudSave();
- else setCloudState('☁ 本機已儲存｜等待雲端連線');
+ scheduleCloudSave();
 }
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$(b.dataset.page).classList.add('active');render()});
 async function addMember(){
@@ -4048,6 +4112,9 @@ function printEventReport(){
 })();
 
 render();
+window.addEventListener('online',()=>{cloudReady=true;setCloudState('● 網路已恢復｜檢查雲端同步…');scheduleCloudReconnect_();});
+window.addEventListener('offline',()=>{cloudReady=false;setCloudState('⚠ 網路已離線｜本機資料安全保存',true);});
+setInterval(()=>{if(!cloudSaving && (!cloudReady||localDirty))scheduleCloudReconnect_();},30000);
 initializeCloud();
 // V1.38.4: nickname columns + 12-13px adaptive event-report print; auto member sync preserved.
 // This only refreshes the member list from MAIN API; it never calls full cloud load.
