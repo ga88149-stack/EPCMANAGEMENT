@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.7 Web · Independent Ledger Exclusion Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.8 Web · Dashboard Total Exclusion Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3532,12 +3532,11 @@ function render(){
  if($('eventPlayerTotals'))$('eventPlayerTotals').innerHTML=cols.map(c=>`<td class="col-${c[0]}" style="white-space:nowrap">${totalVals[c[0]]||''}</td>`).join('');
  syncPlayerColumnCheckboxes();
  let info=poolInfo(), totalGroups=currentEvent().players.reduce((s,p)=>s+calcPlayer(p).groups,0), expected=totalGroups*currentEvent().chips, actual=currentEvent().players.reduce((s,p)=>s+(+p.stack||0),0), chipDiff=actual-expected;
+ // Dashboard totals must represent MAIN / normal ledger only.
+ // Independent accounting events (e.g. 包廂) are excluded here as well;
+ // renderDashboardSummary() already calculates the authoritative ledger KPIs.
  let settledEvents=db.events.filter(x=>x.status==='已結算');
- let settledJP=settledEvents.reduce((sum,x)=>sum+(+x.finalJP||0),0);
- let totalProfit=settledEvents.reduce((sum,x)=>sum+(x.finalAccounting?.net||0),0);
  $('kMembers').textContent=db.members.length;
- $('kProfit').textContent=money(totalProfit);$('kProfit').className='v '+(totalProfit>=0?'pos':'neg');
- $('kJP').textContent=money(settledJP);
  $('sPool').textContent=money(info.pool);$('sJP').textContent=money(info.jp);const settleTotals=ev.players.reduce((a,p)=>{const c=calcPlayerForEvent(p,ev);a.discount+=(+c.totalDiscount||0);a.netAdmin+=(+c.netAdmin||0);return a;},{discount:0,netAdmin:0});if($('sTotalDiscount'))$('sTotalDiscount').textContent=money(settleTotals.discount);if($('sNetAdmin'))$('sNetAdmin').textContent=money(settleTotals.netAdmin);$('sAvail').textContent=money(info.avail);if($('sEntrants'))$('sEntrants').textContent=ev.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,ev).groups,0);if($('sStartingChips'))$('sStartingChips').textContent=Number(ev.chips||0).toLocaleString();$('sChipDiff').textContent=chipDiff.toLocaleString();$('sChipDiff').className='v '+(chipDiff===0?'pos':'neg');
  if($('btnCalcICM')){$('btnCalcICM').disabled=chipDiff!==0;$('btnCalcICM').style.opacity=$('btnCalcICM').disabled?'.45':'1';}
  const prizeCheck=manualPrizeValidation(ev);
