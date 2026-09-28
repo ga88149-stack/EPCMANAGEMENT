@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.6 Web · Accounting Presentation Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.44.7 Web · Independent Ledger Exclusion Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2476,8 +2476,12 @@ function accountingAllEventsForDate(date){
 function accountingGroupForEvent(e){
  return String(e&&e.accountingGroup||'').trim();
 }
+// Any event with an accounting group is independent accounting and must never enter the main ledger/dashboard.
+function isIndependentAccountingEvent(e){
+ return !!accountingGroupForEvent(e);
+}
 function accountingEventsForDate(date){
- return accountingAllEventsForDate(date).filter(e=>!accountingGroupForEvent(e));
+ return accountingAllEventsForDate(date).filter(e=>!isIndependentAccountingEvent(e));
 }
 function setEventAccountingGroup(eventId,value){
  const e=(db.events||[]).find(x=>x.id===eventId);
@@ -3242,7 +3246,7 @@ function reportingLedgerEntries(){
  // Event-level items are included only for normal/general-ledger events.
  // Events assigned to an independent accounting group stay outside the main ledger and reports.
  (db.events||[]).forEach(e=>{
-   if(accountingGroupForEvent(e))return;
+   if(isIndependentAccountingEvent(e))return;
    const date=businessDateForEvent(e);
    (Array.isArray(e.accountingItems)?e.accountingItems:[]).forEach(item=>{
      pushItem(date,item,`第${e.seq||1}場｜${Number(e.level||0).toLocaleString()} 賽事`);
@@ -3251,7 +3255,7 @@ function reportingLedgerEntries(){
  return out;
 }
 function reportingDayInfo(date){
- const allEvents=accountingAllEventsForDate(date).filter(e=>!accountingGroupForEvent(e));
+ const allEvents=accountingEventsForDate(date);
  const base=accountingTotalsForEvents(allEvents);
  const entries=reportingLedgerEntries().filter(x=>x.date===date);
  const membership=entries.filter(x=>x.type==='membership').reduce((n,x)=>n+x.amount,0);
@@ -3265,7 +3269,7 @@ function renderDashboardDailyReport(){
  const def=dashboardDefaultRange();
  const el=$('dashboardDailyDate'); if(!el)return;
  if(!el.value){
-   const candidates=[...(db.dailyAccounting||[]).map(x=>x&&x.date).filter(Boolean),...(db.events||[]).map(e=>businessDateForEvent(e)).filter(Boolean)].sort();
+   const candidates=[...(db.dailyAccounting||[]).map(x=>x&&x.date).filter(Boolean),...(db.events||[]).filter(e=>!isIndependentAccountingEvent(e)).map(e=>businessDateForEvent(e)).filter(Boolean)].sort();
    el.value=candidates[candidates.length-1]||def.first;
  }
  const d=reportingDayInfo(el.value);
@@ -3372,7 +3376,7 @@ function renderDashboardSummary(){
 
  // Event breakdown remains descriptive, but excludes independent-accounting events
  // so it represents the same normal-ledger population as the accounting KPIs.
- const normalInRange=inRange.filter(e=>!accountingGroupForEvent(e));
+ const normalInRange=inRange.filter(e=>!isIndependentAccountingEvent(e));
  const levels={};
  normalInRange.forEach(e=>{
    const lv=Number(e.level||0);
