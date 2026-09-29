@@ -1107,7 +1107,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.8 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.9 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1832,11 +1832,77 @@ function mergeCloud3_(base,local,remote){
  return cloneCloud_(local);
 }
 function setCloudBase_(data){cloudBase=cloneCloud_(data);try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(e){}}
+let epcActiveEdit_=null;
 function epcEditingField_(){
- const a=document.activeElement;if(!a)return false;
+ const a=document.activeElement;
+ if(!a)return false;
  const t=String(a.tagName||'').toUpperCase();
  return t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||a.isContentEditable;
 }
+function epcEditKey_(el){
+ if(!el)return '';
+ return String(el.id||el.name||el.getAttribute('data-field')||el.getAttribute('onchange')||el.getAttribute('oninput')||'');
+}
+function epcCaptureEdit_(el){
+ if(!el)return;
+ const t=String(el.tagName||'').toUpperCase();
+ if(!(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||el.isContentEditable))return;
+ epcActiveEdit_={
+   key:epcEditKey_(el),
+   id:el.id||'',
+   name:el.name||'',
+   value:el.isContentEditable?el.textContent:el.value,
+   checked:el.type==='checkbox'||el.type==='radio'?!!el.checked:null,
+   selectionStart:typeof el.selectionStart==='number'?el.selectionStart:null,
+   selectionEnd:typeof el.selectionEnd==='number'?el.selectionEnd:null
+ };
+}
+function epcRestoreEdit_(){
+ const e=epcActiveEdit_; if(!e)return;
+ let el=null;
+ if(e.id)el=document.getElementById(e.id);
+ if(!el&&e.name)el=document.querySelector('[name="'+CSS.escape(e.name)+'"]');
+ if(!el&&e.key){
+   const all=[...document.querySelectorAll('input,textarea,select,[contenteditable="true"]')];
+   el=all.find(x=>epcEditKey_(x)===e.key)||null;
+ }
+ if(!el)return;
+ if(el.isContentEditable)el.textContent=e.value;
+ else el.value=e.value;
+ if(e.checked!==null)el.checked=e.checked;
+ try{
+   el.focus({preventScroll:true});
+   if(e.selectionStart!==null&&typeof el.setSelectionRange==='function')
+     el.setSelectionRange(e.selectionStart,e.selectionEnd);
+ }catch(_){}
+}
+document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
+document.addEventListener('input',e=>epcCaptureEdit_(e.target),true);
+document.addEventListener('change',e=>{
+ epcCaptureEdit_(e.target);
+ // A changed form value is local work. Prevent a remote clean-load from winning
+ // during the debounce window before the existing handler persists it.
+ localDirty=true;
+ try{localStorage.setItem('epcLocalDirty','1');}catch(_){}
+},true);
+document.addEventListener('focusout',e=>{
+ // Keep the snapshot through the current event loop so onchange/blur handlers
+ // can commit first; then release the edit lock.
+ setTimeout(()=>{
+   if(document.activeElement!==e.target)epcActiveEdit_=null;
+ },250);
+},true);
+
+// Wrap render globally. If any existing code renders while the operator is typing,
+// immediately restore the exact in-progress value/caret instead of letting an old
+// db/cloud snapshot visibly reset the field.
+const epcOriginalRender_=render;
+render=function(){
+ const had=!!epcActiveEdit_;
+ epcOriginalRender_.apply(this,arguments);
+ if(had)epcRestoreEdit_();
+};
+
 function startLiveSync_(){
  if(liveSyncTimer)clearInterval(liveSyncTimer);
  liveSyncTimer=setInterval(async()=>{
@@ -1947,6 +2013,7 @@ async function initializeCloud(){
  }
 }
 async function refreshFormMembers(saveAfter=true){
+ if(epcEditingField_())return false;
  try{
    const res=await cloudGet('members');
    const before=JSON.stringify((db.members||[]).map(m=>[m.id,m.name,m.group,m.note,m.createdDate]));
@@ -4231,7 +4298,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.45.8: the print clone must contain exactly the same selected columns
+   // V1.45.9: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
