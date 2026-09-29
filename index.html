@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.3 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.5 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1780,7 +1780,7 @@ function scheduleCloudReconnect_(){
 
 function cloneCloud_(v){return v===undefined?undefined:JSON.parse(JSON.stringify(v));}
 function sameCloud_(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e){return false;}}
-function cloudRecKey_(x){if(!x||typeof x!=='object'||Array.isArray(x))return '';for(const k of ['id','eventId','reportId','writeId','date','key'])if(x[k]!==undefined&&x[k]!==null&&String(x[k])!=='')return k+':'+String(x[k]);return '';}
+function cloudRecKey_(x){if(!x||typeof x!=='object'||Array.isArray(x))return '';for(const k of ['id','memberId','playerId','eventId','reportId','writeId','date','key'])if(x[k]!==undefined&&x[k]!==null&&String(x[k])!=='')return k+':'+String(x[k]);return '';}
 function cloudKeyedArray_(a){return Array.isArray(a)&&a.length>0&&a.every(x=>!!cloudRecKey_(x));}
 function mergeCloud3_(base,local,remote){
  if(sameCloud_(local,base))return cloneCloud_(remote);
@@ -1852,7 +1852,7 @@ function startLiveSync_(){
    }catch(e){
      console.warn('live sync poll failed',e);
    }
- },4000);
+ },1500);
 }
 
 async function initializeCloud(){
