@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.5 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.6 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1815,44 +1815,49 @@ function startLiveSync_(){
  liveSyncTimer=setInterval(async()=>{
    if(cloudSaving||document.hidden)return;
    try{
+     // Fast path: read only EPC_DATA revision metadata. Do NOT download/parse the full DB
+     // unless another device has actually committed a newer revision.
+     const meta=await cloudGet('revision');
+     const rev=Number(meta.revision||0);
+     if(!(rev>cloudRevision))return;
+
+     // New revision exists: now fetch the full database exactly once.
      const res=await cloudGet('load');
-     const rev=Number(res.revision||0);
-     if(!(rev>cloudRevision) || !res.data || typeof res.data!=='object')return;
+     const loadedRev=Number(res.revision||0);
+     if(!(loadedRev>cloudRevision) || !res.data || typeof res.data!=='object')return;
 
      const remote=cloneCloud_(res.data);
      remote.members=mergeFormMembers(remote.members,res.members);
 
      if(!localDirty){
-       // Clean client: remote is authoritative. This includes deletions.
        backupLocal('before-live-remote-apply');
        db=remote;
-       cloudRevision=rev;
+       cloudRevision=loadedRev;
        setCloudBase_(remote);
        localStorage.setItem('epcV1',JSON.stringify(db));
-       localStorage.setItem('epcCloudRevision',String(rev));
+       localStorage.setItem('epcCloudRevision',String(loadedRev));
        render();
-       setCloudState('☁ 已即時同步｜Revision '+rev);
+       setCloudState('☁ 已即時同步｜Revision '+loadedRev);
        return;
      }
 
-     // Dirty client + newer cloud: three-way merge before writing.
-     // base = last common cloud snapshot, local = this computer, remote = newest cloud.
+     // Both sides changed: merge against the last common cloud snapshot.
      backupLocal('before-live-three-way-merge');
      db=mergeCloud3_(cloudBase||remote,db,remote);
      db.members=mergeFormMembers(db.members,res.members);
-     cloudRevision=rev;
+     cloudRevision=loadedRev;
      setCloudBase_(remote);
      localStorage.setItem('epcV1',JSON.stringify(db));
-     localStorage.setItem('epcCloudRevision',String(rev));
+     localStorage.setItem('epcCloudRevision',String(loadedRev));
      localStorage.setItem('epcLocalDirty','1');
      localDirty=true;
      render();
      setCloudState('● 已合併雲端新版本｜正在同步本機變更…');
      scheduleCloudSave();
    }catch(e){
-     console.warn('live sync poll failed',e);
+     console.warn('fast live sync poll failed',e);
    }
- },1500);
+ },1000);
 }
 
 async function initializeCloud(){
