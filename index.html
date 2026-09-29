@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.2 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.3 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1674,7 +1674,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 const $=id=>document.getElementById(id);
 const money=n=>'$'+Math.round(Number(n||0)).toLocaleString('zh-TW');
 const uid=()=>String(Date.now()).slice(-8)+Math.floor(Math.random()*90+10);
-const CLOUD_API='https://script.google.com/macros/s/AKfycby1YCXllpyYOFEN60N-jR6kAk-Y2hOYpIa2GlS74cBFDK-Dt4mDa4sCd80MR6ZSxpbQ6A/exec';
+const CLOUD_API='https://script.google.com/macros/s/AKfycbwj-jLaSTiljcw15_UnhUFv4QxVq5HbNyers3ybU-6IAkwSj_A5X36x-852Xu5MxobS/exec';
 const STACK_API='https://script.google.com/macros/s/AKfycbwJgutjAat9guTMsUgLYymwP0CbOUKpVzWyg5bKe65xa51ysBJas2QMbkjB5B2wpDeJVQ/exec';
 let db=JSON.parse(localStorage.getItem('epcV1')||'null')||{members:[],jpBalance:0,events:[],currentEventId:null};
 let cloudRevision=Number(localStorage.getItem('epcCloudRevision')||0);
@@ -1724,29 +1724,32 @@ async function fetchWithTimeout_(url,options={}){
  finally{clearTimeout(timer);}
 }
 async function cloudRequest_(kind,payload){
- let lastErr=null;
- for(let i=0;i<CLOUD_RETRY_DELAYS.length;i++){
-   if(CLOUD_RETRY_DELAYS[i]){
-     setCloudState('↻ 雲端暫時無回應｜自動重試 '+(i+1)+'/'+CLOUD_RETRY_DELAYS.length);
-     await sleep_(CLOUD_RETRY_DELAYS[i]);
-   }
+ // Writes are attempted once only. If a POST response is lost, saveCloudNow()
+ // verifies writeId with a fresh GET before deciding to resend.
+ if(kind==='POST'){
    try{
-     let r;
-     if(kind==='GET'){
-       const action=payload;
-       r=await fetchWithTimeout_(CLOUD_API+'?action='+encodeURIComponent(action)+'&_='+Date.now(),{cache:'no-store',redirect:'follow'});
-     }else{
-       r=await fetchWithTimeout_(CLOUD_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),cache:'no-store',redirect:'follow'});
-     }
+     const r=await fetchWithTimeout_(CLOUD_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),cache:'no-store',redirect:'follow'});
      if(!r.ok)throw new Error('HTTP '+r.status);
      const j=await r.json();
      if(!j.ok)throw new Error(j.error||'Cloud API error');
      cloudReady=true;
      return j;
    }catch(err){
-     lastErr=err;
-     if(isConflictError_(err))throw err; // revision conflict is not a network failure; never auto-retry/overwrite it.
+     if(isConflictError_(err))throw err;
+     throw err;
    }
+ }
+ let lastErr=null;
+ for(let i=0;i<CLOUD_RETRY_DELAYS.length;i++){
+   if(CLOUD_RETRY_DELAYS[i])await sleep_(CLOUD_RETRY_DELAYS[i]);
+   try{
+     const r=await fetchWithTimeout_(CLOUD_API+'?action='+encodeURIComponent(payload)+'&_='+Date.now(),{cache:'no-store',redirect:'follow'});
+     if(!r.ok)throw new Error('HTTP '+r.status);
+     const j=await r.json();
+     if(!j.ok)throw new Error(j.error||'Cloud API error');
+     cloudReady=true;
+     return j;
+   }catch(err){ lastErr=err; }
  }
  cloudReady=false;
  scheduleCloudReconnect_();
@@ -1810,15 +1813,45 @@ function setCloudBase_(data){cloudBase=cloneCloud_(data);try{localStorage.setIte
 function startLiveSync_(){
  if(liveSyncTimer)clearInterval(liveSyncTimer);
  liveSyncTimer=setInterval(async()=>{
-   if(cloudSaving||localDirty||document.hidden)return;
+   if(cloudSaving||document.hidden)return;
    try{
-     const res=await cloudGet('load'); const rev=Number(res.revision||0);
-     if(rev>cloudRevision&&res.data&&typeof res.data==='object'){
-       db=res.data; db.members=mergeFormMembers(db.members,res.members); cloudRevision=rev; setCloudBase_(db);
-       localStorage.setItem('epcV1',JSON.stringify(db)); localStorage.setItem('epcCloudRevision',String(rev));
-       render(); setCloudState('☁ 已即時同步其他裝置｜Revision '+rev);
+     const res=await cloudGet('load');
+     const rev=Number(res.revision||0);
+     if(!(rev>cloudRevision) || !res.data || typeof res.data!=='object')return;
+
+     const remote=cloneCloud_(res.data);
+     remote.members=mergeFormMembers(remote.members,res.members);
+
+     if(!localDirty){
+       // Clean client: remote is authoritative. This includes deletions.
+       backupLocal('before-live-remote-apply');
+       db=remote;
+       cloudRevision=rev;
+       setCloudBase_(remote);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localStorage.setItem('epcCloudRevision',String(rev));
+       render();
+       setCloudState('☁ 已即時同步｜Revision '+rev);
+       return;
      }
-   }catch(e){console.warn('live sync poll failed',e);}
+
+     // Dirty client + newer cloud: three-way merge before writing.
+     // base = last common cloud snapshot, local = this computer, remote = newest cloud.
+     backupLocal('before-live-three-way-merge');
+     db=mergeCloud3_(cloudBase||remote,db,remote);
+     db.members=mergeFormMembers(db.members,res.members);
+     cloudRevision=rev;
+     setCloudBase_(remote);
+     localStorage.setItem('epcV1',JSON.stringify(db));
+     localStorage.setItem('epcCloudRevision',String(rev));
+     localStorage.setItem('epcLocalDirty','1');
+     localDirty=true;
+     render();
+     setCloudState('● 已合併雲端新版本｜正在同步本機變更…');
+     scheduleCloudSave();
+   }catch(e){
+     console.warn('live sync poll failed',e);
+   }
  },4000);
 }
 
