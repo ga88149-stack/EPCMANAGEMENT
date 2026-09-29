@@ -1107,11 +1107,12 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.46.0 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.47.0 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
 <button data-page="events">賽事管理</button>
+<button data-page="activities">活動管理</button>
 
 <button data-page="dailysettle">分帳報表</button>
 <button data-page="accounting">EPC帳務</button>
@@ -1618,6 +1619,37 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
     </div>
   </div>
 </section>
+
+<section id="activities" class="page">
+ <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap">
+  <div><h2 style="margin-bottom:4px">活動管理</h2><div class="small">活動規則、進度統計、資格追蹤與獎勵發放集中管理。自動可判定的資料由賽事紀錄統計；牌型／逆轉等條件保留人工登記。</div></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+   <button class="secondary" onclick="setActivityTab('overview')">活動總覽</button>
+   <button class="secondary" onclick="setActivityTab('member')">會員活動</button>
+   <button class="secondary" onclick="setActivityTab('daily')">日常活動</button>
+   <button class="secondary" onclick="setActivityTab('umbrella')">保護傘</button>
+   <button class="secondary" onclick="setActivityTab('boss')">雙十狩王</button>
+   <button class="secondary" onclick="setActivityTab('ledger')">獎勵紀錄</button>
+  </div>
+ </div>
+
+ <div class="card" style="margin-top:14px">
+  <div class="formgrid" style="grid-template-columns:1fr 1fr 1.2fr auto">
+   <div><label>統計開始日</label><input type="date" id="activityDateFrom" onchange="renderActivities()"></div>
+   <div><label>統計結束日</label><input type="date" id="activityDateTo" onchange="renderActivities()"></div>
+   <div><label>搜尋會員</label><input id="activityMemberSearch" placeholder="姓名 / 會員 ID" oninput="renderActivities()"></div>
+   <div style="align-self:end"><button class="secondary" onclick="setActivityThisMonth()">本月</button></div>
+  </div>
+ </div>
+
+ <div id="activityOverview" class="activity-tab"></div>
+ <div id="activityMember" class="activity-tab" style="display:none"></div>
+ <div id="activityDaily" class="activity-tab" style="display:none"></div>
+ <div id="activityUmbrella" class="activity-tab" style="display:none"></div>
+ <div id="activityBoss" class="activity-tab" style="display:none"></div>
+ <div id="activityLedger" class="activity-tab" style="display:none"></div>
+</section>
+
 <section id="dailysettle" class="page">
  <div id="settlementListView">
   <div class="report-topbar"><div><h2>分帳報表管理</h2><div class="small">以營業日建立分帳報表；建立後可進入查看、列印或刪除。報表內容會依該營業日目前已正式結算的賽事即時計算。</div></div></div>
@@ -3729,8 +3761,127 @@ function setPlayerColumnPreference(k,v){
 function playerVisibleCols(){
  return loadPlayerVisibleCols();
 }
+
+let activityTab='overview';
+const EPC_ACTIVITY_RULES={
+ member:[
+  {name:'新會員｜首次福利',rule:'首場行政費全免＋1,000折價卡（一次使用100）',mode:'auto'},
+  {name:'新會員｜30 DAYS 場次任務',rule:'30天內：3場500獎金／8場500折價卡／15場1,000獎金／20場1,000獎金／30場1,000獎金',mode:'auto'},
+  {name:'新會員｜出席任務',rule:'連續簽到7天500獎金；累積出席15天1,000獎金',mode:'auto'},
+  {name:'舊帶新',rule:'新會員＋推薦人首次同場行政費全免；新會員3／8／15場時推薦人分別500獎金／1,000折價卡／1,000獎金',mode:'mixed'},
+  {name:'舊帶舊｜返校活動',rule:'30天以上無EPC參賽紀錄；返校首日行政費半價，當天兩人完成2場各500獎金；回流後7天兩人同場行政費半價；7天8場任務：帶回者500獎金、回流者1,000獎金＋500折價卡',mode:'mixed'}
+ ],
+ daily:[
+  {name:'每週任務卡',rule:'出席3／5／7天：200折價卡／200折價卡／600獎金；參賽5／10／15場：200折價卡／200折價卡／600獎金；達7天或15場，當週已取得折價卡1:1升級為獎金',mode:'auto'},
+  {name:'開桌先鋒榜',rule:'19:00前到場且第一場成功開桌才計分；平日第1~5名5/4/3/2/1分，假日6/5/4/3/2分；假日全體積分+1；單週滿7分才有資格。週獎1,200／800／500',mode:'mixed'},
+  {name:'週排行榜',rule:'每場限時錦標賽前三名：3／2／1分；假日前2場積分加倍、00:00後積分加倍。週獎2,500／1,500／1,000',mode:'mixed'},
+  {name:'獵人榜',rule:'淘汰一位對手1分；15天一期，每期冠軍6,000獎金',mode:'manual'},
+  {name:'女士優惠',rule:'女性玩家行政費半價',mode:'manual'},
+  {name:'早鳥優惠',rule:'前4位報名每人折100',mode:'mixed'},
+  {name:'晚鳥優惠',rule:'最後40分鐘參賽行政費半價',mode:'manual'},
+  {name:'指定手牌',rule:'指定手牌河牌贏池1,000獎金',mode:'manual'},
+  {name:'皇家同花順',rule:'最大獎金120,000；擊中者80%、同桌玩家20%（稅10.4%）',mode:'manual'}
+ ],
+ umbrella:[
+  {name:'保護傘券',rule:'ALL-IN當下領先、最後被對手逆轉擊敗即可獲得；88以上對子1張／兩對或三條3張／順子或同花5張／葫蘆以上10張',mode:'manual'},
+  {name:'保護傘｜每週獎勵',rule:'保護傘券最多者2,000；抽第2位1,000；抽第3位1,000。同分冠軍平分2,000且不參加抽獎；週冠軍不得參加抽獎',mode:'manual'},
+  {name:'保護傘｜每月獎勵',rule:'當月保護傘券最多者，下個月每日首次參賽免行政費',mode:'manual'}
+ ],
+ boss:[
+  {name:'雙十狩王｜BOSS血量',rule:'BOSS 200 HP；每隻王獎池封頂14,000，最多3隻王',mode:'manual'},
+  {name:'雙十狩王｜10Xo攻擊',rule:'10Xo不同花，進入翻牌後且最終贏得20BB以上有效底池',mode:'manual'},
+  {name:'雙十狩王｜TT強化攻擊',rule:'TT須打到河牌並贏得有效底池；傷害×1.5，向下取整至10的倍數',mode:'manual'},
+  {name:'雙十狩王｜傷害抽取',rule:'10傷50%／20傷30%／30傷15%／40傷5%／50傷3%',mode:'manual'},
+  {name:'雙十狩王｜斬殺階段',rule:'BOSS低於30HP進入斬殺：第1~5次10%／20%／30%／40%／50%，失敗後下一次+10%直到成功',mode:'manual'},
+  {name:'雙十狩王｜獎池分配',rule:'擊殺者50%；其他玩家平分50%，向下取整至百位數，不含擊殺者，餘數400回到擊殺者（海報範例）',mode:'manual'}
+ ]
+};
+function ensureActivityDb_(){
+ if(!db.activityManagement||typeof db.activityManagement!=='object')db.activityManagement={};
+ if(!Array.isArray(db.activityManagement.ledger))db.activityManagement.ledger=[];
+}
+function setActivityTab(tab){
+ activityTab=tab||'overview';
+ document.querySelectorAll('.activity-tab').forEach(x=>x.style.display='none');
+ const map={overview:'activityOverview',member:'activityMember',daily:'activityDaily',umbrella:'activityUmbrella',boss:'activityBoss',ledger:'activityLedger'};
+ const el=$(map[activityTab]||map.overview);if(el)el.style.display='block';
+ renderActivities();
+}
+function setActivityThisMonth(){
+ const n=new Date(),y=n.getFullYear(),m=String(n.getMonth()+1).padStart(2,'0'),last=new Date(y,n.getMonth()+1,0).getDate();
+ if($('activityDateFrom'))$('activityDateFrom').value=`${y}-${m}-01`;
+ if($('activityDateTo'))$('activityDateTo').value=`${y}-${m}-${String(last).padStart(2,'0')}`;
+ renderActivities();
+}
+function activityHistory_(m){
+ const from=$('activityDateFrom')?.value||'',to=$('activityDateTo')?.value||'';
+ return (m.history||[]).filter(h=>(!from||String(h.date||'')>=from)&&(!to||String(h.date||'')<=to));
+}
+function activityStats_(){
+ const q=String($('activityMemberSearch')?.value||'').trim().toLowerCase();
+ return (db.members||[]).filter(m=>!q||String(m.name||'').toLowerCase().includes(q)||String(m.id||'').toLowerCase().includes(q)).map(m=>{
+  const h=activityHistory_(m),days=new Set(h.map(x=>x.date).filter(Boolean)).size,events=new Set(h.map(x=>x.eventId||`${x.date}|${x.eventSeq||''}|${x.level||''}`)).size;
+  return {m,h,days,events};
+ }).sort((a,b)=>b.events-a.events||b.days-a.days);
+}
+function activityRuleCards_(kind){
+ return `<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px">${(EPC_ACTIVITY_RULES[kind]||[]).map(x=>`<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b>${x.name}</b><span class="small">${x.mode==='auto'?'● 自動統計':x.mode==='mixed'?'◐ 半自動':'○ 手動登記'}</span></div><div class="small" style="margin-top:8px;line-height:1.65">${x.rule}</div></div>`).join('')}</div>`;
+}
+function addActivityLedger_(){
+ ensureActivityDb_();
+ const memberId=$('activityLedgerMember')?.value||'',activity=$('activityLedgerActivity')?.value||'',rewardType=$('activityLedgerType')?.value||'獎金',amount=Number($('activityLedgerAmount')?.value||0),note=$('activityLedgerNote')?.value||'',date=$('activityLedgerDate')?.value||new Date().toISOString().slice(0,10);
+ const m=(db.members||[]).find(x=>String(x.id)===String(memberId));
+ if(!m||!activity){actionMsg('請選擇會員與活動',true);return}
+ db.activityManagement.ledger.unshift({id:'ACT'+Date.now(),date,memberId:m.id,memberName:m.name||'',activity,rewardType,amount,note,createdAt:new Date().toISOString()});
+ persist();renderActivities();actionMsg('活動獎勵紀錄已新增');
+}
+function delActivityLedger_(id){
+ ensureActivityDb_();db.activityManagement.ledger=db.activityManagement.ledger.filter(x=>x.id!==id);persist();renderActivities();
+}
+function renderActivities(){
+ if(!$('activities'))return;ensureActivityDb_();
+ const stats=activityStats_(),from=$('activityDateFrom')?.value||'',to=$('activityDateTo')?.value||'';
+ const ledger=db.activityManagement.ledger.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
+ const rewardTotal=ledger.reduce((a,x)=>a+(Number(x.amount)||0),0);
+ const rewardCount=ledger.length;
+ const active=stats.filter(x=>x.events>0).length;
+ if($('activityOverview'))$('activityOverview').innerHTML=`
+  <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:14px">
+   <div class="card kpi"><div class="l">區間參賽會員</div><div class="v">${active}</div></div>
+   <div class="card kpi"><div class="l">區間參賽場次累計</div><div class="v">${stats.reduce((a,x)=>a+x.events,0)}</div></div>
+   <div class="card kpi"><div class="l">已登記獎勵筆數</div><div class="v">${rewardCount}</div></div>
+   <div class="card kpi"><div class="l">已登記獎勵面額</div><div class="v">${money(rewardTotal)}</div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>活動分類</h3><table><thead><tr><th>分類</th><th>活動數</th><th>系統處理方式</th></tr></thead><tbody>
+   <tr><td>會員活動</td><td>${EPC_ACTIVITY_RULES.member.length}</td><td>場次／出席自動統計；推薦關係半自動</td></tr>
+   <tr><td>日常活動</td><td>${EPC_ACTIVITY_RULES.daily.length}</td><td>場次與出席自動；排名／牌型依資料可用性半自動或手動</td></tr>
+   <tr><td>保護傘</td><td>${EPC_ACTIVITY_RULES.umbrella.length}</td><td>ALL-IN領先與逆轉目前無手牌資料，人工登記</td></tr>
+   <tr><td>雙十狩王</td><td>${EPC_ACTIVITY_RULES.boss.length}</td><td>手牌、傷害、BOSS HP以人工登記為主</td></tr>
+  </tbody></table></div>
+  <div class="card" style="margin-top:14px"><h3>會員活動進度排行</h3><table><thead><tr><th>會員</th><th>ID</th><th>參賽場次</th><th>出席天數</th></tr></thead><tbody>${stats.slice(0,20).map(x=>`<tr><td>${x.m.name||''}</td><td>${x.m.id||''}</td><td>${x.events}</td><td>${x.days}</td></tr>`).join('')||'<tr><td colspan="4">目前無資料</td></tr>'}</tbody></table></div>`;
+ if($('activityMember'))$('activityMember').innerHTML=`${activityRuleCards_('member')}<div class="card" style="margin-top:14px"><h3>會員進度統計</h3><table><thead><tr><th>會員</th><th>ID</th><th>區間場次</th><th>出席天數</th><th>30場任務</th><th>15天出席</th></tr></thead><tbody>${stats.map(x=>`<tr><td>${x.m.name||''}</td><td>${x.m.id||''}</td><td>${x.events}</td><td>${x.days}</td><td>${Math.min(x.events,30)}/30</td><td>${Math.min(x.days,15)}/15</td></tr>`).join('')||'<tr><td colspan="6">目前無資料</td></tr>'}</tbody></table></div>`;
+ if($('activityDaily'))$('activityDaily').innerHTML=`${activityRuleCards_('daily')}<div class="card" style="margin-top:14px"><h3>區間活躍排行</h3><table><thead><tr><th>排名</th><th>會員</th><th>ID</th><th>場次</th><th>出席天數</th></tr></thead><tbody>${stats.slice(0,30).map((x,i)=>`<tr><td>${i+1}</td><td>${x.m.name||''}</td><td>${x.m.id||''}</td><td>${x.events}</td><td>${x.days}</td></tr>`).join('')}</tbody></table></div>`;
+ if($('activityUmbrella'))$('activityUmbrella').innerHTML=`${activityRuleCards_('umbrella')}<div class="card" style="margin-top:14px"><b>統計方式</b><div class="small" style="margin-top:6px">目前系統沒有保存每一手 ALL-IN 當下勝率、最終牌型與逆轉結果，因此保護傘券不從賽事結果猜測，避免誤發；使用「獎勵紀錄」人工登記後統計。</div></div>`;
+ if($('activityBoss'))$('activityBoss').innerHTML=`${activityRuleCards_('boss')}<div class="card" style="margin-top:14px"><b>統計方式</b><div class="small" style="margin-top:6px">BOSS 攻擊需要 10Xo／TT、翻牌／河牌、有效底池、20BB 與抽傷害資料。現有賽事資料不足以可靠自動判斷，因此先以人工紀錄為準，之後可再接手牌事件模組。</div></div>`;
+ const memberOpts=(db.members||[]).map(m=>`<option value="${m.id}">${m.name||''} (${m.id||''})</option>`).join('');
+ const allActs=[...EPC_ACTIVITY_RULES.member,...EPC_ACTIVITY_RULES.daily,...EPC_ACTIVITY_RULES.umbrella,...EPC_ACTIVITY_RULES.boss].map(x=>`<option>${x.name}</option>`).join('');
+ if($('activityLedger'))$('activityLedger').innerHTML=`
+  <div class="card" style="margin-top:14px"><h3>新增活動／獎勵紀錄</h3><div class="formgrid" style="grid-template-columns:1fr 1.4fr .8fr .8fr 1.4fr auto">
+   <div><label>日期</label><input type="date" id="activityLedgerDate" value="${new Date().toISOString().slice(0,10)}"></div>
+   <div><label>會員</label><select id="activityLedgerMember"><option value="">請選擇</option>${memberOpts}</select></div>
+   <div><label>獎勵類型</label><select id="activityLedgerType"><option>獎金</option><option>折價卡</option><option>行政費優惠</option><option>保護傘券</option><option>傷害</option><option>積分</option><option>其他</option></select></div>
+   <div><label>數值／面額</label><input type="number" id="activityLedgerAmount" value="0"></div>
+   <div><label>活動</label><select id="activityLedgerActivity"><option value="">請選擇</option>${allActs}</select></div>
+   <div style="align-self:end"><button onclick="addActivityLedger_()">新增紀錄</button></div>
+  </div><div style="margin-top:10px"><label>備註</label><input id="activityLedgerNote" placeholder="例如：第3場達標、保護傘5張、BOSS造成30傷"></div></div>
+  <div class="card" style="margin-top:14px"><h3>發放／活動紀錄</h3><table><thead><tr><th>日期</th><th>會員</th><th>活動</th><th>類型</th><th>數值</th><th>備註</th><th>操作</th></tr></thead><tbody>${ledger.map(x=>`<tr><td>${x.date}</td><td>${x.memberName||x.memberId}</td><td>${x.activity}</td><td>${x.rewardType}</td><td>${Number(x.amount||0).toLocaleString()}</td><td>${x.note||''}</td><td><button class="danger" onclick="delActivityLedger_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="7">尚無活動紀錄</td></tr>'}</tbody></table></div>`;
+ document.querySelectorAll('.activity-tab').forEach(x=>x.style.display='none');
+ const map={overview:'activityOverview',member:'activityMember',daily:'activityDaily',umbrella:'activityUmbrella',boss:'activityBoss',ledger:'activityLedger'};
+ if($(map[activityTab]||'activityOverview'))$(map[activityTab]||'activityOverview').style.display='block';
+}
 function render(){
  renderDashboardSummary();
+ renderActivities();
  syncAccountingBusinessHours();
  let ev=currentEvent();
  renderEventList();
@@ -4325,7 +4476,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.46.0: the print clone must contain exactly the same selected columns
+   // V1.47.0: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
