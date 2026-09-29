@@ -1083,9 +1083,31 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   #eventAccountingEditor .l{grid-template-columns:1fr !important;}
 }
 </style>
+<style id="v1458ExactPrintColumns">
+@media print{
+ body.printing-event-report #eventPrintOnly #eventReportPaper{
+   overflow:hidden!important;
+ }
+ body.printing-event-report #eventPrintOnly #eventReportPaper table{
+   width:100%!important;
+   min-width:0!important;
+   max-width:100%!important;
+   table-layout:fixed!important;
+ }
+ body.printing-event-report #eventPrintOnly #eventReportHead th,
+ body.printing-event-report #eventPrintOnly #eventReportRows td{
+   min-width:0!important;
+   max-width:none!important;
+   box-sizing:border-box!important;
+   white-space:normal!important;
+   overflow:hidden!important;
+   text-overflow:clip!important;
+ }
+}
+</style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.7 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.8 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4205,9 +4227,24 @@ function printEventReport(){
    const visibleCols=clonedPaper.querySelectorAll('#eventReportHead th').length;
    const bodyText=(clonedPaper.querySelector('#eventReportRows')?.textContent||'').trim();
    const denseReport=visibleCols>=9 || bodyText.length>900;
-   const reportFont=denseReport?'12px':'13px';
+   const reportFont=visibleCols>=11?'9px':(denseReport?'10px':'11px');
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
+
+   // V1.45.8: the print clone must contain exactly the same selected columns
+   // as the on-screen report. Older print CSS assigned widths only to the first
+   // 9 columns, which pushed Signature/Note outside the printable area.
+   const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
+   clonedPaper.querySelectorAll('#eventReportHead th,#eventReportRows td').forEach(cell=>{
+     cell.style.setProperty('width',pct,'important');
+     cell.style.setProperty('min-width','0','important');
+     cell.style.setProperty('max-width','none','important');
+   });
+   const tbl=clonedPaper.querySelector('table');
+   if(tbl){
+     tbl.style.setProperty('width','100%','important');
+     tbl.style.setProperty('table-layout','fixed','important');
+   }
  }
 
  document.body.classList.add('printing-event-report');
