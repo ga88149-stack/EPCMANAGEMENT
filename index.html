@@ -1107,7 +1107,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.48.0 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.48.1 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3771,6 +3771,10 @@ function ensureActDb_(){
  A.pioneerQualify=A.pioneerQualify||{};
  A.rankAdjust=A.rankAdjust||{};
  A.rankMultipliers=Array.isArray(A.rankMultipliers)?A.rankMultipliers:[];
+ A.rankRecurringRules=Array.isArray(A.rankRecurringRules)?A.rankRecurringRules:[
+  {id:'RR_WEEKEND',name:'六日前兩場 / 日前兩場',enabled:true,days:[6,0],mode:'firstN',firstN:2,mult:2},
+  {id:'RR_MIDNIGHT',name:'每日 00:00 場',enabled:true,days:[1,2,3,4,5,6,0],mode:'time',from:'00:00',to:'00:00',mult:2}
+ ];
  A.hunter=Array.isArray(A.hunter)?A.hunter:[];
  A.umbrella=Array.isArray(A.umbrella)?A.umbrella:[];
  A.umbrellaRules=A.umbrellaRules||{'88以上對子':1,'兩對 / 三條':3,'順子 / 同花':5,'葫蘆以上':10};
@@ -3845,12 +3849,72 @@ function actPioneer_(){
  const ranking=Object.entries(totals).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
  return `<div class="card"><h3>開桌先鋒｜排行榜</h3><div class="small">登記前4名後，系統預設第1~4位為 5／4／3／2 分；同場其他參賽者預設 1 分。每一分都可直接修改，並可標註排行榜資格。</div><table><thead><tr><th>排名</th><th>會員</th><th>總分</th><th>有排行資格</th></tr></thead><tbody>${ranking.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td><td><input type="checkbox" ${A.pioneerQualify[x.id]?'checked':''} onchange="actAdj_('pioneerQual','${x.id}','q',this.checked)"></td></tr>`).join('')||'<tr><td colspan="4">尚無積分</td></tr>'}</tbody></table></div>${cards}`;
 }
-function addRankMultiplier_(){
- ensureActDb_();db.activityManagement.rankMultipliers.push({id:'RM'+Date.now(),from:$('rankMulFrom').value,to:$('rankMulTo').value,mult:+$('rankMulValue').value||1});persist();renderActivities();
+
+function rankDayNum_(dateStr){
+ const d=new Date(String(dateStr||'')+'T12:00:00');
+ return isNaN(d)?null:d.getDay();
 }
-function delRankMultiplier_(id){ensureActDb_();db.activityManagement.rankMultipliers=db.activityManagement.rankMultipliers.filter(x=>x.id!==id);persist();renderActivities()}
-function eventDateTime_(e){return `${e.date||''}T${e.startTime||'00:00'}`}
-function rankMultiplier_(e){let m=1;for(const r of db.activityManagement.rankMultipliers||[]){const dt=eventDateTime_(e);if((!r.from||dt>=r.from)&&(!r.to||dt<=r.to))m*=+r.mult||1}return m}
+function rankEventSeqOfDay_(e){
+ const same=(db.events||[]).filter(x=>String(x.date||'')===String(e.date||''))
+   .sort((a,b)=>{
+     const ta=String(a.startTime||'99:99'),tb=String(b.startTime||'99:99');
+     if(ta!==tb)return ta.localeCompare(tb);
+     return (+a.seq||999)-(+b.seq||999);
+   });
+ return Math.max(1,same.findIndex(x=>String(x.id)===String(e.id))+1);
+}
+function rankTimeMatch_(time,from,to){
+ time=String(time||'').slice(0,5);from=String(from||'').slice(0,5);to=String(to||'').slice(0,5);
+ if(!time||!from||!to)return false;
+ if(from===to)return time===from; // 00:00~00:00 = exact 00:00 start
+ if(from<to)return time>=from&&time<=to;
+ return time>=from||time<=to; // crosses midnight
+}
+function rankRuleMatch_(e,r){
+ if(!r||!r.enabled)return false;
+ const day=rankDayNum_(e.date);
+ if(Array.isArray(r.days)&&r.days.length&&!r.days.includes(day))return false;
+ if(r.mode==='firstN')return rankEventSeqOfDay_(e)<=Math.max(1,+r.firstN||1);
+ if(r.mode==='time')return rankTimeMatch_(e.startTime,r.from,r.to);
+ return false;
+}
+function rankMultiplier_(e){
+ const A=db.activityManagement||{},rules=A.rankRecurringRules||[];
+ let mult=1;
+ rules.forEach(r=>{if(rankRuleMatch_(e,r))mult=Math.max(mult,+r.mult||1)});
+ return mult; // overlapping rules take highest multiplier, never multiply together
+}
+function addRankRecurringRule_(){
+ ensureActDb_();const A=db.activityManagement;
+ const mode=$('rankRuleMode')?.value||'firstN';
+ const days=[0,1,2,3,4,5,6].filter(d=>$('rankDay'+d)?.checked);
+ A.rankRecurringRules.push({
+  id:'RR'+Date.now(),name:$('rankRuleName')?.value||'自訂加倍規則',
+  enabled:true,days,mode,
+  firstN:+$('rankRuleFirstN')?.value||2,
+  from:$('rankRuleFrom')?.value||'00:00',to:$('rankRuleTo')?.value||'00:00',
+  mult:+$('rankRuleMult')?.value||2
+ });
+ persist();renderActivities();
+}
+function editRankRecurringRule_(id,k,v){
+ const r=(db.activityManagement.rankRecurringRules||[]).find(x=>x.id===id);if(!r)return;
+ if(k==='enabled')r.enabled=!!v;
+ else if(k==='mult'||k==='firstN')r[k]=Number(v)||1;
+ else r[k]=v;
+ persist();renderActivities();
+}
+function toggleRankRuleDay_(id,d,v){
+ const r=(db.activityManagement.rankRecurringRules||[]).find(x=>x.id===id);if(!r)return;
+ r.days=Array.isArray(r.days)?r.days:[];
+ if(v&&!r.days.includes(d))r.days.push(d);
+ if(!v)r.days=r.days.filter(x=>x!==d);
+ persist();renderActivities();
+}
+function delRankRecurringRule_(id){
+ db.activityManagement.rankRecurringRules=(db.activityManagement.rankRecurringRules||[]).filter(x=>x.id!==id);
+ persist();renderActivities();
+}
 function eventTopScores_(e){
  const arr=(e.players||[]).map(p=>({id:String(p.memberId),name:actMember_(p.memberId).name||p.memberId,net:chipGrowthFor(p,e),stack:+p.stack||0})).sort((a,b)=>b.net-a.net||b.stack-a.stack);
  let last=null,rank=0,seen=0;const mult=rankMultiplier_(e),out=[];
@@ -3858,13 +3922,43 @@ function eventTopScores_(e){
  return out;
 }
 function actRank_(){
- const A=db.activityManagement,tot={};
- const detail=actEvents_().map(e=>{const top=eventTopScores_(e);top.forEach(x=>tot[x.id]=(tot[x.id]||0)+x.score);return `<div class="card" style="margin-top:10px"><b>${actEventLabel_(e)}</b> <span class="small">倍率 ×${rankMultiplier_(e)}</span><table><thead><tr><th>名次</th><th>會員</th><th>籌碼淨勝值</th><th>下桌籌碼</th><th>得分</th></tr></thead><tbody>${top.map(x=>`<tr><td>${x.rank}</td><td>${x.name}</td><td>${x.net.toFixed(1)}</td><td>${(+x.stack).toLocaleString()}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="5">無資料</td></tr>'}</tbody></table></div>`}).join('');
+ const A=db.activityManagement,tot={},dayNames=['日','一','二','三','四','五','六'];
+ const detail=actEvents_().map(e=>{const top=eventTopScores_(e);top.forEach(x=>tot[x.id]=(tot[x.id]||0)+x.score);return `<div class="card" style="margin-top:10px"><b>${actEventLabel_(e)}</b> <span class="small">當日第 ${rankEventSeqOfDay_(e)} 場｜倍率 ×${rankMultiplier_(e)}</span><table><thead><tr><th>名次</th><th>會員</th><th>籌碼淨勝值</th><th>下桌籌碼</th><th>得分</th></tr></thead><tbody>${top.map(x=>`<tr><td>${x.rank}</td><td>${x.name}</td><td>${x.net.toFixed(1)}</td><td>${(+x.stack).toLocaleString()}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="5">無資料</td></tr>'}</tbody></table></div>`}).join('');
  const ranking=Object.entries(tot).map(([id,auto])=>({id,name:actMember_(id).name||id,auto,adj:+A.rankAdjust[id]||0})).map(x=>({...x,total:x.auto+x.adj})).sort((a,b)=>b.total-a.total);
- return `<div class="card"><h3>週排行榜｜自動計分</h3><div class="small">每場依「籌碼淨勝值」排序；相同時以下桌籌碼較高者優先；兩者都相同則同名次、都得該名次分數。前三名 3／2／1 分，再套用加倍時段。</div>
- <div class="formgrid" style="grid-template-columns:1.3fr 1.3fr .7fr auto;margin-top:10px"><div><label>加倍開始</label><input type="datetime-local" id="rankMulFrom"></div><div><label>加倍結束</label><input type="datetime-local" id="rankMulTo"></div><div><label>倍率</label><input type="number" id="rankMulValue" value="2" step=".5"></div><div style="align-self:end"><button onclick="addRankMultiplier_()">新增時段</button></div></div>
- ${(A.rankMultipliers||[]).map(r=>`<div class="small" style="margin-top:5px">${r.from||'不限'} ～ ${r.to||'不限'} ×${r.mult} <button class="danger" onclick="delRankMultiplier_('${r.id}')">刪除</button></div>`).join('')}
- <table style="margin-top:10px"><thead><tr><th>排名</th><th>會員</th><th>自動得分</th><th>人工調整</th><th>總得分</th></tr></thead><tbody>${ranking.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.auto}</td><td><input type="number" style="width:90px" value="${x.adj}" onchange="actAdj_('rank','${x.id}','adj',this.value)"></td><td><b>${x.total}</b></td></tr>`).join('')||'<tr><td colspan="5">區間內無得分</td></tr>'}</tbody></table></div>${detail}`;
+ const rules=(A.rankRecurringRules||[]).map(r=>`<div class="card" style="margin-top:8px;padding:12px">
+   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <label><input type="checkbox" ${r.enabled?'checked':''} onchange="editRankRecurringRule_('${r.id}','enabled',this.checked)"> 啟用</label>
+    <input style="max-width:210px" value="${r.name||''}" onchange="editRankRecurringRule_('${r.id}','name',this.value)">
+    <span class="small">星期：</span>
+    ${dayNames.map((n,d)=>`<label><input type="checkbox" ${(r.days||[]).includes(d)?'checked':''} onchange="toggleRankRuleDay_('${r.id}',${d},this.checked)">${n}</label>`).join('')}
+    <select style="max-width:150px" onchange="editRankRecurringRule_('${r.id}','mode',this.value)">
+      <option value="firstN" ${r.mode==='firstN'?'selected':''}>當日前幾場</option>
+      <option value="time" ${r.mode==='time'?'selected':''}>開桌時間</option>
+    </select>
+    ${r.mode==='firstN'
+      ?`<span>前</span><input type="number" style="width:70px" min="1" value="${r.firstN||2}" onchange="editRankRecurringRule_('${r.id}','firstN',this.value)"><span>場</span>`
+      :`<input type="time" style="width:120px" value="${r.from||'00:00'}" onchange="editRankRecurringRule_('${r.id}','from',this.value)"><span>～</span><input type="time" style="width:120px" value="${r.to||'00:00'}" onchange="editRankRecurringRule_('${r.id}','to',this.value)">`
+    }
+    <span>倍率</span><input type="number" style="width:75px" step=".5" min="1" value="${r.mult||2}" onchange="editRankRecurringRule_('${r.id}','mult',this.value)">
+    <button class="danger" onclick="delRankRecurringRule_('${r.id}')">刪除</button>
+   </div></div>`).join('');
+ return `<div class="card"><h3>週排行榜｜自動計分</h3>
+ <div class="small">每場依「籌碼淨勝值」排序；相同時以下桌籌碼較高者優先；兩者都相同則同名次、都得分。前三名 3／2／1 分。加倍規則依星期、當日場次順序或開桌時間自動判斷；同一場同時命中多條規則時採最高倍率，不重複相乘。</div>
+ <h3 style="margin-top:14px">固定加倍規則</h3>
+ ${rules}
+ <div class="card" style="margin-top:10px;padding:12px"><b>＋新增規則</b>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+   <input id="rankRuleName" placeholder="例如：假日前兩場" style="max-width:190px">
+   ${dayNames.map((n,d)=>`<label><input id="rankDay${d}" type="checkbox">${n}</label>`).join('')}
+   <select id="rankRuleMode" style="max-width:150px"><option value="firstN">當日前幾場</option><option value="time">開桌時間</option></select>
+   <span>前</span><input id="rankRuleFirstN" type="number" value="2" min="1" style="width:65px"><span>場</span>
+   <input id="rankRuleFrom" type="time" value="00:00" style="width:115px"><span>～</span><input id="rankRuleTo" type="time" value="00:00" style="width:115px">
+   <span>倍率</span><input id="rankRuleMult" type="number" value="2" step=".5" min="1" style="width:70px">
+   <button onclick="addRankRecurringRule_()">新增規則</button>
+  </div>
+ </div>
+ <h3 style="margin-top:14px">區間排行榜</h3>
+ <table><thead><tr><th>排名</th><th>會員</th><th>自動得分</th><th>人工調整</th><th>總得分</th></tr></thead><tbody>${ranking.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.auto}</td><td><input type="number" style="width:90px" value="${x.adj}" onchange="actAdj_('rank','${x.id}','adj',this.value)"></td><td><b>${x.total}</b></td></tr>`).join('')||'<tr><td colspan="5">區間內無得分</td></tr>'}</tbody></table></div>${detail}`;
 }
 function hunterEventChanged_(){const e=(db.events||[]).find(x=>x.id===$('hunterEvent')?.value),sel=$('hunterKiller');if(sel)sel.innerHTML='<option value="">選擊殺者</option>'+(e?.players||[]).map(p=>`<option value="${p.memberId}">${actMember_(p.memberId).name||p.memberId}</option>`).join('')}
 function addHunter_(){ensureActDb_();const eventId=$('hunterEvent').value,killer=$('hunterKiller').value;if(!eventId||!killer)return actionMsg('請選場次與擊殺者',true);db.activityManagement.hunter.unshift({id:'H'+Date.now(),date:(db.events||[]).find(e=>e.id===eventId)?.date||'',eventId,killer,points:+$('hunterPoints').value||1,note:$('hunterNote').value||''});persist();renderActivities()}
@@ -4513,7 +4607,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.48.0: the print clone must contain exactly the same selected columns
+   // V1.48.1: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
