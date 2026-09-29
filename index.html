@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.6 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.7 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1810,10 +1810,15 @@ function mergeCloud3_(base,local,remote){
  return cloneCloud_(local);
 }
 function setCloudBase_(data){cloudBase=cloneCloud_(data);try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(e){}}
+function epcEditingField_(){
+ const a=document.activeElement;if(!a)return false;
+ const t=String(a.tagName||'').toUpperCase();
+ return t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||a.isContentEditable;
+}
 function startLiveSync_(){
  if(liveSyncTimer)clearInterval(liveSyncTimer);
  liveSyncTimer=setInterval(async()=>{
-   if(cloudSaving||document.hidden)return;
+   if(cloudSaving||document.hidden||epcEditingField_())return;
    try{
      // Fast path: read only EPC_DATA revision metadata. Do NOT download/parse the full DB
      // unless another device has actually committed a newer revision.
