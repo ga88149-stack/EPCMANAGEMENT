@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.1 Web · Cloud POST Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.2 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1920,7 +1920,7 @@ async function saveCloudNow(force=false){
  try{
    const sentLocal=cloneCloud_(db);
    const sentBase=cloneCloud_(cloudBase||db);
-   const res=await cloudPost({action:'mergeSave',data:sentLocal,baseData:sentBase,revision:cloudRevision,writeId});
+   const res=await cloudPost({action:'save',data:sentLocal,baseData:sentBase,revision:cloudRevision,writeId});
    const savedRevision=Number(res.revision||0);
    if(!res.data||typeof res.data!=='object')throw new Error('CLOUD_MERGE_RESPONSE_INVALID');
 
