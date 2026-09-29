@@ -1107,7 +1107,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.48.1 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.48.2 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3782,7 +3782,10 @@ function ensureActDb_(){
  const B=A.boss;
  if(B.startPrize==null)B.startPrize=0;if(B.cap==null)B.cap=14000;
  if(B.personEnabled==null)B.personEnabled=true;if(B.personStep==null)B.personStep=1;if(B.personAmount==null)B.personAmount=100;
- if(B.groupEnabled==null)B.groupEnabled=true;if(B.groupStep==null)B.groupStep=1;if(B.groupAmount==null)B.groupAmount=200;
+ if(B.groupEnabled==null)B.groupEnabled=true;
+ // General stage: default every 16 groups +200. Hunting stage: every 8 groups +200.
+ if(B.normalGroupStep==null)B.normalGroupStep=16;if(B.normalGroupAmount==null)B.normalGroupAmount=200;
+ if(B.huntGroupStep==null)B.huntGroupStep=8;if(B.huntGroupAmount==null)B.huntGroupAmount=200;
  if(B.attackEnabled==null)B.attackEnabled=false;if(B.attackThreshold==null)B.attackThreshold=14000;
  if(B.initialHp==null)B.initialHp=200;
  B.attacks=Array.isArray(B.attacks)?B.attacks:[];
@@ -3984,19 +3987,66 @@ function actUmbrella_(){
  <h3 style="margin-top:14px">明細</h3><table><thead><tr><th>日期</th><th>會員</th><th>牌型</th><th>券數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.type}</td><td><input type="number" style="width:90px" value="${x.coupons}" onchange="umbrellaEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="umbrellaDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無資料</td></tr>'}</tbody></table></div>`;
 }
 function bossSet_(k,v,type='num'){const B=db.activityManagement.boss;B[k]=type==='bool'?!!v:Number(v)||0;persist();renderActivities()}
-function bossPool_(){const B=db.activityManagement.boss,ev=actEvents_();let people=0,groups=0;ev.forEach(e=>{people+=(e.players||[]).length;(e.players||[]).forEach(p=>groups+=actGroups_(p,e))});let pool=+B.startPrize||0;if(B.personEnabled)pool+=Math.floor(people/Math.max(1,+B.personStep||1))*(+B.personAmount||0);if(B.groupEnabled)pool+=Math.floor(groups/Math.max(1,+B.groupStep||1))*(+B.groupAmount||0);if(+B.cap>0)pool=Math.min(pool,+B.cap);return {people,groups,pool}}
-function bossCurrentHp_(){const B=db.activityManagement.boss;return Math.max(0,(+B.initialHp||0)-(B.attacks||[]).reduce((s,x)=>s+(x.success===false?0:(+x.damage||0)),0))}
+
+function bossPool_(){
+ const B=db.activityManagement.boss,ev=actEvents_();let people=0,groups=0;
+ ev.forEach(e=>{people+=(e.players||[]).length;(e.players||[]).forEach(p=>groups+=actGroups_(p,e))});
+ const start=+B.startPrize||0;
+ const personBonus=B.personEnabled?Math.floor(people/Math.max(1,+B.personStep||1))*(+B.personAmount||0):0;
+ // General stage is calculated first. It uses its own group threshold (default 16 groups +200).
+ const normalGroupBonus=B.groupEnabled?Math.floor(groups/Math.max(1,+B.normalGroupStep||16))*(+B.normalGroupAmount||0):0;
+ let generalPool=start+personBonus+normalGroupBonus;
+ const threshold=+B.attackThreshold||0;
+ const attackActive=!!B.attackEnabled||(threshold>0&&generalPool>=threshold);
+ // Snapshot the group count at the moment hunting starts. If not yet stored, derive the threshold-crossing
+ // baseline from the current aggregate and persist only when attack actually starts.
+ if(attackActive&&B.huntStartGroups==null) B.huntStartGroups=groups;
+ const huntBase=attackActive?(+B.huntStartGroups||0):groups;
+ const huntGroups=attackActive?Math.max(0,groups-huntBase):0;
+ const huntGroupBonus=attackActive&&B.groupEnabled?Math.floor(huntGroups/Math.max(1,+B.huntGroupStep||8))*(+B.huntGroupAmount||0):0;
+ let pool=generalPool+huntGroupBonus;if(+B.cap>0)pool=Math.min(pool,+B.cap);
+ return {people,groups,pool,generalPool,personBonus,normalGroupBonus,attackActive,huntBase,huntGroups,huntGroupBonus};
+}
+function bossCurrentHp_(){
+ const B=db.activityManagement.boss;
+ // Every registered attack deducts damage. "斬殺成功" is only the execution result,
+ // and must not decide whether normal 10Xo/TT damage is counted.
+ return Math.max(0,(+B.initialHp||0)-(B.attacks||[]).reduce((sum,x)=>sum+Math.max(0,+x.damage||0),0));
+}
 function addBossAttack_(){const B=db.activityManagement.boss,id=$('bossMember').value;if(!id)return actionMsg('請選攻擊玩家',true);B.attacks.unshift({id:'B'+Date.now(),date:$('bossDate').value||new Date().toISOString().slice(0,10),memberId:id,method:$('bossMethod').value,damage:+$('bossDamage').value||0,execute:+$('bossExecute').value||0,success:$('bossSuccess').checked,note:$('bossNote').value||''});persist();renderActivities()}
 function bossAttackEdit_(id,k,v){const x=db.activityManagement.boss.attacks.find(z=>z.id===id);if(x){x[k]=k==='success'?!!v:Number(v)||0;persist();renderActivities()}}
 function bossAttackDel_(id){db.activityManagement.boss.attacks=db.activityManagement.boss.attacks.filter(x=>x.id!==id);persist();renderActivities()}
+
+function resetBossHuntBaseline_(){
+ const B=db.activityManagement.boss;
+ B.huntStartGroups=null;persist();renderActivities();
+}
 function actBoss_(){
- const B=db.activityManagement.boss,P=bossPool_(),hp=bossCurrentHp_(),autoAttack=(+B.attackThreshold>0&&P.pool>=+B.attackThreshold),enabled=B.attackEnabled||autoAttack,{from,to}=actRange_(),rows=B.attacks.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
- return `<div class="card"><h3>雙十狩主｜第一：獎池累計</h3><div class="formgrid" style="grid-template-columns:repeat(4,1fr)"><div><label>起始獎金</label><input type="number" value="${B.startPrize}" onchange="bossSet_('startPrize',this.value)"></div><div><label>獎池封頂</label><input type="number" value="${B.cap}" onchange="bossSet_('cap',this.value)"></div><div><label>攻擊啟用門檻</label><input type="number" value="${B.attackThreshold}" onchange="bossSet_('attackThreshold',this.value)"></div><div><label>魔王初始HP</label><input type="number" value="${B.initialHp}" onchange="bossSet_('initialHp',this.value)"></div></div>
- <div class="formgrid" style="grid-template-columns:auto .7fr .8fr auto .7fr .8fr auto;margin-top:10px"><div><label>人數加碼</label><input type="checkbox" ${B.personEnabled?'checked':''} onchange="bossSet_('personEnabled',this.checked,'bool')"></div><div><label>每幾人</label><input type="number" value="${B.personStep}" onchange="bossSet_('personStep',this.value)"></div><div><label>+金額</label><input type="number" value="${B.personAmount}" onchange="bossSet_('personAmount',this.value)"></div><div><label>組數加碼</label><input type="checkbox" ${B.groupEnabled?'checked':''} onchange="bossSet_('groupEnabled',this.checked,'bool')"></div><div><label>每幾組</label><input type="number" value="${B.groupStep}" onchange="bossSet_('groupStep',this.value)"></div><div><label>+金額</label><input type="number" value="${B.groupAmount}" onchange="bossSet_('groupAmount',this.value)"></div><div><label>手動啟用攻擊</label><input type="checkbox" ${B.attackEnabled?'checked':''} onchange="bossSet_('attackEnabled',this.checked,'bool')"></div></div>
- <div class="grid" style="grid-template-columns:repeat(5,1fr);margin-top:12px"><div class="card"><div class="small">區間參賽人數</div><b>${P.people}</b></div><div class="card"><div class="small">區間總組數</div><b>${P.groups}</b></div><div class="card"><div class="small">累計獎池</div><b>${money(P.pool)}</b></div><div class="card"><div class="small">攻擊狀態</div><b>${enabled?'已啟用':'未啟用'}</b></div><div class="card"><div class="small">魔王剩餘HP</div><b>${hp}</b></div></div></div>
- <div class="card" style="margin-top:12px"><h3>第二：攻擊／傷害／斬殺</h3>${enabled?`<div class="formgrid" style="grid-template-columns:.9fr 1.2fr .9fr .7fr .7fr .7fr 1fr auto"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><select id="bossMember"><option value="">選會員</option>${actMemberOptions_()}</select></div><div><label>攻擊形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>斬殺成功</label><input type="checkbox" id="bossSuccess"></div><div><label>備註</label><input id="bossNote"></div><div style="align-self:end"><button onclick="addBossAttack_()">登記攻擊</button></div></div>`:'<div class="small">目前尚未啟用攻擊。可由獎池達門檻自動啟用，或上方手動勾選。</div>'}
+ const B=db.activityManagement.boss,P=bossPool_(),hp=bossCurrentHp_(),enabled=P.attackActive,{from,to}=actRange_(),rows=B.attacks.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
+ return `<div class="card"><h3>雙十狩主｜第一：獎池累計</h3>
+ <div class="small">一般階段與狩王階段的組數加碼分開設定。一般階段預設每 16 組 +200；進入狩王階段後，從狩王起始組數重新累積，預設每 8 組 +200。</div>
+ <div class="formgrid" style="grid-template-columns:repeat(4,1fr);margin-top:10px"><div><label>起始獎金</label><input type="number" value="${B.startPrize}" onchange="bossSet_('startPrize',this.value)"></div><div><label>獎池封頂</label><input type="number" value="${B.cap}" onchange="bossSet_('cap',this.value)"></div><div><label>攻擊啟用門檻</label><input type="number" value="${B.attackThreshold}" onchange="bossSet_('attackThreshold',this.value)"></div><div><label>魔王初始HP</label><input type="number" value="${B.initialHp}" onchange="bossSet_('initialHp',this.value)"></div></div>
+ <div class="formgrid" style="grid-template-columns:auto .7fr .8fr .7fr .8fr auto;margin-top:10px">
+  <div><label>人數加碼</label><input type="checkbox" ${B.personEnabled?'checked':''} onchange="bossSet_('personEnabled',this.checked,'bool')"></div>
+  <div><label>每幾人</label><input type="number" value="${B.personStep}" onchange="bossSet_('personStep',this.value)"></div><div><label>+金額</label><input type="number" value="${B.personAmount}" onchange="bossSet_('personAmount',this.value)"></div>
+  <div><label>一般階段每幾組</label><input type="number" value="${B.normalGroupStep}" onchange="bossSet_('normalGroupStep',this.value)"></div><div><label>+金額</label><input type="number" value="${B.normalGroupAmount}" onchange="bossSet_('normalGroupAmount',this.value)"></div>
+  <div><label>組數加碼</label><input type="checkbox" ${B.groupEnabled?'checked':''} onchange="bossSet_('groupEnabled',this.checked,'bool')"></div>
+ </div>
+ <div class="formgrid" style="grid-template-columns:.8fr .8fr auto auto;margin-top:10px">
+  <div><label>狩王階段每幾組</label><input type="number" value="${B.huntGroupStep}" onchange="bossSet_('huntGroupStep',this.value)"></div><div><label>+金額</label><input type="number" value="${B.huntGroupAmount}" onchange="bossSet_('huntGroupAmount',this.value)"></div>
+  <div><label>手動啟用狩王／攻擊</label><input type="checkbox" ${B.attackEnabled?'checked':''} onchange="bossSet_('attackEnabled',this.checked,'bool')"></div>
+  <div style="align-self:end"><button class="secondary" onclick="resetBossHuntBaseline_()">重設狩王起始組數</button></div>
+ </div>
+ <div class="grid" style="grid-template-columns:repeat(6,1fr);margin-top:12px">
+  <div class="card"><div class="small">區間參賽人數</div><b>${P.people}</b></div><div class="card"><div class="small">區間總組數</div><b>${P.groups}</b></div>
+  <div class="card"><div class="small">一般階段獎池</div><b>${money(P.generalPool)}</b></div><div class="card"><div class="small">狩王後新增組數</div><b>${P.huntGroups}</b></div>
+  <div class="card"><div class="small">累計獎池</div><b>${money(P.pool)}</b></div><div class="card"><div class="small">攻擊狀態</div><b>${enabled?'已啟用':'未啟用'}</b></div>
+ </div></div>
+ <div class="card" style="margin-top:12px"><h3>第二：攻擊／傷害／斬殺</h3>
+ <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px"><div class="card"><div class="small">魔王初始HP</div><b>${B.initialHp}</b></div><div class="card"><div class="small">累計已受傷害</div><b>${Math.max(0,(+B.initialHp||0)-hp)}</b></div><div class="card"><div class="small">魔王剩餘HP</div><b>${hp}</b></div></div>
+ ${enabled?`<div class="formgrid" style="grid-template-columns:.9fr 1.2fr .9fr .7fr .7fr .7fr 1fr auto"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><select id="bossMember"><option value="">選會員</option>${actMemberOptions_()}</select></div><div><label>攻擊形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>斬殺成功</label><input type="checkbox" id="bossSuccess"></div><div><label>備註</label><input id="bossNote"></div><div style="align-self:end"><button onclick="addBossAttack_()">登記攻擊</button></div></div>`:'<div class="small">目前尚未啟用攻擊。達獎池門檻或手動啟用後才可登記。</div>'}
  <div style="margin-top:10px"><b>${hp<30?'已進入斬殺模式':'尚未進入斬殺模式'}</b></div>
- <table style="margin-top:10px"><thead><tr><th>日期</th><th>會員</th><th>形式</th><th>傷害（可改）</th><th>斬殺次數（可改）</th><th>成功</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.method}</td><td><input type="number" style="width:80px" value="${x.damage}" onchange="bossAttackEdit_('${x.id}','damage',this.value)"></td><td><input type="number" style="width:70px" value="${x.execute||0}" onchange="bossAttackEdit_('${x.id}','execute',this.value)"></td><td><input type="checkbox" ${x.success?'checked':''} onchange="bossAttackEdit_('${x.id}','success',this.checked)"></td><td>${x.note||''}</td><td><button class="danger" onclick="bossAttackDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="8">尚無攻擊紀錄</td></tr>'}</tbody></table></div>`;
+ <table style="margin-top:10px"><thead><tr><th>日期</th><th>會員</th><th>形式</th><th>傷害（可改）</th><th>斬殺次數（可改）</th><th>斬殺成功</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.method}</td><td><input type="number" style="width:80px" value="${x.damage}" onchange="bossAttackEdit_('${x.id}','damage',this.value)"></td><td><input type="number" style="width:70px" value="${x.execute||0}" onchange="bossAttackEdit_('${x.id}','execute',this.value)"></td><td><input type="checkbox" ${x.success?'checked':''} onchange="bossAttackEdit_('${x.id}','success',this.checked)"></td><td>${x.note||''}</td><td><button class="danger" onclick="bossAttackDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="8">尚無攻擊紀錄</td></tr>'}</tbody></table></div>`;
 }
 function renderActivities(){
  if(!$('activities'))return;ensureActDb_();
@@ -4607,7 +4657,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.48.1: the print clone must contain exactly the same selected columns
+   // V1.48.2: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
