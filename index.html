@@ -1107,7 +1107,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.47.0 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.47.1 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1642,7 +1642,28 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   </div>
  </div>
 
- <div id="activityOverview" class="activity-tab"></div>
+ 
+<div class="card" style="margin-top:14px;border:1px solid #d8b04a">
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+  <div><h3 style="margin:0">活動手動登記</h3><div class="small">任何需要人工判定的活動都可以直接在這裡登記，紀錄會進入活動管理資料並同步雲端。</div></div>
+  <button onclick="toggleActivityRegister_()">＋ 登記活動</button>
+ </div>
+ <div id="activityRegisterPanel" style="display:none;margin-top:12px">
+  <div class="formgrid" style="grid-template-columns:1fr 1.3fr 1.3fr .8fr .8fr">
+   <div><label>日期</label><input type="date" id="activityRegDate"></div>
+   <div><label>會員</label><select id="activityRegMember"></select></div>
+   <div><label>活動</label><select id="activityRegActivity" onchange="activityRegDefaults_()"></select></div>
+   <div><label>紀錄類型</label><select id="activityRegType"><option>積分</option><option>獎金</option><option>折價卡</option><option>行政費優惠</option><option>保護傘券</option><option>傷害</option><option>淘汰</option><option>達標</option><option>其他</option></select></div>
+   <div><label>數值</label><input type="number" id="activityRegAmount" value="1" step="1"></div>
+  </div>
+  <div class="formgrid" style="grid-template-columns:1fr 1fr auto;margin-top:10px">
+   <div><label>對象／牌型／名次</label><input id="activityRegTarget" placeholder="例如：淘汰王小明／兩對／第1名／10Xo"></div>
+   <div><label>備註</label><input id="activityRegNote" placeholder="例如：保護傘兩對3張、BOSS造成30傷"></div>
+   <div style="align-self:end"><button onclick="saveActivityRegistration_()">儲存登記</button></div>
+  </div>
+ </div>
+</div>
+<div id="activityOverview" class="activity-tab"></div>
  <div id="activityMember" class="activity-tab" style="display:none"></div>
  <div id="activityDaily" class="activity-tab" style="display:none"></div>
  <div id="activityUmbrella" class="activity-tab" style="display:none"></div>
@@ -3838,8 +3859,65 @@ function addActivityLedger_(){
 function delActivityLedger_(id){
  ensureActivityDb_();db.activityManagement.ledger=db.activityManagement.ledger.filter(x=>x.id!==id);persist();renderActivities();
 }
+
+function activityAllNames_(){
+ return [...EPC_ACTIVITY_RULES.member,...EPC_ACTIVITY_RULES.daily,...EPC_ACTIVITY_RULES.umbrella,...EPC_ACTIVITY_RULES.boss].map(x=>x.name);
+}
+function toggleActivityRegister_(){
+ const p=$('activityRegisterPanel');if(!p)return;
+ p.style.display=p.style.display==='none'?'block':'none';
+ if(p.style.display!=='none')fillActivityRegister_();
+}
+function fillActivityRegister_(){
+ const d=$('activityRegDate');if(d&&!d.value)d.value=new Date().toISOString().slice(0,10);
+ const m=$('activityRegMember');if(m){
+   const old=m.value;
+   m.innerHTML='<option value="">請選擇會員</option>'+(db.members||[]).map(x=>`<option value="${x.id}">${x.name||''} (${x.id||''})</option>`).join('');
+   if(old)m.value=old;
+ }
+ const a=$('activityRegActivity');if(a){
+   const old=a.value;
+   a.innerHTML='<option value="">請選擇活動</option>'+activityAllNames_().map(x=>`<option value="${x}">${x}</option>`).join('');
+   if(old)a.value=old;
+ }
+}
+function activityRegDefaults_(){
+ const a=$('activityRegActivity')?.value||'',t=$('activityRegType'),n=$('activityRegAmount');
+ if(!t||!n)return;
+ if(a.includes('保護傘')){t.value='保護傘券';n.value=1}
+ else if(a.includes('獵人榜')){t.value='淘汰';n.value=1}
+ else if(a.includes('雙十狩王')){t.value='傷害';n.value=10}
+ else if(a.includes('排行榜')||a.includes('先鋒榜')){t.value='積分';n.value=1}
+ else if(a.includes('指定手牌')||a.includes('皇家同花順')){t.value='獎金';n.value=1000}
+ else {t.value='達標';n.value=1}
+}
+function saveActivityRegistration_(){
+ ensureActivityDb_();
+ const memberId=$('activityRegMember')?.value||'',activity=$('activityRegActivity')?.value||'';
+ const m=(db.members||[]).find(x=>String(x.id)===String(memberId));
+ if(!m){actionMsg('請先選擇會員',true);return}
+ if(!activity){actionMsg('請先選擇活動',true);return}
+ const rec={
+  id:'ACT'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+  date:$('activityRegDate')?.value||new Date().toISOString().slice(0,10),
+  memberId:m.id,memberName:m.name||'',activity,
+  rewardType:$('activityRegType')?.value||'其他',
+  amount:Number($('activityRegAmount')?.value||0),
+  target:$('activityRegTarget')?.value||'',
+  note:$('activityRegNote')?.value||'',
+  createdAt:new Date().toISOString()
+ };
+ db.activityManagement.ledger.unshift(rec);
+ persist();
+ renderActivities();
+ fillActivityRegister_();
+ if($('activityRegTarget'))$('activityRegTarget').value='';
+ if($('activityRegNote'))$('activityRegNote').value='';
+ actionMsg('活動登記完成');
+}
 function renderActivities(){
  if(!$('activities'))return;ensureActivityDb_();
+ fillActivityRegister_();
  const stats=activityStats_(),from=$('activityDateFrom')?.value||'',to=$('activityDateTo')?.value||'';
  const ledger=db.activityManagement.ledger.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
  const rewardTotal=ledger.reduce((a,x)=>a+(Number(x.amount)||0),0);
@@ -3874,7 +3952,7 @@ function renderActivities(){
    <div><label>活動</label><select id="activityLedgerActivity"><option value="">請選擇</option>${allActs}</select></div>
    <div style="align-self:end"><button onclick="addActivityLedger_()">新增紀錄</button></div>
   </div><div style="margin-top:10px"><label>備註</label><input id="activityLedgerNote" placeholder="例如：第3場達標、保護傘5張、BOSS造成30傷"></div></div>
-  <div class="card" style="margin-top:14px"><h3>發放／活動紀錄</h3><table><thead><tr><th>日期</th><th>會員</th><th>活動</th><th>類型</th><th>數值</th><th>備註</th><th>操作</th></tr></thead><tbody>${ledger.map(x=>`<tr><td>${x.date}</td><td>${x.memberName||x.memberId}</td><td>${x.activity}</td><td>${x.rewardType}</td><td>${Number(x.amount||0).toLocaleString()}</td><td>${x.note||''}</td><td><button class="danger" onclick="delActivityLedger_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="7">尚無活動紀錄</td></tr>'}</tbody></table></div>`;
+  <div class="card" style="margin-top:14px"><h3>發放／活動紀錄</h3><table><thead><tr><th>日期</th><th>會員</th><th>活動</th><th>類型</th><th>數值</th><th>對象／牌型／名次</th><th>備註</th><th>操作</th></tr></thead><tbody>${ledger.map(x=>`<tr><td>${x.date}</td><td>${x.memberName||x.memberId}</td><td>${x.activity}</td><td>${x.rewardType}</td><td>${Number(x.amount||0).toLocaleString()}</td><td>${x.target||''}</td><td>${x.note||''}</td><td><button class="danger" onclick="delActivityLedger_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="8">尚無活動紀錄</td></tr>'}</tbody></table></div>`;
  document.querySelectorAll('.activity-tab').forEach(x=>x.style.display='none');
  const map={overview:'activityOverview',member:'activityMember',daily:'activityDaily',umbrella:'activityUmbrella',boss:'activityBoss',ledger:'activityLedger'};
  if($(map[activityTab]||'activityOverview'))$(map[activityTab]||'activityOverview').style.display='block';
@@ -4476,7 +4554,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.47.0: the print clone must contain exactly the same selected columns
+   // V1.47.1: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
