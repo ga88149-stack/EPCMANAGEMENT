@@ -1085,7 +1085,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.0 Web · Multi-device Live Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.45.1 Web · Cloud POST Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1709,11 +1709,15 @@ function backupLocal(reason){
  }catch(err){ console.warn('backup failed',err); }
 }
 const CLOUD_RETRY_DELAYS=[0,1800,4500];
-const CLOUD_TIMEOUT_MS=18000;
+const CLOUD_TIMEOUT_MS=60000;
 let cloudReconnectTimer=null;
 function sleep_(ms){return new Promise(r=>setTimeout(r,ms));}
 function isConflictError_(err){return String(err&&err.message||err||'').includes('CLOUD_CONFLICT');}
 async function fetchWithTimeout_(url,options={}){
+ // Apps Script POST may legitimately take longer while LockService + Sheet write + verify run.
+ // Do not abort POST midway: the server could finish after the browser aborts, which makes
+ // the client falsely report a failure even though the cloud write succeeded.
+ if(String(options.method||'GET').toUpperCase()==='POST') return await fetch(url,options);
  const controller=new AbortController();
  const timer=setTimeout(()=>controller.abort(),CLOUD_TIMEOUT_MS);
  try{return await fetch(url,{...options,signal:controller.signal});}
@@ -1938,14 +1942,34 @@ async function saveCloudNow(force=false){
    console.error('cloud save failed',err);
    localDirty=true;
    localStorage.setItem('epcLocalDirty','1');
-   if(String(err.message||err).includes('CLOUD_CONFLICT')){
+   const msg=String(err&&err.message||err||'UNKNOWN');
+   if(msg.includes('CLOUD_CONFLICT')){
      setCloudState('⚠ 雲端已有較新版本｜本機資料未被覆蓋',true);
-   }else if(String(err.message||err).includes('CLOUD_VERIFY_FAILED')){
-     setCloudState('⚠ 上傳後驗證失敗｜不能視為已同步',true);
+   }else if(msg.includes('CLOUD_VERIFY_FAILED')||msg.includes('CLOUD_WRITE_VERIFY_FAILED')){
+     setCloudState('⚠ 上傳後驗證失敗｜本機資料已保留',true);
    }else{
-     cloudReady=false;
-     setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
-     scheduleCloudReconnect_();
+     // A failed POST does not prove the API is offline. Apps Script may have completed the
+     // write after a redirect/network interruption. Verify with a fresh load before retrying.
+     try{
+       const check=await cloudGet('load');
+       cloudReady=true;
+       if(String(check.writeId||'')===String(writeId)){
+         db=check.data||db;
+         cloudRevision=Number(check.revision||cloudRevision);
+         setCloudBase_(check.data||db);
+         localDirty=false; localStorage.removeItem('epcLocalDirty');
+         localStorage.setItem('epcCloudRevision',String(cloudRevision));
+         localStorage.setItem('epcV1',JSON.stringify(db));
+         setCloudState('☁ 雲端已確認儲存｜Revision '+cloudRevision);
+         return true;
+       }
+       setCloudState('● 雲端可連線｜本次儲存未確認｜將自動重送｜'+msg,true);
+       cloudPending=true;
+     }catch(checkErr){
+       cloudReady=false;
+       setCloudState('⚠ 雲端連線異常｜本機資料安全保存｜'+msg,true);
+       scheduleCloudReconnect_();
+     }
    }
    return false;
  }finally{
