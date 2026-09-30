@@ -5465,7 +5465,12 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoRefres
 
 /* ===== V1.50.0 Display Devices ===== */
 const DISPLAY_API_KEY='epcDisplayApiUrlV1';
+const DISPLAY_PREFS_KEY='epcDisplayDevicePrefsV1';
 let displayDevicesCache=[];
+function displayPrefsAll_(){try{return JSON.parse(localStorage.getItem(DISPLAY_PREFS_KEY)||'{}')||{}}catch(_){return {}}}
+function displayPref_(id){return displayPrefsAll_()[id]||{}}
+function saveDisplayPref_(id,pref){const all=displayPrefsAll_();all[id]=pref;localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(all))}
+function removeDisplayPref_(id){const all=displayPrefsAll_();delete all[id];localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(all))}
 
 function displayApi_(){return String(localStorage.getItem(DISPLAY_API_KEY)||'').trim()}
 function displayApiSetInput_(){const el=$('displayApiUrl');if(el&&!el.value)el.value=displayApi_()}
@@ -5496,37 +5501,42 @@ async function pairDisplay_(){
  try{await displayFetch_({action:'pair',code,name:name||'EPC 顯示器'},true);$('displayPairCode').value='';$('displayPairName').value='';await loadDisplays_();actionMsg('顯示器配對完成')}
  catch(e){actionMsg('配對失敗：'+e.message,true)}
 }
-function displaySpecificControls_(id,type,sec){
+function displaySpecificControls_(id,type,sec,ui){
+ ui=ui||{};
+ const checked=(v,def)=>((v===undefined?def:!!v)?' checked':'');
+ const limit=String(ui.limit||10),font=String(ui.rankFontScale||100);
  const common='<div><label>輪播秒數</label><input id="displaySec_'+id+'" type="number" min="5" value="'+(sec||15)+'"></div>';
- if(type==='rank')return '<div><label>排行榜顯示</label><select id="displayLimit_'+id+'"><option value="5">TOP 5</option><option value="10" selected>TOP 10</option><option value="20">TOP 20</option></select></div><div><label>顯示欄位</label><div style="display:flex;gap:12px;flex-wrap:wrap;padding-top:7px"><label style="display:flex;gap:5px;align-items:center"><input id="displayShowRank_'+id+'" type="checkbox" checked>名次</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowName_'+id+'" type="checkbox" checked>名字</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowMemberId_'+id+'" type="checkbox">會員編號</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowScore_'+id+'" type="checkbox" checked>分數</label></div></div><div><label>排行榜字體大小</label><select id="displayRankFontScale_'+id+'"><option value="80">80%</option><option value="90">90%</option><option value="100" selected>100%</option><option value="110">110%</option><option value="120">120%</option><option value="130">130%</option><option value="140">140%</option><option value="150">150%</option><option value="160">160%</option></select></div>'+common;
- if(type==='pioneer')return '<div><label>顯示人數</label><select id="displayLimit_'+id+'"><option value="5">前 5 名</option><option value="10" selected>前 10 名</option></select></div><div><label>顯示內容</label><select id="displayPioneerMode_'+id+'"><option value="score">先鋒積分</option></select></div>'+common;
- if(type==='hunter')return '<div><label>顯示獵人</label><select id="displayLimit_'+id+'"><option value="5">前 5 名</option><option value="10" selected>前 10 名</option></select></div><div><label>顯示內容</label><select id="displayHunterMode_'+id+'"><option value="points">獵人積分</option></select></div>'+common;
- if(type==='weekly')return '<div><label>顯示玩家</label><select id="displayLimit_'+id+'"><option value="5">5 位</option><option value="10" selected>10 位</option><option value="20">20 位</option></select></div><div><label>任務資訊</label><select id="displayWeeklyMode_'+id+'"><option value="progress">出席天數＋參賽場次</option></select></div>'+common;
- if(type==='umbrella')return '<div><label>顯示玩家</label><select id="displayLimit_'+id+'"><option value="5">5 位</option><option value="10" selected>10 位</option></select></div><div><label>顯示內容</label><select id="displayUmbrellaMode_'+id+'"><option value="coupons">保護傘／折價券數</option></select></div>'+common;
+ if(type==='rank')return '<div><label>排行榜顯示</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>TOP 5</option><option value="10" '+(limit==='10'?'selected':'')+'>TOP 10</option><option value="20" '+(limit==='20'?'selected':'')+'>TOP 20</option></select></div><div><label>顯示欄位</label><div style="display:flex;gap:12px;flex-wrap:wrap;padding-top:7px"><label style="display:flex;gap:5px;align-items:center"><input id="displayShowRank_'+id+'" type="checkbox"'+checked(ui.showRank,true)+'>名次</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowName_'+id+'" type="checkbox"'+checked(ui.showName,true)+'>名字</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowMemberId_'+id+'" type="checkbox"'+checked(ui.showMemberId,false)+'>會員編號</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowScore_'+id+'" type="checkbox"'+checked(ui.showScore,true)+'>分數</label></div></div><div><label>排行榜字體大小</label><select id="displayRankFontScale_'+id+'">'+[80,90,100,110,120,130,140,150,160].map(v=>'<option value="'+v+'" '+(font===String(v)?'selected':'')+'>'+v+'%</option>').join('')+'</select></div>'+common;
+ if(type==='pioneer')return '<div><label>顯示人數</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>前 5 名</option><option value="10" '+(limit==='10'?'selected':'')+'>前 10 名</option></select></div><div><label>顯示內容</label><select id="displayPioneerMode_'+id+'"><option value="score">先鋒積分</option></select></div>'+common;
+ if(type==='hunter')return '<div><label>顯示獵人</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>前 5 名</option><option value="10" '+(limit==='10'?'selected':'')+'>前 10 名</option></select></div><div><label>顯示內容</label><select id="displayHunterMode_'+id+'"><option value="points">獵人積分</option></select></div>'+common;
+ if(type==='weekly')return '<div><label>顯示玩家</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>5 位</option><option value="10" '+(limit==='10'?'selected':'')+'>10 位</option><option value="20" '+(limit==='20'?'selected':'')+'>20 位</option></select></div><div><label>任務資訊</label><select id="displayWeeklyMode_'+id+'"><option value="progress">出席天數＋參賽場次</option></select></div>'+common;
+ if(type==='umbrella')return '<div><label>顯示玩家</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>5 位</option><option value="10" '+(limit==='10'?'selected':'')+'>10 位</option></select></div><div><label>顯示內容</label><select id="displayUmbrellaMode_'+id+'"><option value="coupons">保護傘／折價券數</option></select></div>'+common;
  if(type==='boss')return '<div><label>BOSS 畫面</label><select id="displayBossMode_'+id+'"><option value="battle">獎池＋HP血條＋最新攻擊</option></select></div><div><label>畫面更新</label><select disabled><option>即時更新</option></select></div>'+common;
  return common;
 }
 function refreshDisplayControls_(id,type,sec){
- const el=$('displaySpecific_'+id);if(el)el.innerHTML=displaySpecificControls_(id,type,sec);
+ const el=$('displaySpecific_'+id),p=displayPref_(id);
+ if(el)el.innerHTML=displaySpecificControls_(id,type,sec,p.type===type?p.ui:{});
 }
+
 async function loadDisplays_(){
  displayApiSetInput_();if(!displayApi_())return;
  try{
   const r=await displayFetch_({action:'devices'});displayDevicesCache=r.devices||[];
   const box=$('displayDeviceRows');if(!box)return;
   box.innerHTML=displayDevicesCache.length?displayDevicesCache.map(d=>{
-   const online=Date.now()-(+d.lastSeen||0)<30000,type=d.contentType||'boss';
+   const online=Date.now()-(+d.lastSeen||0)<30000,pref=displayPref_(d.deviceId),type=pref.type||d.contentType||'boss',sec=pref.sec||d.rotateSeconds||15,ui=pref.ui||{};
    return `<div class="display-device"><div class="display-device-head"><div><b>${d.name||'未命名顯示器'}</b> <span class="${online?'display-online':'display-offline'}">${online?'● 在線':'○ 離線'}</span><div class="small">設備 ID：${d.deviceId||''}</div></div><button class="danger" onclick="removeDisplay_('${d.deviceId}')">解除配對</button></div>
    <div class="formgrid" style="grid-template-columns:1fr 3fr;margin-top:10px">
-    <div><label>顯示活動</label><select id="displayType_${d.deviceId}" onchange="refreshDisplayControls_('${d.deviceId}',this.value,${d.rotateSeconds||15})">${displayContentOptions_(type)}</select></div>
-    <div id="displaySpecific_${d.deviceId}" class="formgrid" style="grid-template-columns:repeat(3,1fr)">${displaySpecificControls_(d.deviceId,type,d.rotateSeconds||15)}</div>
+    <div><label>顯示活動</label><select id="displayType_${d.deviceId}" onchange="refreshDisplayControls_('${d.deviceId}',this.value,${sec})">${displayContentOptions_(type)}</select></div>
+    <div id="displaySpecific_${d.deviceId}" class="formgrid" style="grid-template-columns:repeat(3,1fr)">${displaySpecificControls_(d.deviceId,type,sec,ui)}</div>
    </div>
    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="primary" onclick="publishDisplay_('${d.deviceId}')">套用到螢幕</button></div>
    <div class="display-preview small">目前：${type}｜每個活動使用自己的顯示版型｜最後連線：${d.lastSeen?new Date(+d.lastSeen).toLocaleString('zh-TW'):'-'}</div></div>`
   }).join(''):'<div class="small">目前沒有已配對設備</div>';
  }catch(e){if($('displayDeviceRows'))$('displayDeviceRows').innerHTML='<div class="small">載入失敗：'+e.message+'</div>'}
 }
-async function removeDisplay_(id){if(!confirm('確定解除這台顯示器？'))return;try{await displayFetch_({action:'remove',deviceId:id},true);await loadDisplays_()}catch(e){actionMsg(e.message,true)}}
+async function removeDisplay_(id){if(!confirm('確定解除這台顯示器？'))return;try{await displayFetch_({action:'remove',deviceId:id},true);removeDisplayPref_(id);await loadDisplays_()}catch(e){actionMsg(e.message,true)}}
 
 function displayLeaderboard_(kind){
  ensureActDb_();const A=db.activityManagement||{},tot={};
@@ -5570,7 +5580,7 @@ async function publishDisplay_(deviceId,silent=false){
  const ui={kind:type,limit:Math.max(3,+($('displayLimit_'+deviceId)?.value||10)),layout:$('displayLayout_'+deviceId)?.value||'classic',showRank:$('displayShowRank_'+deviceId)?.checked!==false,showName:$('displayShowName_'+deviceId)?.checked!==false,showMemberId:!!$('displayShowMemberId_'+deviceId)?.checked,showScore:$('displayShowScore_'+deviceId)?.checked!==false,rankFontScale:Math.min(160,Math.max(80,+($('displayRankFontScale_'+deviceId)?.value||100)))};
  const payload=displayPayload_(type);payload.ui=ui;
  if(Array.isArray(payload.rows))payload.rows=payload.rows.slice(0,ui.limit);
- try{await displayFetch_({action:'publish',deviceId,contentType:type,rotateSeconds:sec,payload},true);if(!silent){actionMsg('已套用 '+(payload.title||'活動')+' 專屬顯示版型');await loadDisplays_()}}
+ try{await displayFetch_({action:'publish',deviceId,contentType:type,rotateSeconds:sec,payload},true);saveDisplayPref_(deviceId,{type,sec,ui});if(!silent){actionMsg('已套用 '+(payload.title||'活動')+' 專屬顯示版型');await loadDisplays_()}}
  catch(e){if(!silent)actionMsg('顯示器更新失敗：'+e.message,true)}
 }
 async function publishAllDisplays_(){
