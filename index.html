@@ -1453,6 +1453,34 @@ html[data-epc-theme="dark"] #epcThemeToggle{
 }
 html[data-epc-theme="dark"] #epcThemeToggle .themeDot{background:#e8b24b!important;box-shadow:0 0 11px rgba(232,178,75,.70)!important}
 </style>
+
+<style id="epcThemeStructuralFixV1508">
+html[data-epc-theme="light"] main{
+ background:
+   radial-gradient(circle at 10% 0%,rgba(67,220,224,.15),transparent 29%),
+   radial-gradient(circle at 90% 5%,rgba(74,183,222,.11),transparent 26%),
+   linear-gradient(135deg,#fbffff 0%,#eefcfc 50%,#edf8fb 100%)!important;
+ color:#17343c!important;
+ min-height:calc(100vh - 110px);
+}
+html[data-epc-theme="light"] main .page{color:#17343c!important}
+html[data-epc-theme="light"] main .page.active{display:block}
+html[data-epc-theme="light"] .kpi,
+html[data-epc-theme="light"] .card{
+ background:linear-gradient(145deg,#ffffff,#f3fcfc)!important;
+ border-color:#cfeaec!important;
+ box-shadow:0 12px 30px rgba(32,139,149,.09),0 0 20px rgba(61,218,221,.05)!important;
+}
+html[data-epc-theme="light"] .kpi .l{color:#67878d!important}
+html[data-epc-theme="light"] .kpi .v{color:#17343c!important}
+html[data-epc-theme="light"] h1,
+html[data-epc-theme="light"] h2,
+html[data-epc-theme="light"] h3{color:#15353d!important}
+html[data-epc-theme="light"] #actionMsg{
+ background:#ffffff!important;color:#17343c!important;border-color:#39cbd1!important;
+ box-shadow:0 0 18px rgba(57,203,209,.12)!important;
+}
+</style>
 </head>
 <script>
 (function(){
@@ -1462,7 +1490,7 @@ html[data-epc-theme="dark"] #epcThemeToggle .themeDot{background:#e8b24b!importa
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.7 Web · Glacier Blue / Graphite Gold UI + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.8 Web · Glacier Blue / Graphite Gold UI FIX + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1473,7 +1501,7 @@ html[data-epc-theme="dark"] #epcThemeToggle .themeDot{background:#e8b24b!importa
 <button data-page="activities">活動管理</button>
 <button data-page="displays">顯示設備</button>
 
-<button id="epcThemeToggle" type="button" onclick="toggleEpcTheme_()" title="切換深淺色模式"><span class="themeDot"></span><span id="epcThemeText">☀ 切換淺色</span></button></nav>
+<button id="epcThemeToggle" data-theme-control="1" type="button" onclick="event.preventDefault();event.stopPropagation();toggleEpcTheme_();return false;" title="切換深淺色模式"><span class="themeDot"></span><span id="epcThemeText">☀ 切換淺色</span></button></nav>
 <main>
 <div id="actionMsg" style="display:none;position:sticky;top:72px;z-index:20;padding:11px 14px;margin-bottom:12px;border-radius:10px;background:#17212c;border:1px solid #d6b35a;color:#eef3f8;font-weight:700"></div>
 <section id="dashboard" class="page active">
