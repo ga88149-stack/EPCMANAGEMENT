@@ -1649,6 +1649,70 @@ html[data-epc-theme="light"] #settlementReport{
  background:#fff!important;
 }
 </style>
+<style id="v15012ReadabilityFix">
+/* V1.50.12 — UI readability only. No business/data logic changes. */
+
+/* Dialogs / confirmation overlays: keep text readable in Graphite Gold. */
+[data-epc-theme="dark"] dialog,
+[data-epc-theme="dark"] .modal,
+[data-epc-theme="dark"] .modal-card,
+[data-epc-theme="dark"] .dialog,
+[data-epc-theme="dark"] .dialog-card,
+[data-epc-theme="dark"] .confirm-modal,
+[data-epc-theme="dark"] .confirm-card{
+  background:#141e28!important;
+  color:#f3f7fb!important;
+  border-color:#d6b35a!important;
+}
+[data-epc-theme="dark"] dialog h1,[data-epc-theme="dark"] dialog h2,[data-epc-theme="dark"] dialog h3,
+[data-epc-theme="dark"] .modal h1,[data-epc-theme="dark"] .modal h2,[data-epc-theme="dark"] .modal h3,
+[data-epc-theme="dark"] .dialog h1,[data-epc-theme="dark"] .dialog h2,[data-epc-theme="dark"] .dialog h3,
+[data-epc-theme="dark"] .confirm-modal h1,[data-epc-theme="dark"] .confirm-modal h2,[data-epc-theme="dark"] .confirm-modal h3{
+  color:#e7c568!important;
+}
+[data-epc-theme="dark"] dialog p,[data-epc-theme="dark"] dialog div,[data-epc-theme="dark"] dialog span,
+[data-epc-theme="dark"] .modal p,[data-epc-theme="dark"] .modal div,[data-epc-theme="dark"] .modal span,
+[data-epc-theme="dark"] .dialog p,[data-epc-theme="dark"] .dialog div,[data-epc-theme="dark"] .dialog span,
+[data-epc-theme="dark"] .confirm-modal p,[data-epc-theme="dark"] .confirm-modal div,[data-epc-theme="dark"] .confirm-modal span{
+  color:#e8eef5;
+}
+
+/* Event report is paper: never inherit app theme. */
+#eventreport #eventReportPaper,
+#eventreport #eventReportPaper .tablewrap,
+#eventreport #eventReportPaper table,
+#eventreport #eventReportPaper tbody,
+#eventreport #eventReportPaper tr,
+#eventreport #eventReportPaper td{
+  background:#fff!important;
+  color:#15191d!important;
+}
+#eventreport #eventReportPaper tbody tr:nth-child(even) td{background:#f6f8fa!important}
+#eventreport #eventReportPaper th{
+  background:#202a33!important;
+  color:#fff!important;
+  border-color:#202a33!important;
+}
+#eventreport #eventReportPaper #eventReportHeader>div,
+#eventreport #eventReportPaper #eventReportRule,
+#eventreport #eventReportPaper .report-summary-footer,
+#eventreport #eventReportPaper .report-summary-footer>div{
+  background:#f7f9fa!important;
+  color:#15191d!important;
+}
+#eventreport #eventReportPaper .small,
+#eventreport #eventReportPaper .report-summary-footer span{color:#667580!important}
+#eventreport #eventReportPaper strong,
+#eventreport #eventReportPaper .report-summary-footer strong{color:#111820!important}
+
+/* Light theme dialogs remain white / Glacier Blue. */
+[data-epc-theme="light"] dialog,
+[data-epc-theme="light"] .modal-card,
+[data-epc-theme="light"] .dialog-card,
+[data-epc-theme="light"] .confirm-card{
+  background:#fff!important;color:#172531!important;border-color:#63a9bd!important;
+}
+</style>
 </head>
 <script>
 (function(){
