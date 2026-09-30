@@ -4179,21 +4179,16 @@ function calcPlayerForEvent(p,e){
    let overbuyGroups=Math.max(0,groups-threshold);
    let allRebuyGroups=Math.max(0,groups-1);
 
-   // Every rebuy receives the price difference between first buy-in and rebuy price.
-   // Example: 7200 - 6600 = 600 per rebuy, including overbuy groups.
+   // Split custom-mode discounts by purpose:
+   // normal rebuy groups (up to threshold) = rebuy discount;
+   // groups over threshold = full waived rebuy admin, shown entirely as overbuy discount.
+   // This keeps the same total discount/paid amount while making the two columns meaningful.
    let rebuyDiscountPerGroup=Math.max(0,buyinTotal-rebuyTotal);
-   let rebuyDiscount=rebuyDiscountPerGroup*allRebuyGroups;
+   let rebuyDiscount=rebuyDiscountPerGroup*normalRebuyGroups;
+   let overbuyDiscount=rebuyAdmin*overbuyGroups;
 
-   // After the threshold, waive only the remaining admin fee.
-   // Example: rebuy admin 1200 - existing rebuy discount 600 = extra overbuy discount 600.
-   let overbuyDiscountPerGroup=Math.max(0,rebuyAdmin-rebuyDiscountPerGroup);
-   let overbuyDiscount=overbuyDiscountPerGroup*overbuyGroups;
-
-   // Accounting report presentation: an overbuy group is shown as the FULL waived admin fee.
-   // The player/event table may still show the price discount + extra overbuy waiver split.
-   // Example: 1200 admin, 600 rebuy price discount -> accounting shows 1200 as group discount.
-   let accountingGroupDiscount=rebuyAdmin*overbuyGroups;
-   let accountingRebuyDiscount=Math.max(0,rebuyDiscount-(rebuyDiscountPerGroup*overbuyGroups));
+   let accountingGroupDiscount=overbuyDiscount;
+   let accountingRebuyDiscount=rebuyDiscount;
 
    let auto=rebuyDiscount+overbuyDiscount;
    let totalDiscount=auto+manual;
