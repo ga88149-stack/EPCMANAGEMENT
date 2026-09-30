@@ -5477,7 +5477,7 @@ async function pairDisplay_(){
 }
 function displaySpecificControls_(id,type,sec){
  const common='<div><label>輪播秒數</label><input id="displaySec_'+id+'" type="number" min="5" value="'+(sec||15)+'"></div>';
- if(type==='rank')return '<div><label>排行榜顯示</label><select id="displayLimit_'+id+'"><option value="5">TOP 5</option><option value="10" selected>TOP 10</option><option value="20">TOP 20</option></select></div><div><label>版型</label><select id="displayLayout_'+id+'"><option value="classic">經典排行榜</option><option value="compact">緊湊榜單</option><option value="hero">前三名焦點</option></select></div>'+common;
+ if(type==='rank')return '<div><label>排行榜顯示</label><select id="displayLimit_'+id+'"><option value="5">TOP 5</option><option value="10" selected>TOP 10</option><option value="20">TOP 20</option></select></div><div><label>顯示欄位</label><div style="display:flex;gap:12px;flex-wrap:wrap;padding-top:7px"><label style="display:flex;gap:5px;align-items:center"><input id="displayShowRank_'+id+'" type="checkbox" checked>名次</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowName_'+id+'" type="checkbox" checked>名字</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowMemberId_'+id+'" type="checkbox">會員編號</label><label style="display:flex;gap:5px;align-items:center"><input id="displayShowScore_'+id+'" type="checkbox" checked>分數</label></div></div>'+common;
  if(type==='pioneer')return '<div><label>顯示人數</label><select id="displayLimit_'+id+'"><option value="5">前 5 名</option><option value="10" selected>前 10 名</option></select></div><div><label>顯示內容</label><select id="displayPioneerMode_'+id+'"><option value="score">先鋒積分</option></select></div>'+common;
  if(type==='hunter')return '<div><label>顯示獵人</label><select id="displayLimit_'+id+'"><option value="5">前 5 名</option><option value="10" selected>前 10 名</option></select></div><div><label>顯示內容</label><select id="displayHunterMode_'+id+'"><option value="points">獵人積分</option></select></div>'+common;
  if(type==='weekly')return '<div><label>顯示玩家</label><select id="displayLimit_'+id+'"><option value="5">5 位</option><option value="10" selected>10 位</option><option value="20">20 位</option></select></div><div><label>任務資訊</label><select id="displayWeeklyMode_'+id+'"><option value="progress">出席天數＋參賽場次</option></select></div>'+common;
@@ -5523,7 +5523,7 @@ function displayLeaderboard_(kind){
   const ids=new Set([...Object.keys(tot),...Object.keys(A.rankAdjust||{})]);
   return [...ids].map(id=>{
    const auto=+tot[id]||0,adj=+(A.rankAdjust||{})[id]||0;
-   return {id,name:actMember_(id).name||id,auto,adj,score:auto+adj};
+   return {id,memberId:id,name:actMember_(id).name||id,auto,adj,score:auto+adj};
   }).filter(x=>x.score!==0||x.auto!==0||x.adj!==0)
     .sort((a,b)=>b.score-a.score||b.auto-a.auto||String(a.name).localeCompare(String(b.name),'zh-Hant'))
     .slice(0,20);
@@ -5546,7 +5546,7 @@ function displayPayload_(type){
 async function publishDisplay_(deviceId,silent=false){
  const type=$('displayType_'+deviceId)?.value||(displayDevicesCache.find(x=>x.deviceId===deviceId)?.contentType)||'boss';
  const sec=Math.max(5,+($('displaySec_'+deviceId)?.value||15));
- const ui={kind:type,limit:Math.max(3,+($('displayLimit_'+deviceId)?.value||10)),layout:$('displayLayout_'+deviceId)?.value||'classic'};
+ const ui={kind:type,limit:Math.max(3,+($('displayLimit_'+deviceId)?.value||10)),layout:$('displayLayout_'+deviceId)?.value||'classic',showRank:$('displayShowRank_'+deviceId)?.checked!==false,showName:$('displayShowName_'+deviceId)?.checked!==false,showMemberId:!!$('displayShowMemberId_'+deviceId)?.checked,showScore:$('displayShowScore_'+deviceId)?.checked!==false};
  const payload=displayPayload_(type);payload.ui=ui;
  if(Array.isArray(payload.rows))payload.rows=payload.rows.slice(0,ui.limit);
  try{await displayFetch_({action:'publish',deviceId,contentType:type,rotateSeconds:sec,payload},true);if(!silent){actionMsg('已套用 '+(payload.title||'活動')+' 專屬顯示版型');await loadDisplays_()}}
