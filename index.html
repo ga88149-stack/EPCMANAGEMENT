@@ -1713,6 +1713,29 @@ html[data-epc-theme="light"] #settlementReport{
   background:#fff!important;color:#172531!important;border-color:#63a9bd!important;
 }
 </style>
+<style id="v15013ExactModalFix">
+/* Exact IDs: settlement/delete dialogs are inline-styled and have no modal class. */
+#settlementConfirmModal>div,
+#deleteConfirmModal>div{
+  background:#141e28!important;
+  color:#f3f7fb!important;
+}
+#settlementConfirmModal>div{border-color:#d6b35a!important}
+#deleteConfirmModal>div{border-color:#e05d5d!important}
+#settlementConfirmModal h3{color:#e7c568!important}
+#deleteConfirmModal h3{color:#ffaaaa!important}
+#settlementConfirmText,#settlementConfirmText *,
+#deleteConfirmText,#deleteConfirmText *{color:#f3f7fb!important}
+html[data-epc-theme="light"] #settlementConfirmModal>div,
+html[data-epc-theme="light"] #deleteConfirmModal>div{
+  background:#fff!important;color:#172531!important;
+}
+html[data-epc-theme="light"] #settlementConfirmText,
+html[data-epc-theme="light"] #settlementConfirmText *,
+html[data-epc-theme="light"] #deleteConfirmText,
+html[data-epc-theme="light"] #deleteConfirmText *{color:#172531!important}
+html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
+</style>
 </head>
 <script>
 (function(){
