@@ -5585,7 +5585,18 @@ async function publishDisplay_(deviceId,silent=false){
 }
 async function publishAllDisplays_(){
  if(!displayApi_()||!displayDevicesCache.length)return;
- for(const d of displayDevicesCache){try{await publishDisplay_(d.deviceId,true)}catch(_){}}
+ // Background activity refresh must never read transient/rebuilt form controls.
+ // Republish each device from its last saved preference instead.
+ for(const d of displayDevicesCache){
+  try{
+   const pref=displayPref_(d.deviceId),type=pref.type||d.contentType||'boss',sec=Math.max(5,+(pref.sec||d.rotateSeconds||15));
+   const ui=Object.assign({kind:type,limit:10,layout:'classic',showRank:true,showName:true,showMemberId:false,showScore:true,rankFontScale:100},pref.ui||{});
+   ui.kind=type;
+   const payload=displayPayload_(type);payload.ui=ui;
+   if(Array.isArray(payload.rows))payload.rows=payload.rows.slice(0,ui.limit);
+   await displayFetch_({action:'publish',deviceId:d.deviceId,contentType:type,rotateSeconds:sec,payload},true);
+  }catch(_){}
+ }
 }
 const _renderActivitiesDisplayBase=typeof renderActivities==='function'?renderActivities:null;
 if(_renderActivitiesDisplayBase){
