@@ -4187,28 +4187,29 @@ function calcPlayerForEvent(p,e){
    // This keeps the same total discount/paid amount while making the two columns meaningful.
    let rebuyDiscountPerGroup=Math.max(0,buyinTotal-rebuyTotal);
    let rebuyDiscount=rebuyDiscountPerGroup*normalRebuyGroups;
-   // Overbuy groups are fully admin-free, so restore/deduct the ORIGINAL buy-in admin,
-   // not the already-discounted rebuy admin.
-   let overbuyDiscount=buyinAdmin*overbuyGroups;
 
-   // Accounting uses the same actual discount amounts: half-price discount for normal
-   // rebuys and full original admin waiver for overbuy groups.
-   let accountingGroupDiscount=overbuyDiscount;
+   // Player/event page: overbuy shows only the extra discount versus the normal rebuy
+   // price (e.g. 400 per group), so staff can see the player's payable-price discount.
+   let overbuyDiscountPerGroup=Math.max(0,rebuyAdmin-rebuyDiscountPerGroup);
+   let overbuyDiscount=overbuyDiscountPerGroup*overbuyGroups;
+
+   // Accounting: restore the full original admin waiver for overbuy groups (e.g. 800).
+   let accountingGroupDiscount=buyinAdmin*overbuyGroups;
    let accountingRebuyDiscount=rebuyDiscount;
 
    let auto=rebuyDiscount+overbuyDiscount;
    let totalDiscount=auto+manual;
 
-   // Original value uses the full first-buy price for every group.
-   // Paid amount deducts rebuy, overbuy and manual discounts exactly once.
+   // Player paid amount must still reflect the FULL overbuy waiver, not only the display split.
    let original=Math.max(0,groups*buyinTotal);
-   let paid=Math.max(0,original-totalDiscount);
+   let accountingAuto=rebuyDiscount+accountingGroupDiscount;
+   let paid=Math.max(0,original-accountingAuto-manual);
 
    // Prize-pool contribution is the non-admin portion of the standard first buy-in.
    let poolPerGroup=Math.max(0,buyinTotal-buyinAdmin);
    let pool=Math.max(0,groups*poolPerGroup);
    let grossAdmin=Math.max(0,groups*buyinAdmin);
-   let netAdmin=Math.max(0,grossAdmin-rebuyDiscount-overbuyDiscount-manual);
+   let netAdmin=Math.max(0,grossAdmin-rebuyDiscount-accountingGroupDiscount-manual);
 
    return {
      groups, auto, manual, totalDiscount, original, paid, pool,
