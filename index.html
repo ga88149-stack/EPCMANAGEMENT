@@ -1107,7 +1107,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 <style>.searchCombo{position:relative}.searchComboMenu{position:absolute;z-index:99999;left:0;right:0;top:100%;max-height:260px;overflow-y:auto;background:#0b141d;border:1px solid #33495b;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:none}.searchComboMenu.open{display:block}.searchComboItem{padding:8px 10px;cursor:pointer;color:#eaf2f8;border-bottom:1px solid #182733}.searchComboItem:hover{background:#17304a}</style></head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.49.0 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.49.2 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1247,6 +1247,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
  <div class="card">
   <div class="formgrid">
    <div><label>日期</label><input type="date" id="eDate"></div>
+   <div><label>場次名稱</label><input id="eName" placeholder="預設：第一場、第二場…；可手動修改"></div>
  <div><label>開賽時間</label><input id="eStartTime" inputmode="numeric" placeholder="例如 16:00"></div>
  <div><label>預計截止買入時間</label><input id="eRegCloseTime" inputmode="numeric" placeholder="例如 18:30"></div>
    <div><label>級別</label><input id="eLevel" type="number" min="0" step="100" inputmode="numeric" placeholder="例如 1200、3400、6600、11000"></div>
@@ -2461,6 +2462,7 @@ function saveEvent(){
  let e=requireEvent();if(!e)return;
  
  e.date=$('eDate').value;
+ e.name=($('eName')?.value||'').trim();
  e.startTime=($('eStartTime')?.value||'').trim();
  e.regCloseTime=($('eRegCloseTime')?.value||'').trim();
  e.level=+$('eLevel').value;
@@ -2721,6 +2723,19 @@ function showPage(id){if(id==='members' && $('memberDateFrom') && !$('memberDate
  render();
 }
 function goEvents(){showPage('events')}
+
+function eventOrdinalName_(seq){
+ const n=Math.max(1,Math.floor(+seq||1));
+ const zh=['零','一','二','三','四','五','六','七','八','九','十'];
+ if(n<=10)return '第'+zh[n]+'場';
+ if(n<20)return '第十'+(n===10?'':zh[n-10])+'場';
+ if(n<100){const a=Math.floor(n/10),b=n%10;return '第'+zh[a]+'十'+(b?zh[b]:'')+'場'}
+ return '第'+n+'場';
+}
+function eventDisplayName_(e){
+ const manual=String(e?.name||'').trim();
+ return manual||eventOrdinalName_(e?.seq||1);
+}
 function newEvent(){
  let e=blankEvent();
  let bd=$('eventBusinessDate')?.value||new Date().toISOString().slice(0,10);
@@ -2733,7 +2748,7 @@ function newEvent(){
 function openEvent(id){db.currentEventId=id;persist();showPage('event')}
 function deleteEventByIndex(index){
  const e=db.events[index];if(!e){actionMsg('找不到這場賽事',true);return;}
- const label=`${businessDateForEvent(e)} 第${e.seq||1}場 ${Number(e.level||0).toLocaleString()}`;
+ const label=`${businessDateForEvent(e)} ${eventDisplayName_(e)} ${Number(e.level||0).toLocaleString()}`;
  askDeleteConfirm(`確定要刪除「${label}」嗎？刪除後該場會員盈虧紀錄也會一起移除。`,()=>performDeleteEventByIndex(index));
 }
 async function performDeleteEventByIndex(index){
@@ -3406,7 +3421,7 @@ function unlockSettledEvent(id){
  const e=(db.events||[]).find(x=>String(x.id)===String(id));
  if(!e)return actionMsg('找不到這場賽事',true);
  if(e.status!=='已結算')return actionMsg('這場賽事目前不是已結算狀態',true);
- const label=`${businessDateForEvent(e)} 第${e.seq||1}場 ${Number(e.level||0).toLocaleString()} 賽事`;
+ const label=`${businessDateForEvent(e)} ${eventDisplayName_(e)} ${Number(e.level||0).toLocaleString()} 賽事`;
  if(!confirm(`確定要解鎖「${label}」嗎？\n\n解鎖後可修改買入、優惠、籌碼、獎金與帳務。\n原本的會員結算紀錄會先移除，修改完成後請重新「正式結算」。`))return;
  (db.members||[]).forEach(m=>{
    m.history=(m.history||[]).filter(h=>String(h.eventId)!==String(e.id));
@@ -3417,6 +3432,13 @@ function unlockSettledEvent(id){
  persist();
  render();
  actionMsg(`已解鎖：${label}；修改完成後請重新正式結算`);
+}
+
+function setEventName_(id,value){
+ const e=(db.events||[]).find(x=>String(x.id)===String(id));if(!e)return;
+ const v=String(value||'').trim();
+ e.name=v&&v!==eventOrdinalName_(e.seq||1)?v:'';
+ persist();render();
 }
 function renderEventList(){
  let body=$('eventRows'); if(!body)return;
@@ -3440,7 +3462,7 @@ function renderEventList(){
    let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=raw>0?Math.ceil(raw/unit)*unit:0;
    let reportBtn=`<button type="button" onclick="openEventReportById('${e.id}')">列印報表</button>`;
    let unlockBtn=e.status==='已結算'?`<button type="button" onclick="unlockSettledEvent('${e.id}')">解鎖編輯</button>`:'';
-   return `<tr><td>${businessDateForEvent(e)}</td><td>第 ${e.seq||1} 場</td><td>${e.level}</td><td>${e.players.length}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} ${unlockBtn} <button type="button" class="danger" onclick="deleteEventByIndex(${eventIndex})">刪除</button></td></tr>`;
+   return `<tr><td>${businessDateForEvent(e)}</td><td><input value="${eventDisplayName_(e).replace(/&/g,'&amp;').replace(/\"/g,'&quot;')}" style="min-width:120px" onchange="setEventName_('${e.id}',this.value)"></td><td>${e.level}</td><td>${e.players.length}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} ${unlockBtn} <button type="button" class="danger" onclick="deleteEventByIndex(${eventIndex})">刪除</button></td></tr>`;
  }).join('') || '<tr><td colspan="9" style="text-align:center;color:#91a0b2">此營業日尚無賽事</td></tr>';
 }
 function calcPlayerForEvent(p,e){
@@ -3825,8 +3847,8 @@ function actResolveMember_(inputId){
  return m?String(m.id):'';
 }
 
-function actEventOptions_(){return actEvents_().map(e=>`<option value="${e.id}">${e.date||''}｜第${e.seq||1}場｜${e.level||''}</option>`).join('')}
-function actEventLabel_(e){return `${e.date||''} 第${e.seq||1}場 ${e.level||''}`}
+function actEventOptions_(){return actEvents_().map(e=>`<option value="${e.id}">${e.date||''}｜${eventDisplayName_(e)}｜${e.level||''}</option>`).join('')}
+function actEventLabel_(e){return `${e.date||''} ${eventDisplayName_(e)} ${e.level||''}`}
 function actGroups_(p,e){try{return +calcPlayerForEvent(p,e).groups||0}catch(_){return (+p.buyin||0)+(+p.rebuy||0)+(+p.addon||0)}}
 function actPlayerStats_(){
  const {q}=actRange_(),map={};
@@ -4021,13 +4043,15 @@ function activeBoss_(){const B=db.activityManagement.boss;return (B.bosses||[]).
 function bossCurrentHp_(){const b=activeBoss_();if(!b||b.killed)return 0;return Math.max(0,(+b.initialHp||0)-(b.attacks||[]).reduce((n,x)=>n+(+x.damage||0),0))}
 function bossSet_(k,v,t){const B=db.activityManagement.boss;B[k]=t==='bool'?!!v:(['activityFrom','activityTo'].includes(k)?String(v||''):(+v||0));persist();renderActivities()}
 function bossExclude_(id,on){const B=db.activityManagement.boss;B.excludedEventIds=B.excludedEventIds||[];if(on&&!B.excludedEventIds.includes(String(id)))B.excludedEventIds.push(String(id));if(!on)B.excludedEventIds=B.excludedEventIds.filter(x=>x!==String(id));persist();renderActivities()}
+function bossAddExclude_(){const id=$('bossExcludeSelect')?.value;if(id)bossExclude_(id,true)}
+function bossRemoveExclude_(id){bossExclude_(id,false)}
 function bossToggleAttack_(on){const B=db.activityManagement.boss;B.attackEnabled=!!on;if(on&&!B.huntStartedAt)B.huntStartedAt=new Date().toISOString().slice(0,16);if(!on)B.huntStartedAt='';persist();renderActivities()}
 function addNewBoss_(){const B=db.activityManagement.boss,id='BOSS'+Date.now();B.bosses.push({id,name:'魔王 '+((B.bosses||[]).length+1),initialHp:+B.initialHp||200,attacks:[],killed:false});B.activeBossId=id;persist();renderActivities()}
 function deleteBoss_(id){const B=db.activityManagement.boss;if(!confirm('確定刪除此魔王？'))return;B.bosses=B.bosses.filter(x=>x.id!==id);B.activeBossId=B.bosses.at(-1)?.id||'';persist();renderActivities()}
 function selectBoss_(id){db.activityManagement.boss.activeBossId=id;persist();renderActivities()}
 function addBossAttack_(){const B=db.activityManagement.boss,b=activeBoss_(),id=actResolveMember_('bossMember');if(!b)return actionMsg('請先新增魔王',true);if(!id)return actionMsg('請選攻擊玩家',true);const S=bossStats_(),success=!!$('bossSuccess').checked,table=Math.max(1,+$('bossTableCount').value||1),pool=Math.min(+B.cap||Infinity,S.pool);let dmg=Math.max(0,+$('bossDamage').value||0),killer=0,other=0;if(success){dmg=Math.max(dmg,bossCurrentHp_());b.killed=true;const others=Math.max(0,table-1);if(others){other=Math.floor((pool*.5/others)/100)*100;killer=pool-other*others}else killer=pool}b.attacks=b.attacks||[];b.attacks.unshift({id:'B'+Date.now(),date:$('bossDate').value,memberId:id,method:$('bossMethod').value,damage:dmg,execute:+$('bossExecute').value||0,success,note:$('bossNote').value||'',poolAtKill:success?pool:0,tableCount:success?table:0,killerPrize:killer,otherPrize:other});persist();renderActivities()}
 function bossAttackDel_(id){const b=activeBoss_();if(!b)return;b.attacks=(b.attacks||[]).filter(x=>x.id!==id);b.killed=b.attacks.some(x=>x.success);persist();renderActivities()}
-function actBoss_(){const B=db.activityManagement.boss,S=bossStats_(),b=activeBoss_(),hp=bossCurrentHp_(),range=(db.events||[]).filter(e=>(!B.activityFrom||e.date>=B.activityFrom)&&(!B.activityTo||e.date<=B.activityTo));const stage=(name,p,people,groups)=>`<div class="card"><h3>${name}</h3><div class="formgrid" style="grid-template-columns:repeat(3,1fr)"><div><label>人數加碼｜多少人</label><input type="number" value="${B[p+'PersonStep']}" onchange="bossSet_('${p}PersonStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'PersonAmount']}" onchange="bossSet_('${p}PersonAmount',this.value)"></div><div><label>忽略不計人數</label><input type="number" value="${B[p+'PersonIgnore']}" onchange="bossSet_('${p}PersonIgnore',this.value)"></div><div><label>組數加碼｜多少組</label><input type="number" value="${B[p+'GroupStep']}" onchange="bossSet_('${p}GroupStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'GroupAmount']}" onchange="bossSet_('${p}GroupAmount',this.value)"></div><div><label>忽略不計組數</label><input type="number" value="${B[p+'GroupIgnore']}" onchange="bossSet_('${p}GroupIgnore',this.value)"></div></div><div class="small">此階段目前 ${people} 人／${groups} 組</div></div>`;return `<div class="card"><h3>雙十狩主｜活動區間與規則</h3><div class="formgrid" style="grid-template-columns:repeat(4,1fr)"><div><label>活動開始日</label><input type="date" value="${B.activityFrom}" onchange="bossSet_('activityFrom',this.value)"></div><div><label>活動結束日</label><input type="date" value="${B.activityTo}" onchange="bossSet_('activityTo',this.value)"></div><div><label>起始獎金</label><input type="number" value="${B.startPrize}" onchange="bossSet_('startPrize',this.value)"></div><div><label>封頂</label><input type="number" value="${B.cap}" onchange="bossSet_('cap',this.value)"></div><div><label>自動啟動標準線</label><input type="number" value="${B.attackThreshold}" onchange="bossSet_('attackThreshold',this.value)"></div><div><label>魔王預設HP</label><input type="number" value="${B.initialHp}" onchange="bossSet_('initialHp',this.value)"></div><div><label>手動攻擊模式</label><input type="checkbox" ${B.attackEnabled?'checked':''} onchange="bossToggleAttack_(this.checked)"></div></div><h3>不計算場次</h3><div style="max-height:160px;overflow:auto">${range.map(e=>`<label style="display:block"><input type="checkbox" ${(B.excludedEventIds||[]).includes(String(e.id))?'checked':''} onchange="bossExclude_('${e.id}',this.checked)"> ${actEventLabel_(e)}</label>`).join('')}</div></div><div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">${stage('一般模式','normal',S.np,S.ng)}${stage('狩王模式','hunt',S.hp,S.hg)}</div><div class="card" style="margin-top:12px"><h3>區間統計</h3><table><thead><tr><th>模式</th><th>人數</th><th>人數加碼</th><th>組數</th><th>組數加碼</th></tr></thead><tbody><tr><td>一般模式</td><td>${S.np}</td><td>${money(S.npb)}</td><td>${S.ng}</td><td>${money(S.ngb)}</td></tr><tr><td>攻擊模式</td><td>${S.hp}</td><td>${money(S.hpb)}</td><td>${S.hg}</td><td>${money(S.hgb)}</td></tr></tbody></table><h3>目前累積 ${money(S.pool)}｜攻擊模式：${S.active?'已啟用':'未啟用'}</h3></div><div class="card" style="margin-top:12px"><h3>魔王管理</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${(B.bosses||[]).map(x=>`<button onclick="selectBoss_('${x.id}')">${x.name}${x.killed?'（已擊殺）':''}</button>`).join('')}<button onclick="addNewBoss_()">＋新增魔王</button>${b?`<button class="danger" onclick="deleteBoss_('${b.id}')">刪除目前魔王</button>`:''}</div>${b?`<p>HP：${b.initialHp}｜剩餘：<b>${hp}</b></p>`:''}</div>${b&&S.active&&!b.killed?`<div class="card" style="margin-top:12px"><h3>攻擊登記</h3><div class="formgrid" style="grid-template-columns:repeat(8,1fr)"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><input id="bossMember" list="bossMemberList" placeholder="姓名 / ID"><datalist id="bossMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>擊殺魔王</label><input type="checkbox" id="bossSuccess"></div><div><label>桌上總人數（含擊殺者）</label><input type="number" id="bossTableCount" value="2" min="1"></div><div><label>備註</label><input id="bossNote"></div></div><button onclick="addBossAttack_()">登記攻擊</button></div>`:''}${b?`<div class="card" style="margin-top:12px"><h3>攻擊／分配紀錄</h3><table><thead><tr><th>日期</th><th>會員</th><th>形式</th><th>傷害</th><th>擊殺</th><th>當下獎池</th><th>擊殺者</th><th>其他每人</th><th>桌上人數</th><th></th></tr></thead><tbody>${(b.attacks||[]).map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.method}</td><td>${x.damage}</td><td>${x.success?'是':'否'}</td><td>${x.success?money(x.poolAtKill):'-'}</td><td>${x.success?money(x.killerPrize):'-'}</td><td>${x.success?money(x.otherPrize):'-'}</td><td>${x.success?x.tableCount:'-'}</td><td><button class="danger" onclick="bossAttackDel_('${x.id}')">刪除</button></td></tr>`).join('')}</tbody></table></div>`:''}`}
+function actBoss_(){const B=db.activityManagement.boss,S=bossStats_(),b=activeBoss_(),hp=bossCurrentHp_(),range=(db.events||[]).filter(e=>(!B.activityFrom||e.date>=B.activityFrom)&&(!B.activityTo||e.date<=B.activityTo));const stage=(name,p,people,groups)=>`<div class="card"><h3>${name}</h3><div class="formgrid" style="grid-template-columns:repeat(3,1fr)"><div><label>人數加碼｜多少人</label><input type="number" value="${B[p+'PersonStep']}" onchange="bossSet_('${p}PersonStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'PersonAmount']}" onchange="bossSet_('${p}PersonAmount',this.value)"></div><div><label>忽略不計人數</label><input type="number" value="${B[p+'PersonIgnore']}" onchange="bossSet_('${p}PersonIgnore',this.value)"></div><div><label>組數加碼｜多少組</label><input type="number" value="${B[p+'GroupStep']}" onchange="bossSet_('${p}GroupStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'GroupAmount']}" onchange="bossSet_('${p}GroupAmount',this.value)"></div><div><label>忽略不計組數</label><input type="number" value="${B[p+'GroupIgnore']}" onchange="bossSet_('${p}GroupIgnore',this.value)"></div></div><div class="small">此階段目前 ${people} 人／${groups} 組</div></div>`;return `<div class="card"><h3>雙十狩主｜活動區間與規則</h3><div class="formgrid" style="grid-template-columns:repeat(4,1fr)"><div><label>活動開始日</label><input type="date" value="${B.activityFrom}" onchange="bossSet_('activityFrom',this.value)"></div><div><label>活動結束日</label><input type="date" value="${B.activityTo}" onchange="bossSet_('activityTo',this.value)"></div><div><label>起始獎金</label><input type="number" value="${B.startPrize}" onchange="bossSet_('startPrize',this.value)"></div><div><label>封頂</label><input type="number" value="${B.cap}" onchange="bossSet_('cap',this.value)"></div><div><label>自動啟動標準線</label><input type="number" value="${B.attackThreshold}" onchange="bossSet_('attackThreshold',this.value)"></div><div><label>魔王預設HP</label><input type="number" value="${B.initialHp}" onchange="bossSet_('initialHp',this.value)"></div><div><label>手動攻擊模式</label><input type="checkbox" ${B.attackEnabled?'checked':''} onchange="bossToggleAttack_(this.checked)"></div></div><h3>不計算場次</h3><div class="formgrid" style="grid-template-columns:1fr auto;align-items:end"><div><label>選擇場次</label><select id="bossExcludeSelect"><option value="">選擇要排除的場次</option>${range.filter(e=>!(B.excludedEventIds||[]).includes(String(e.id))).map(e=>`<option value="${e.id}">${actEventLabel_(e)}</option>`).join('')}</select></div><div><button onclick="bossAddExclude_()">＋新增</button></div></div><div style="margin-top:8px">${(B.excludedEventIds||[]).map(id=>{const e=(db.events||[]).find(x=>String(x.id)===String(id));return e?`<span style="display:inline-flex;align-items:center;gap:6px;margin:3px;padding:6px 8px;border:1px solid #33495b;border-radius:8px">${actEventLabel_(e)} <button class="danger" style="padding:2px 6px" onclick="bossRemoveExclude_('${id}')">×</button></span>`:''}).join('')||'<span class="small">目前沒有不計算場次</span>'}</div></div><div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">${stage('一般模式','normal',S.np,S.ng)}${stage('狩王模式','hunt',S.hp,S.hg)}</div><div class="card" style="margin-top:12px"><h3>區間統計</h3><table><thead><tr><th>模式</th><th>人數</th><th>人數加碼</th><th>組數</th><th>組數加碼</th></tr></thead><tbody><tr><td>一般模式</td><td>${S.np}</td><td>${money(S.npb)}</td><td>${S.ng}</td><td>${money(S.ngb)}</td></tr><tr><td>攻擊模式</td><td>${S.hp}</td><td>${money(S.hpb)}</td><td>${S.hg}</td><td>${money(S.hgb)}</td></tr></tbody></table><h3>目前累積 ${money(S.pool)}｜攻擊模式：${S.active?'已啟用':'未啟用'}</h3></div><div class="card" style="margin-top:12px"><h3>魔王管理</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${(B.bosses||[]).map(x=>`<button onclick="selectBoss_('${x.id}')">${x.name}${x.killed?'（已擊殺）':''}</button>`).join('')}<button onclick="addNewBoss_()">＋新增魔王</button>${b?`<button class="danger" onclick="deleteBoss_('${b.id}')">刪除目前魔王</button>`:''}</div>${b?`<p>HP：${b.initialHp}｜剩餘：<b>${hp}</b></p>`:''}</div>${b&&S.active&&!b.killed?`<div class="card" style="margin-top:12px"><h3>攻擊登記</h3><div class="formgrid" style="grid-template-columns:repeat(8,1fr)"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><input id="bossMember" list="bossMemberList" placeholder="姓名 / ID"><datalist id="bossMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>擊殺魔王</label><input type="checkbox" id="bossSuccess"></div><div><label>桌上總人數（含擊殺者）</label><input type="number" id="bossTableCount" value="2" min="1"></div><div><label>備註</label><input id="bossNote"></div></div><button onclick="addBossAttack_()">登記攻擊</button></div>`:''}${b?`<div class="card" style="margin-top:12px"><h3>攻擊／分配紀錄</h3><table><thead><tr><th>日期</th><th>會員</th><th>形式</th><th>傷害</th><th>擊殺</th><th>當下獎池</th><th>擊殺者</th><th>其他每人</th><th>桌上人數</th><th></th></tr></thead><tbody>${(b.attacks||[]).map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.method}</td><td>${x.damage}</td><td>${x.success?'是':'否'}</td><td>${x.success?money(x.poolAtKill):'-'}</td><td>${x.success?money(x.killerPrize):'-'}</td><td>${x.success?money(x.otherPrize):'-'}</td><td>${x.success?x.tableCount:'-'}</td><td><button class="danger" onclick="bossAttackDel_('${x.id}')">刪除</button></td></tr>`).join('')}</tbody></table></div>`:''}`}
 function enhanceSearchCombos_(){document.querySelectorAll('input[list]').forEach(inp=>{if(inp.dataset.comboDone)return;inp.dataset.comboDone='1';const dl=document.getElementById(inp.getAttribute('list'));if(!dl)return;const wrap=document.createElement('div');wrap.className='searchCombo';inp.parentNode.insertBefore(wrap,inp);wrap.appendChild(inp);const menu=document.createElement('div');menu.className='searchComboMenu';wrap.appendChild(menu);const draw=()=>{const q=(inp.value||'').toLowerCase();const a=[...dl.querySelectorAll('option')].filter(o=>!q||o.value.toLowerCase().includes(q)).slice(0,150);menu.innerHTML=a.map(o=>'<div class="searchComboItem" data-v="'+o.value.replace(/"/g,'&quot;')+'">'+o.value+'</div>').join('');menu.classList.toggle('open',a.length>0&&document.activeElement===inp)};inp.addEventListener('input',draw);inp.addEventListener('focus',draw);menu.addEventListener('mousedown',e=>{const x=e.target.closest('.searchComboItem');if(!x)return;e.preventDefault();inp.value=x.dataset.v;menu.classList.remove('open');inp.dispatchEvent(new Event('change',{bubbles:true}))});inp.addEventListener('blur',()=>setTimeout(()=>menu.classList.remove('open'),100))})}
 function renderActivities(){
  if(!$('activities'))return;ensureActDb_();
@@ -4057,8 +4081,8 @@ function render(){
    if($('settleEventMeta'))$('settleEventMeta').textContent='請先到「賽事管理」建立或進入一場賽事';
    return;
  }
- $('currentEventLabel').textContent=`${ev.date} · 第${ev.seq||1}場 · ${ev.level}｜開賽 ${ev.startTime||'--:--'}｜預計截止買入 ${ev.regCloseTime||'--:--'}`;
- if($('settleEventTitle'))$('settleEventTitle').textContent=`${ev.date}｜第 ${ev.seq||1} 場｜${Number(ev.level).toLocaleString()} 賽事`;
+ $('currentEventLabel').textContent=`${ev.date} · ${eventDisplayName_(ev)} · ${ev.level}｜開賽 ${ev.startTime||'--:--'}｜預計截止買入 ${ev.regCloseTime||'--:--'}`;
+ if($('settleEventTitle'))$('settleEventTitle').textContent=`${ev.date}｜${eventDisplayName_(ev)}｜${Number(ev.level).toLocaleString()} 賽事`;
  if($('settleEventMeta')){
    const priceText=(ev.pricingMode||'standard')==='custom'
      ? `首購 ${money(ev.buyinTotal)}（行政費 ${money(ev.buyinAdmin)}）｜重買 ${money(ev.rebuyTotal)}（行政費 ${money(ev.rebuyAdmin)}）`
@@ -4068,7 +4092,7 @@ function render(){
  if($('settleStartTime'))$('settleStartTime').value=ev.startTime||'';
  if($('settleRegCloseTime'))$('settleRegCloseTime').value=ev.regCloseTime||'';
  if($('settleEndTime'))$('settleEndTime').value=ev.endTime||'';
- $('eDate').value=ev.date;if($('eStartTime'))$('eStartTime').value=ev.startTime||'';if($('eRegCloseTime'))$('eRegCloseTime').value=ev.regCloseTime||'';$('eLevel').value=ev.level;$('ePoolUnit').value=ev.poolUnit;$('eAdmin').value=ev.admin;
+ $('eDate').value=ev.date;if($('eName'))$('eName').value=eventDisplayName_(ev);if($('eStartTime'))$('eStartTime').value=ev.startTime||'';if($('eRegCloseTime'))$('eRegCloseTime').value=ev.regCloseTime||'';$('eLevel').value=ev.level;$('ePoolUnit').value=ev.poolUnit;$('eAdmin').value=ev.admin;
  if($('ePricingMode'))$('ePricingMode').value=ev.pricingMode||'standard';
  if($('eBuyinTotal'))$('eBuyinTotal').value=ev.buyinTotal??((+ev.poolUnit||0)+(+ev.admin||0));
  if($('eBuyinAdmin'))$('eBuyinAdmin').value=ev.buyinAdmin??(+ev.admin||0);
@@ -4541,7 +4565,7 @@ function renderEventReport(){
  ensureEventReportSettings(e);
  let info=poolInfo(e);
  let totalGroups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
- let eventName=`${Number(e.level||0).toLocaleString()} 賽事`;
+ let eventName=`${eventDisplayName_(e)}｜${Number(e.level||0).toLocaleString()} 賽事`;
  if($('eventReportSettings'))$('eventReportSettings').innerHTML=EVENT_REPORT_FIELDS.map(([k,label])=>
    `<label style="display:flex;gap:7px;align-items:center"><input type="checkbox" ${e.reportFields[k]?'checked':''} onchange="setEventReportField('${k}',this.checked)"> ${label}</label>`
  ).join('');
@@ -4638,7 +4662,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.49.0: the print clone must contain exactly the same selected columns
+   // V1.49.2: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
