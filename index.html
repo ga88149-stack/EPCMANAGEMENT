@@ -1947,77 +1947,66 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
 </section>
 
 <section id="settle" class="page">
- <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-<h2 style="margin:0">ICM / 結算</h2>
-<button onclick="showPage('event')">← 返回賽事帳務</button>
-</div>
- <div class="card" style="margin-bottom:12px">
-  <div class="toolbar no-print" style="margin-bottom:10px">
-   <button type="button" class="primary" onclick="syncPhoneStacksOnly()">同步手機籌碼</button>
-   <span class="small">只更新本場玩家的下桌籌碼，不載入會員、買入、重買、優惠、賽事設定或其他帳務資料。</span>
-  </div>
-  <div class="small">目前結算賽事</div>
-  <div style="font-size:20px;font-weight:800;margin-top:5px" id="settleEventTitle">尚未選擇賽事</div>
-  <div class="small" id="settleEventMeta" style="margin-top:5px"></div>
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px">
+  <h2 style="margin:0">ICM / 結算</h2>
+  <button onclick="showPage('event')">← 返回賽事帳務</button>
  </div>
- <div class="card">
-  <div class="formgrid">
-   <div><label>開賽時間</label><input id="settleStartTime" readonly placeholder="--:--"></div>
-   <div><label>預計截止買入時間</label><input id="settleRegCloseTime" readonly placeholder="--:--"></div>
-   <div><label>實際結束時間</label><input id="settleEndTime" inputmode="numeric" placeholder="例如 20:15" onchange="saveEndTime(this.value)"></div>
-  </div>
- </div>
- <div class="grid">
-  <div class="card kpi"><div class="l">原始獎池</div><div class="v" id="sPool">$0</div></div>
-  <div class="card kpi"><div class="l">人次</div><div class="v" id="sEntrants">0</div></div>
-<div class="card kpi"><div class="l">起始籌碼</div><div class="v" id="sStartingChips">0</div></div>
-<div class="card kpi"><div class="l">JP 提撥</div><div class="v" id="sJP">$0</div></div>
-  <div class="card kpi"><div class="l">折扣總額</div><div class="v" id="sTotalDiscount">$0</div></div>
-  <div class="card kpi"><div class="l">實收行政費</div><div class="v" id="sNetAdmin">$0</div></div>
-  <div class="card kpi"><div class="l">ICM 可發獎金</div><div class="v" id="sAvail">$0</div></div>
-  <div class="card kpi"><div class="l">籌碼差異</div><div class="v" id="sChipDiff">0</div></div>
- </div>
- <div class="card">
-  <div class="toolbar">
-<button type="button" class="primary" id="btnCalcICM" onclick="calculateICM()">① 計算 ICM</button><div class="small" style="margin-top:8px">獎金依「下桌籌碼占總籌碼比例」分配 ICM 可發獎金，最後以 100 元為單位調整，總額不變。</div>
-<button type="button" class="primary" id="btnConfirmSettlement" onclick="confirmSettlement()">② 正式結算 / 鎖定</button>
-<button type="button" id="btnUnlockSettlement" onclick="unlockSettledEvent(currentEvent()?.id)" style="display:none">解鎖編輯</button>
+
+ <div class="card" style="margin-bottom:10px;padding:14px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+   <div>
+    <div class="small">目前結算賽事</div>
+    <div style="font-size:20px;font-weight:800;margin-top:3px" id="settleEventTitle">尚未選擇賽事</div>
+    <div class="small" id="settleEventMeta" style="margin-top:4px"></div>
+   </div>
+   <div class="formgrid" style="grid-template-columns:repeat(3,minmax(150px,1fr));min-width:min(100%,560px);gap:8px">
+    <div><label>開賽時間</label><input id="settleStartTime" readonly placeholder="--:--"></div>
+    <div><label>預計截止買入時間</label><input id="settleRegCloseTime" readonly placeholder="--:--"></div>
+    <div><label>實際結束時間</label><input id="settleEndTime" inputmode="numeric" placeholder="例如 20:15" onchange="saveEndTime(this.value)"></div>
+   </div>
   </div>
 
-  <div class="card" style="margin:14px 0 0">
-    <h3 style="margin-top:0">結算報表規則</h3>
-    <div class="small" style="margin-bottom:10px">設定後會自動帶到正式結算報表。</div>
-
-    <label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">本場規則</label>
-    <textarea id="settleReportRuleInput" rows="3"
-      placeholder="輸入本場賽事規則／獎金說明……"
-      style="width:100%;box-sizing:border-box;resize:vertical"
-      oninput="saveEventReportRule(this.value)"></textarea>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
-      <button type="button" onclick="useDefaultReportRule()">套用預設規則</button>
-    </div>
-
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #263646">
-      <label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">預設規則</label>
-      <textarea id="settleDefaultReportRuleInput" rows="3"
-        placeholder="設定一次，之後新賽事自動套用"
-        style="width:100%;box-sizing:border-box;resize:vertical"
-        oninput="saveDefaultReportRule(this.value)"></textarea>
-    </div>
+  <div class="grid" style="margin-top:6px">
+   <div class="card kpi" style="margin-bottom:0"><div class="l">總實收</div><div class="v" id="sTotalPaid">$0</div></div>
+   <div class="card kpi" style="margin-bottom:0"><div class="l">總獎池</div><div class="v" id="sPool">$0</div></div>
+   <div class="card kpi" style="margin-bottom:0"><div class="l">實收行政費</div><div class="v" id="sNetAdmin">$0</div></div>
+   <div class="card kpi" style="margin-bottom:0"><div class="l">JP 提撥</div><div class="v" id="sJP">$0</div></div>
+   <div class="card kpi" style="margin-bottom:0"><div class="l">起始籌碼</div><div class="v" id="sStartingChips">0</div></div>
+   <div class="card kpi" style="margin-bottom:0"><div class="l">總可發獎金</div><div class="v" id="sAvail">$0</div></div>
+   <div class="card kpi" style="margin-bottom:0"><div class="l">折扣總額</div><div class="v" id="sTotalDiscount">$0</div></div>
+   <div class="card kpi" style="margin-bottom:0"><div class="l">籌碼差異</div><div class="v" id="sChipDiff">0</div></div>
   </div>
-<div class="small" style="margin-top:8px">在下方直接輸入每位玩家的「下桌籌碼」。只有籌碼差異 = 0 時，才能計算 ICM 與正式結算。</div>
-  <div class="small">JP = 總獎池 × 3% 後依設定單位向上取整；不足一個取整單位的餘數一併計入 JP。</div>
  </div>
- <div class="card no-print">
-<h3>顯示設定</h3>
-<div class="small" style="margin-bottom:10px">勾選後可立即控制下方 ICM 結算表要顯示的欄位；設定也會保留。</div>
-<div id="reportColumnSettings" style="display:flex;gap:14px;flex-wrap:wrap"></div>
-</div>
+
+ <div class="card no-print" style="margin-bottom:10px;padding:12px 14px">
+  <div class="toolbar" style="margin:0;align-items:center">
+   <button type="button" class="primary" onclick="syncPhoneStacksOnly()">① 同步籌碼</button>
+   <button type="button" class="primary" id="btnCalcICM" onclick="calculateICM()">② 計算 ICM</button>
+   <button type="button" class="primary" id="btnConfirmSettlement" onclick="confirmSettlement()">③ 正式結算 / 鎖定</button>
+   <button type="button" id="btnUnlockSettlement" onclick="unlockSettledEvent(currentEvent()?.id)" style="display:none">解鎖編輯</button>
+  </div>
+ </div>
 <div class="card tablewrap">
  <div class="small" style="margin-bottom:10px"><b>獎金確認：</b>計算 ICM 後，可在「ICM獎金」欄直接手動修改。獎金合計必須等於 ICM 可發獎金，且下桌籌碼為 0 的玩家獎金必須為 0。</div>
  <table id="settleTable"><thead><tr id="settleHead"></tr></thead><tbody id="settleRows"></tbody><tfoot><tr><td id="manualPrizeTotalCell" colspan="99" style="text-align:right;font-weight:800"></td></tr></tfoot></table>
 </div>
+ <div class="card" style="margin-top:10px">
+  <h3 style="margin-top:0">結算報表規則</h3>
+  <div class="small" style="margin-bottom:10px">設定後會自動帶到正式結算報表。</div>
+  <label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">本場規則</label>
+  <textarea id="settleReportRuleInput" rows="3" placeholder="輸入本場賽事規則／獎金說明……" style="width:100%;box-sizing:border-box;resize:vertical" oninput="saveEventReportRule(this.value)"></textarea>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"><button type="button" onclick="useDefaultReportRule()">套用預設規則</button></div>
+  <div style="margin-top:14px;padding-top:12px;border-top:1px solid #263646">
+   <label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">預設規則</label>
+   <textarea id="settleDefaultReportRuleInput" rows="3" placeholder="設定一次，之後新賽事自動套用" style="width:100%;box-sizing:border-box;resize:vertical" oninput="saveDefaultReportRule(this.value)"></textarea>
+  </div>
+ </div>
+ <div class="card no-print">
+  <h3>顯示設定</h3>
+  <div class="small" style="margin-bottom:10px">勾選後可立即控制 ICM 結算表要顯示的欄位；設定也會保留。</div>
+  <div id="reportColumnSettings" style="display:flex;gap:14px;flex-wrap:wrap"></div>
+ </div>
+
  <div class="card tablewrap"><h3>合併結帳</h3><table><thead><tr><th>結帳群組</th><th>成員</th><th>合計輸贏</th></tr></thead><tbody id="groupRows"></tbody></table></div>
 </section>
 
@@ -4920,7 +4909,7 @@ function render(){
  // renderDashboardSummary() already calculates the authoritative ledger KPIs.
  let settledEvents=db.events.filter(x=>x.status==='已結算');
  $('kMembers').textContent=db.members.length;
- $('sPool').textContent=money(info.pool);$('sJP').textContent=money(info.jp);const settleTotals=ev.players.reduce((a,p)=>{const c=calcPlayerForEvent(p,ev);a.discount+=(+c.totalDiscount||0);a.netAdmin+=(+c.netAdmin||0);return a;},{discount:0,netAdmin:0});if($('sTotalDiscount'))$('sTotalDiscount').textContent=money(settleTotals.discount);if($('sNetAdmin'))$('sNetAdmin').textContent=money(settleTotals.netAdmin);$('sAvail').textContent=money(info.avail);if($('sEntrants'))$('sEntrants').textContent=ev.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,ev).groups,0);if($('sStartingChips'))$('sStartingChips').textContent=Number(ev.chips||0).toLocaleString();$('sChipDiff').textContent=chipDiff.toLocaleString();$('sChipDiff').className='v '+(chipDiff===0?'pos':'neg');
+ $('sPool').textContent=money(info.pool);$('sJP').textContent=money(info.jp);const settleTotals=ev.players.reduce((a,p)=>{const c=calcPlayerForEvent(p,ev);a.discount+=(+c.totalDiscount||0);a.netAdmin+=(+c.netAdmin||0);a.paid+=(+c.paid||0);return a;},{discount:0,netAdmin:0,paid:0});if($('sTotalPaid'))$('sTotalPaid').textContent=money(settleTotals.paid);if($('sTotalDiscount'))$('sTotalDiscount').textContent=money(settleTotals.discount);if($('sNetAdmin'))$('sNetAdmin').textContent=money(settleTotals.netAdmin);$('sAvail').textContent=money(info.avail);if($('sEntrants'))$('sEntrants').textContent=ev.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,ev).groups,0);if($('sStartingChips'))$('sStartingChips').textContent=Number(ev.chips||0).toLocaleString();$('sChipDiff').textContent=chipDiff.toLocaleString();$('sChipDiff').className='v '+(chipDiff===0?'pos':'neg');
  if($('btnCalcICM')){$('btnCalcICM').disabled=chipDiff!==0;$('btnCalcICM').style.opacity=$('btnCalcICM').disabled?'.45':'1';}
  const prizeCheck=manualPrizeValidation(ev);
  if($('manualPrizeTotalCell')){
