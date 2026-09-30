@@ -1107,7 +1107,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.48.2 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.48.4 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3784,7 +3784,9 @@ function ensureActDb_(){
  if(B.personEnabled==null)B.personEnabled=true;if(B.personStep==null)B.personStep=1;if(B.personAmount==null)B.personAmount=100;
  if(B.groupEnabled==null)B.groupEnabled=true;
  // General stage: default every 16 groups +200. Hunting stage: every 8 groups +200.
- if(B.normalGroupStep==null)B.normalGroupStep=16;if(B.normalGroupAmount==null)B.normalGroupAmount=200;
+ if(B.normalGroupStep==null)B.normalGroupStep=8;
+ if(B.normalGroupStep===16 && B.normalGroupAmount===200 && B._normalStepCorrected!==true){B.normalGroupStep=8;B._normalStepCorrected=true;}
+ if(B.normalGroupAmount==null)B.normalGroupAmount=200;
  if(B.huntGroupStep==null)B.huntGroupStep=8;if(B.huntGroupAmount==null)B.huntGroupAmount=200;
  if(B.attackEnabled==null)B.attackEnabled=false;if(B.attackThreshold==null)B.attackThreshold=14000;
  if(B.initialHp==null)B.initialHp=200;
@@ -3798,7 +3800,25 @@ function actEvents_(){
  return (db.events||[]).filter(e=>(!from||String(e.date||'')>=from)&&(!to||String(e.date||'')<=to));
 }
 function actMember_(id){return (db.members||[]).find(m=>String(m.id)===String(id))||{}}
+
 function actMemberOptions_(){return (db.members||[]).map(m=>`<option value="${m.id}">${m.name||''} (${m.id||''})</option>`).join('')}
+function actMemberSearchOptions_(members){
+ return (members||db.members||[]).map(m=>{
+  const id=String(m.id||m.memberId||'');
+  const mm=m.id?m:actMember_(id);
+  const name=String(mm?.name||id).replace(/"/g,'&quot;');
+  return '<option value="'+name+' ('+id+')"></option>';
+ }).join('');
+}
+function actResolveMember_(inputId){
+ const raw=String($(inputId)?.value||'').trim();
+ if(!raw)return '';
+ const mt=raw.match(/\(([^()]+)\)\s*$/);
+ if(mt)return mt[1].trim();
+ const m=(db.members||[]).find(x=>String(x.id)===raw||String(x.name||'').trim()===raw);
+ return m?String(m.id):'';
+}
+
 function actEventOptions_(){return actEvents_().map(e=>`<option value="${e.id}">${e.date||''}｜第${e.seq||1}場｜${e.level||''}</option>`).join('')}
 function actEventLabel_(e){return `${e.date||''} 第${e.seq||1}場 ${e.level||''}`}
 function actGroups_(p,e){try{return +calcPlayerForEvent(p,e).groups||0}catch(_){return (+p.buyin||0)+(+p.rebuy||0)+(+p.addon||0)}}
@@ -3963,26 +3983,26 @@ function actRank_(){
  <h3 style="margin-top:14px">區間排行榜</h3>
  <table><thead><tr><th>排名</th><th>會員</th><th>自動得分</th><th>人工調整</th><th>總得分</th></tr></thead><tbody>${ranking.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.auto}</td><td><input type="number" style="width:90px" value="${x.adj}" onchange="actAdj_('rank','${x.id}','adj',this.value)"></td><td><b>${x.total}</b></td></tr>`).join('')||'<tr><td colspan="5">區間內無得分</td></tr>'}</tbody></table></div>${detail}`;
 }
-function hunterEventChanged_(){const e=(db.events||[]).find(x=>x.id===$('hunterEvent')?.value),sel=$('hunterKiller');if(sel)sel.innerHTML='<option value="">選擊殺者</option>'+(e?.players||[]).map(p=>`<option value="${p.memberId}">${actMember_(p.memberId).name||p.memberId}</option>`).join('')}
-function addHunter_(){ensureActDb_();const eventId=$('hunterEvent').value,killer=$('hunterKiller').value;if(!eventId||!killer)return actionMsg('請選場次與擊殺者',true);db.activityManagement.hunter.unshift({id:'H'+Date.now(),date:(db.events||[]).find(e=>e.id===eventId)?.date||'',eventId,killer,points:+$('hunterPoints').value||1,note:$('hunterNote').value||''});persist();renderActivities()}
+function hunterEventChanged_(){const e=(db.events||[]).find(x=>x.id===$('hunterEvent')?.value),list=$('hunterKillerList'),inp=$('hunterKiller');if(inp)inp.value='';if(list)list.innerHTML=actMemberSearchOptions_(e?.players||[])}
+function addHunter_(){ensureActDb_();const eventId=$('hunterEvent').value,killer=actResolveMember_('hunterKiller');if(!eventId||!killer)return actionMsg('請選場次與擊殺者',true);db.activityManagement.hunter.unshift({id:'H'+Date.now(),date:(db.events||[]).find(e=>e.id===eventId)?.date||'',eventId,killer,points:+$('hunterPoints').value||1,note:$('hunterNote').value||''});persist();renderActivities()}
 function hunterEdit_(id,v){const x=db.activityManagement.hunter.find(z=>z.id===id);if(x){x.points=+v||0;persist();renderActivities()}}
 function hunterDel_(id){db.activityManagement.hunter=db.activityManagement.hunter.filter(x=>x.id!==id);persist();renderActivities()}
 function actHunter_(){
  const {from,to}=actRange_(),rows=db.activityManagement.hunter.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
- return `<div class="card"><h3>獵人排行榜｜擊殺登記</h3><div class="formgrid" style="grid-template-columns:1.4fr 1.2fr .6fr 1.2fr auto"><div><label>場次</label><select id="hunterEvent" onchange="hunterEventChanged_()"><option value="">選擇場次</option>${actEventOptions_()}</select></div><div><label>擊殺者</label><select id="hunterKiller"><option value="">先選場次</option></select></div><div><label>分數</label><input type="number" id="hunterPoints" value="1"></div><div><label>備註</label><input id="hunterNote"></div><div style="align-self:end"><button onclick="addHunter_()">登記擊殺</button></div></div>
+ return `<div class="card"><h3>獵人排行榜｜擊殺登記</h3><div class="formgrid" style="grid-template-columns:1.4fr 1.2fr .6fr 1.2fr auto"><div><label>場次</label><select id="hunterEvent" onchange="hunterEventChanged_()"><option value="">選擇場次</option>${actEventOptions_()}</select></div><div><label>擊殺者</label><input id="hunterKiller" list="hunterKillerList" autocomplete="off" placeholder="先選場次，再輸入姓名 / ID"><datalist id="hunterKillerList"></datalist></div><div><label>分數</label><input type="number" id="hunterPoints" value="1"></div><div><label>備註</label><input id="hunterNote"></div><div style="align-self:end"><button onclick="addHunter_()">登記擊殺</button></div></div>
  <h3 style="margin-top:14px">排行榜</h3><table><thead><tr><th>排名</th><th>會員</th><th>總分</th></tr></thead><tbody>${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="3">尚無資料</td></tr>'}</tbody></table>
  <h3 style="margin-top:14px">登記紀錄</h3><table><thead><tr><th>日期</th><th>場次</th><th>擊殺者</th><th>分數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actEventLabel_((db.events||[]).find(e=>e.id===x.eventId)||{})}</td><td>${actMember_(x.killer).name||x.killer}</td><td><input type="number" style="width:90px" value="${x.points}" onchange="hunterEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="hunterDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無登記</td></tr>'}</tbody></table></div>`;
 }
 function umbrellaRule_(k,v){db.activityManagement.umbrellaRules[k]=+v||0;persist();renderActivities()}
 function umbrellaTypeChanged_(){const k=$('umbrellaType').value;$('umbrellaCoupons').value=db.activityManagement.umbrellaRules[k]??0}
-function addUmbrella_(){const id=$('umbrellaMember').value,k=$('umbrellaType').value;if(!id)return actionMsg('請選會員',true);db.activityManagement.umbrella.unshift({id:'U'+Date.now(),date:$('umbrellaDate').value||new Date().toISOString().slice(0,10),memberId:id,type:k,coupons:+$('umbrellaCoupons').value||0,note:$('umbrellaNote').value||''});persist();renderActivities()}
+function addUmbrella_(){const id=actResolveMember_('umbrellaMember'),k=$('umbrellaType').value;if(!id)return actionMsg('請選會員',true);db.activityManagement.umbrella.unshift({id:'U'+Date.now(),date:$('umbrellaDate').value||new Date().toISOString().slice(0,10),memberId:id,type:k,coupons:+$('umbrellaCoupons').value||0,note:$('umbrellaNote').value||''});persist();renderActivities()}
 function umbrellaEdit_(id,v){const x=db.activityManagement.umbrella.find(z=>z.id===id);if(x){x.coupons=+v||0;persist();renderActivities()}}
 function umbrellaDel_(id){db.activityManagement.umbrella=db.activityManagement.umbrella.filter(x=>x.id!==id);persist();renderActivities()}
 function actUmbrella_(){
  const A=db.activityManagement,{from,to}=actRange_(),rows=A.umbrella.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
  const rules=Object.entries(A.umbrellaRules);
  return `<div class="card"><h3>保護傘｜牌型券數設定</h3><div class="formgrid" style="grid-template-columns:repeat(${rules.length},1fr)">${rules.map(([k,v])=>`<div><label>${k}</label><input type="number" value="${v}" onchange="umbrellaRule_('${k}',this.value)"></div>`).join('')}</div>
- <h3 style="margin-top:14px">登記保護傘</h3><div class="formgrid" style="grid-template-columns:.9fr 1.2fr 1.2fr .6fr 1.2fr auto"><div><label>日期</label><input type="date" id="umbrellaDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>會員</label><select id="umbrellaMember"><option value="">選會員</option>${actMemberOptions_()}</select></div><div><label>被超車牌型</label><select id="umbrellaType" onchange="umbrellaTypeChanged_()">${rules.map(([k])=>`<option>${k}</option>`).join('')}</select></div><div><label>券數</label><input type="number" id="umbrellaCoupons" value="${rules[0]?.[1]||0}"></div><div><label>備註</label><input id="umbrellaNote"></div><div style="align-self:end"><button onclick="addUmbrella_()">登記</button></div></div>
+ <h3 style="margin-top:14px">登記保護傘</h3><div class="formgrid" style="grid-template-columns:.9fr 1.2fr 1.2fr .6fr 1.2fr auto"><div><label>日期</label><input type="date" id="umbrellaDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>會員</label><input id="umbrellaMember" list="umbrellaMemberList" autocomplete="off" placeholder="輸入姓名 / 會員ID"><datalist id="umbrellaMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>被超車牌型</label><select id="umbrellaType" onchange="umbrellaTypeChanged_()">${rules.map(([k])=>`<option>${k}</option>`).join('')}</select></div><div><label>券數</label><input type="number" id="umbrellaCoupons" value="${rules[0]?.[1]||0}"></div><div><label>備註</label><input id="umbrellaNote"></div><div style="align-self:end"><button onclick="addUmbrella_()">登記</button></div></div>
  <h3 style="margin-top:14px">排行榜</h3><table><thead><tr><th>排名</th><th>會員</th><th>券數</th></tr></thead><tbody>${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="3">尚無資料</td></tr>'}</tbody></table>
  <h3 style="margin-top:14px">明細</h3><table><thead><tr><th>日期</th><th>會員</th><th>牌型</th><th>券數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.type}</td><td><input type="number" style="width:90px" value="${x.coupons}" onchange="umbrellaEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="umbrellaDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無資料</td></tr>'}</tbody></table></div>`;
 }
@@ -3994,7 +4014,8 @@ function bossPool_(){
  const start=+B.startPrize||0;
  const personBonus=B.personEnabled?Math.floor(people/Math.max(1,+B.personStep||1))*(+B.personAmount||0):0;
  // General stage is calculated first. It uses its own group threshold (default 16 groups +200).
- const normalGroupBonus=B.groupEnabled?Math.floor(groups/Math.max(1,+B.normalGroupStep||16))*(+B.normalGroupAmount||0):0;
+ const normalStep=Math.max(1,+B.normalGroupStep||8);
+ const normalGroupBonus=B.groupEnabled?Math.max(0,Math.floor(groups/normalStep)-1)*(+B.normalGroupAmount||0):0;
  let generalPool=start+personBonus+normalGroupBonus;
  const threshold=+B.attackThreshold||0;
  const attackActive=!!B.attackEnabled||(threshold>0&&generalPool>=threshold);
@@ -4013,7 +4034,7 @@ function bossCurrentHp_(){
  // and must not decide whether normal 10Xo/TT damage is counted.
  return Math.max(0,(+B.initialHp||0)-(B.attacks||[]).reduce((sum,x)=>sum+Math.max(0,+x.damage||0),0));
 }
-function addBossAttack_(){const B=db.activityManagement.boss,id=$('bossMember').value;if(!id)return actionMsg('請選攻擊玩家',true);B.attacks.unshift({id:'B'+Date.now(),date:$('bossDate').value||new Date().toISOString().slice(0,10),memberId:id,method:$('bossMethod').value,damage:+$('bossDamage').value||0,execute:+$('bossExecute').value||0,success:$('bossSuccess').checked,note:$('bossNote').value||''});persist();renderActivities()}
+function addBossAttack_(){const B=db.activityManagement.boss,id=actResolveMember_('bossMember');if(!id)return actionMsg('請選攻擊玩家',true);B.attacks.unshift({id:'B'+Date.now(),date:$('bossDate').value||new Date().toISOString().slice(0,10),memberId:id,method:$('bossMethod').value,damage:+$('bossDamage').value||0,execute:+$('bossExecute').value||0,success:$('bossSuccess').checked,note:$('bossNote').value||''});persist();renderActivities()}
 function bossAttackEdit_(id,k,v){const x=db.activityManagement.boss.attacks.find(z=>z.id===id);if(x){x[k]=k==='success'?!!v:Number(v)||0;persist();renderActivities()}}
 function bossAttackDel_(id){db.activityManagement.boss.attacks=db.activityManagement.boss.attacks.filter(x=>x.id!==id);persist();renderActivities()}
 
@@ -4024,7 +4045,7 @@ function resetBossHuntBaseline_(){
 function actBoss_(){
  const B=db.activityManagement.boss,P=bossPool_(),hp=bossCurrentHp_(),enabled=P.attackActive,{from,to}=actRange_(),rows=B.attacks.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
  return `<div class="card"><h3>雙十狩主｜第一：獎池累計</h3>
- <div class="small">一般階段與狩王階段的組數加碼分開設定。一般階段預設每 16 組 +200；進入狩王階段後，從狩王起始組數重新累積，預設每 8 組 +200。</div>
+ <div class="small">一般階段仍以 8 組為一階，但第一階 8 組不加碼：16、24、32、40…組才各 +200。進入狩王階段後重新累積，狩王後新增 8、16、24…組即各 +200。</div>
  <div class="formgrid" style="grid-template-columns:repeat(4,1fr);margin-top:10px"><div><label>起始獎金</label><input type="number" value="${B.startPrize}" onchange="bossSet_('startPrize',this.value)"></div><div><label>獎池封頂</label><input type="number" value="${B.cap}" onchange="bossSet_('cap',this.value)"></div><div><label>攻擊啟用門檻</label><input type="number" value="${B.attackThreshold}" onchange="bossSet_('attackThreshold',this.value)"></div><div><label>魔王初始HP</label><input type="number" value="${B.initialHp}" onchange="bossSet_('initialHp',this.value)"></div></div>
  <div class="formgrid" style="grid-template-columns:auto .7fr .8fr .7fr .8fr auto;margin-top:10px">
   <div><label>人數加碼</label><input type="checkbox" ${B.personEnabled?'checked':''} onchange="bossSet_('personEnabled',this.checked,'bool')"></div>
@@ -4044,7 +4065,7 @@ function actBoss_(){
  </div></div>
  <div class="card" style="margin-top:12px"><h3>第二：攻擊／傷害／斬殺</h3>
  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px"><div class="card"><div class="small">魔王初始HP</div><b>${B.initialHp}</b></div><div class="card"><div class="small">累計已受傷害</div><b>${Math.max(0,(+B.initialHp||0)-hp)}</b></div><div class="card"><div class="small">魔王剩餘HP</div><b>${hp}</b></div></div>
- ${enabled?`<div class="formgrid" style="grid-template-columns:.9fr 1.2fr .9fr .7fr .7fr .7fr 1fr auto"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><select id="bossMember"><option value="">選會員</option>${actMemberOptions_()}</select></div><div><label>攻擊形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>斬殺成功</label><input type="checkbox" id="bossSuccess"></div><div><label>備註</label><input id="bossNote"></div><div style="align-self:end"><button onclick="addBossAttack_()">登記攻擊</button></div></div>`:'<div class="small">目前尚未啟用攻擊。達獎池門檻或手動啟用後才可登記。</div>'}
+ ${enabled?`<div class="formgrid" style="grid-template-columns:.9fr 1.2fr .9fr .7fr .7fr .7fr 1fr auto"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><input id="bossMember" list="bossMemberList" autocomplete="off" placeholder="輸入姓名 / 會員ID"><datalist id="bossMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>攻擊形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>斬殺成功</label><input type="checkbox" id="bossSuccess"></div><div><label>備註</label><input id="bossNote"></div><div style="align-self:end"><button onclick="addBossAttack_()">登記攻擊</button></div></div>`:'<div class="small">目前尚未啟用攻擊。達獎池門檻或手動啟用後才可登記。</div>'}
  <div style="margin-top:10px"><b>${hp<30?'已進入斬殺模式':'尚未進入斬殺模式'}</b></div>
  <table style="margin-top:10px"><thead><tr><th>日期</th><th>會員</th><th>形式</th><th>傷害（可改）</th><th>斬殺次數（可改）</th><th>斬殺成功</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.method}</td><td><input type="number" style="width:80px" value="${x.damage}" onchange="bossAttackEdit_('${x.id}','damage',this.value)"></td><td><input type="number" style="width:70px" value="${x.execute||0}" onchange="bossAttackEdit_('${x.id}','execute',this.value)"></td><td><input type="checkbox" ${x.success?'checked':''} onchange="bossAttackEdit_('${x.id}','success',this.checked)"></td><td>${x.note||''}</td><td><button class="danger" onclick="bossAttackDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="8">尚無攻擊紀錄</td></tr>'}</tbody></table></div>`;
 }
@@ -4657,7 +4678,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.48.2: the print clone must contain exactly the same selected columns
+   // V1.48.4: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
