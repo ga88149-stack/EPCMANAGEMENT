@@ -2389,8 +2389,8 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
 
 <div id="settlementConfirmModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
   <div style="width:min(460px,100%);background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
-    <h3 style="margin-top:0;color:#e7c568!important">確認正式結算</h3>
-    <div id="settlementConfirmText" style="line-height:1.7;margin-bottom:18px;color:#f3f7fb!important"></div>
+    <h3 style="margin-top:0;color:#8a6400!important">確認正式結算</h3>
+    <div id="settlementConfirmText" style="line-height:1.7;margin-bottom:18px;color:#172531!important"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button type="button" onclick="closeSettlementConfirm()">取消</button>
       <button type="button" class="primary" onclick="executeFormalSettlement()">確認正式結算</button>
@@ -4072,10 +4072,10 @@ function confirmSettlement(){
  let info=poolInfo(e);
  let groups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
  $('settlementConfirmText').innerHTML=
-   `<span style="color:#f3f7fb!important">即將正式結算並鎖定本場賽事。</span><br><br>`+
-   `<strong style="color:#ffffff!important">${e.date}｜${Number(e.level||0).toLocaleString()} 賽事</strong><br>`+
-   `<span style="color:#f3f7fb!important">總組數：${groups}<br>總獎池：${money(info.pool)}<br>JP：${money(info.jp)}<br>可發獎金：${money(info.avail)}</span><br><br>`+
-   `<span style="color:#cbd6e0!important">確認後會更新本場正式結算資料，之後仍可編輯並重新正式結算。</span>`;
+   `<span style="color:#172531!important">即將正式結算並鎖定本場賽事。</span><br><br>`+
+   `<strong style="color:#111820!important">${e.date}｜${Number(e.level||0).toLocaleString()} 賽事</strong><br>`+
+   `<span style="color:#172531!important">總組數：${groups}<br>總獎池：${money(info.pool)}<br>JP：${money(info.jp)}<br>可發獎金：${money(info.avail)}</span><br><br>`+
+   `<span style="color:#526577!important">確認後會更新本場正式結算資料，之後仍可編輯並重新正式結算。</span>`;
  $('settlementConfirmModal').style.display='flex';
 }
 function closeSettlementConfirm(){
