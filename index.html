@@ -5499,8 +5499,17 @@ function displayLeaderboard_(kind){
  }else if(kind==='umbrella'){
   (A.umbrella||[]).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
  }else if(kind==='rank'){
-  // Reuse the activity ranking page's calculated records when available; otherwise derive from rank manual adjustments.
-  Object.entries(A.rankAdjust||{}).forEach(([id,v])=>tot[id]=(+v||0));
+  // Use the exact same calculation as 活動管理 → 週排行榜.
+  actEvents_().forEach(e=>{
+   eventTopScores_(e).forEach(x=>tot[x.id]=(tot[x.id]||0)+(+x.score||0));
+  });
+  const ids=new Set([...Object.keys(tot),...Object.keys(A.rankAdjust||{})]);
+  return [...ids].map(id=>{
+   const auto=+tot[id]||0,adj=+(A.rankAdjust||{})[id]||0;
+   return {id,name:actMember_(id).name||id,auto,adj,score:auto+adj};
+  }).filter(x=>x.score!==0||x.auto!==0||x.adj!==0)
+    .sort((a,b)=>b.score-a.score||b.auto-a.auto||String(a.name).localeCompare(String(b.name),'zh-Hant'))
+    .slice(0,10);
  }
  return Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score).slice(0,10);
 }
