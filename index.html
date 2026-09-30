@@ -1122,7 +1122,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.1 Web · Input Guard + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.2 Web · Full Manual Input Guard + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4887,48 +4887,64 @@ if(_renderActivitiesDisplayBase){
 setTimeout(()=>{displayApiSetInput_();if(displayApi_())loadDisplays_()},1200);
 
 
-/* ===== V1.50.1 Global Input Guard ===== */
-let epcInputGuardActive=false;
-let epcInputGuardRenderPending=false;
-let epcInputGuardTimer=0;
 
-function epcIsEditableTarget_(el){
+/* ===== V1.50.2 Full Manual Input Guard =====
+   Any manually edited form control is protected from background render() until
+   the user finishes the edit. This covers seat, manual discount, buy/rebuy,
+   activity settings, scores, HP/damage and other inputs/selects/textareas.
+*/
+let epcManualEditDepth=0;
+let epcPendingRender=false;
+let epcReleaseTimer=0;
+
+function epcEditable_(el){
   if(!el)return false;
   const tag=String(el.tagName||'').toUpperCase();
   return tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||!!el.isContentEditable;
 }
-function epcInputGuardBegin_(el){
-  if(!epcIsEditableTarget_(el))return;
-  epcInputGuardActive=true;
-  clearTimeout(epcInputGuardTimer);
+function epcBeginManualEdit_(el){
+  if(!epcEditable_(el))return;
+  epcManualEditDepth=1;
+  clearTimeout(epcReleaseTimer);
 }
-function epcInputGuardEnd_(){
-  clearTimeout(epcInputGuardTimer);
-  epcInputGuardTimer=setTimeout(function(){
-    epcInputGuardActive=false;
-    if(epcInputGuardRenderPending){
-      epcInputGuardRenderPending=false;
-      try{epcRawRender_();}catch(_){}
+function epcFinishManualEdit_(){
+  clearTimeout(epcReleaseTimer);
+  epcReleaseTimer=setTimeout(function(){
+    epcManualEditDepth=0;
+    if(epcPendingRender){
+      epcPendingRender=false;
+      try{epcRawRenderV1502_();}catch(_){}
     }
-  },250);
+  },500);
 }
-document.addEventListener('focusin',function(e){epcInputGuardBegin_(e.target);},true);
-document.addEventListener('focusout',function(){epcInputGuardEnd_();},true);
-document.addEventListener('input',function(e){
-  if(epcIsEditableTarget_(e.target)){
-    epcInputGuardActive=true;
-    clearTimeout(epcInputGuardTimer);
-  }
+
+/* Capture phase: protect before inline handlers/background callbacks can render. */
+['focusin','pointerdown','keydown','beforeinput','input','change'].forEach(function(evt){
+  document.addEventListener(evt,function(e){
+    if(epcEditable_(e.target))epcBeginManualEdit_(e.target);
+  },true);
+});
+document.addEventListener('focusout',function(e){
+  if(epcEditable_(e.target))epcFinishManualEdit_();
 },true);
 
-const epcRawRender_=render;
+/* Checkboxes/radios/selects can finish without a long typing focus. */
+document.addEventListener('change',function(e){
+  if(!epcEditable_(e.target))return;
+  const t=String(e.target.type||'').toLowerCase();
+  if(t==='checkbox'||t==='radio'||String(e.target.tagName||'').toUpperCase()==='SELECT'){
+    epcFinishManualEdit_();
+  }
+},false);
+
+const epcRawRenderV1502_=render;
 render=function(){
   const active=document.activeElement;
-  if(epcInputGuardActive && epcIsEditableTarget_(active)){
-    epcInputGuardRenderPending=true;
+  if(epcManualEditDepth>0 || epcEditable_(active)){
+    epcPendingRender=true;
     return;
   }
-  return epcRawRender_.apply(this,arguments);
+  return epcRawRenderV1502_.apply(this,arguments);
 };
 
 </script>
