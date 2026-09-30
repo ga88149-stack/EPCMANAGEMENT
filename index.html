@@ -3524,9 +3524,11 @@ function accountingTotalsForEvents(events){
    (Array.isArray(e.players)?e.players:[]).forEach(p=>{
      const c=calcPlayerForEvent(p,e);
      groups+=c.groups; gross+=c.grossAdmin||0; auto+=c.auto||0; manual+=c.manual||0; netAdmin+=c.netAdmin||0;
-     const custom=(e.pricingMode||'standard')==='custom';
-     if(custom){rebuyDiscount+=c.accountingRebuyDiscount??(c.rebuyDiscount||0);groupDiscount+=c.accountingGroupDiscount??(c.overbuyDiscount||0);}
-     else groupDiscount+=c.auto||0;
+     // Accounting restores the full original admin fee for every discounted group.
+     // Player/event UI still shows only the actual discount split (e.g. half-price = 400),
+     // while accounting expense shows the original admin value (e.g. 800).
+     rebuyDiscount+=c.accountingRebuyDiscount??(c.rebuyDiscount||0);
+     groupDiscount+=c.accountingGroupDiscount??(c.overbuyDiscount||0);
    });
    jp+=eventOwnJP(e);
  });
@@ -4187,8 +4189,8 @@ function calcPlayerForEvent(p,e){
    let rebuyDiscount=rebuyDiscountPerGroup*normalRebuyGroups;
    let overbuyDiscount=rebuyAdmin*overbuyGroups;
 
-   let accountingGroupDiscount=overbuyDiscount;
-   let accountingRebuyDiscount=rebuyDiscount;
+   let accountingGroupDiscount=rebuyAdmin*overbuyGroups;
+   let accountingRebuyDiscount=buyinAdmin*normalRebuyGroups;
 
    let auto=rebuyDiscount+overbuyDiscount;
    let totalDiscount=auto+manual;
@@ -4225,8 +4227,8 @@ function calcPlayerForEvent(p,e){
    pool:groups*(+e.poolUnit||0),
    grossAdmin, netAdmin:Math.max(0,grossAdmin-disc),
    rebuyDiscount, overbuyDiscount,
-   accountingRebuyDiscount:rebuyDiscount,
-   accountingGroupDiscount:overbuyDiscount,
+   accountingRebuyDiscount:halfPriceGroups*(+e.admin||0),
+   accountingGroupDiscount:freeAdminGroups*(+e.admin||0),
    normalRebuyGroups:halfPriceGroups,
    overbuyGroups:freeAdminGroups
  };
