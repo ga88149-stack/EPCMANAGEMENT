@@ -1113,9 +1113,16 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
  }
 }
 </style>
-<style>.searchCombo{position:relative}.searchComboMenu{position:absolute;z-index:99999;left:0;right:0;top:100%;max-height:260px;overflow-y:auto;background:#0b141d;border:1px solid #33495b;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:none}.searchComboMenu.open{display:block}.searchComboItem{padding:8px 10px;cursor:pointer;color:#eaf2f8;border-bottom:1px solid #182733}.searchComboItem:hover{background:#17304a}</style></head>
+<style>.searchCombo{position:relative}.searchComboMenu{position:absolute;z-index:99999;left:0;right:0;top:100%;max-height:260px;overflow-y:auto;background:#0b141d;border:1px solid #33495b;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:none}.searchComboMenu.open{display:block}.searchComboItem{padding:8px 10px;cursor:pointer;color:#eaf2f8;border-bottom:1px solid #182733}.searchComboItem:hover{background:#17304a}</style>
+<style id="displayDeviceCss">
+.display-device{border:1px solid #2c3d4d;border-radius:12px;padding:14px;margin:10px 0;background:#0e1720}
+.display-device-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.display-online{color:#49c27d;font-weight:800}.display-offline{color:#91a0b2}
+.display-preview{margin-top:10px;padding:10px;border:1px dashed #33495b;border-radius:9px}
+</style>
+</head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.49.6 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.0 Web · Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1124,6 +1131,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 <button data-page="dailysettle">分帳報表</button>
 <button data-page="accounting">EPC帳務</button>
 <button data-page="activities">活動管理</button>
+<button data-page="displays">顯示設備</button>
 
 </nav>
 <main>
@@ -1715,6 +1723,33 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
   <div class="tablewrap"><table><thead><tr><th>結帳群組</th><th>玩家</th><th>總支付</th><th>領回</th><th>個人輸贏</th><th>群組合計</th></tr></thead><tbody id="accountRows"></tbody></table></div>
  </div>
 </section>
+
+<section id="displays" class="page">
+ <h2>顯示設備</h2>
+ <div class="card">
+  <h3>Display API 設定</h3>
+  <div class="small">顯示器使用獨立 API，不修改 EPC_DATA。第一次部署後，把 Apps Script /exec 網址貼在這裡即可。</div>
+  <div class="formgrid" style="grid-template-columns:1fr auto;margin-top:10px">
+   <div><label>Display API URL</label><input id="displayApiUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+   <div style="align-self:end"><button onclick="saveDisplayApi_()">儲存並測試</button></div>
+  </div>
+  <div id="displayApiStatus" class="small" style="margin-top:8px">尚未設定</div>
+ </div>
+ <div class="card">
+  <h3>配對新顯示器</h3>
+  <div class="small">先在電視開啟 display.html，畫面會出現 6 位數配對碼。</div>
+  <div class="formgrid" style="grid-template-columns:1fr 1fr auto;margin-top:10px">
+   <div><label>6 位數配對碼</label><input id="displayPairCode" inputmode="numeric" maxlength="6" placeholder="例如 483921"></div>
+   <div><label>設備名稱</label><input id="displayPairName" placeholder="例如：主電視、包廂電視"></div>
+   <div style="align-self:end"><button class="primary" onclick="pairDisplay_()">配對設備</button></div>
+  </div>
+ </div>
+ <div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 style="margin:0">已配對設備</h3><button onclick="loadDisplays_()">重新整理</button></div>
+  <div id="displayDeviceRows" style="margin-top:12px"><div class="small">尚未載入設備</div></div>
+ </div>
+</section>
+
 </main>
 
 
@@ -4759,5 +4794,97 @@ async function autoRefreshMembers(){
 setInterval(autoRefreshMembers,15000);
 window.addEventListener('focus',autoRefreshMembers);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoRefreshMembers();});
+
+/* ===== V1.50.0 Display Devices ===== */
+const DISPLAY_API_KEY='epcDisplayApiUrlV1';
+let displayDevicesCache=[];
+
+function displayApi_(){return String(localStorage.getItem(DISPLAY_API_KEY)||'').trim()}
+function displayApiSetInput_(){const el=$('displayApiUrl');if(el&&!el.value)el.value=displayApi_()}
+async function displayFetch_(params={},post=false){
+ const base=displayApi_();if(!base)throw new Error('請先設定 Display API URL');
+ if(post){
+  const r=await fetch(base,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(params),redirect:'follow'});
+  const t=await r.text();let j;try{j=JSON.parse(t)}catch(_){throw new Error('Display API 回傳格式錯誤')}
+  if(!j.ok)throw new Error(j.error||'DISPLAY_API_ERROR');return j;
+ }
+ const u=base+(base.includes('?')?'&':'?')+new URLSearchParams(params).toString();
+ const r=await fetch(u,{cache:'no-store',redirect:'follow'});const j=await r.json();
+ if(!j.ok)throw new Error(j.error||'DISPLAY_API_ERROR');return j;
+}
+async function saveDisplayApi_(){
+ const v=String($('displayApiUrl')?.value||'').trim();if(!v)return actionMsg('請貼上 Display API URL',true);
+ localStorage.setItem(DISPLAY_API_KEY,v);
+ try{const r=await displayFetch_({action:'ping'});$('displayApiStatus').textContent='✓ 已連線｜'+(r.version||'Display API');await loadDisplays_();actionMsg('Display API 已連線')}
+ catch(e){$('displayApiStatus').textContent='連線失敗：'+e.message;actionMsg('Display API 連線失敗：'+e.message,true)}
+}
+function displayContentOptions_(v){
+ const a=[['weekly','每週任務卡'],['pioneer','開桌先鋒'],['rank','週排行榜'],['hunter','獵人排行榜'],['umbrella','保護傘'],['boss','雙十狩王'],['rotate','活動輪播']];
+ return a.map(x=>`<option value="${x[0]}" ${v===x[0]?'selected':''}>${x[1]}</option>`).join('');
+}
+async function pairDisplay_(){
+ const code=String($('displayPairCode')?.value||'').replace(/\D/g,'').slice(0,6),name=String($('displayPairName')?.value||'').trim();
+ if(code.length!==6)return actionMsg('請輸入電視上的 6 位數配對碼',true);
+ try{await displayFetch_({action:'pair',code,name:name||'EPC 顯示器'},true);$('displayPairCode').value='';$('displayPairName').value='';await loadDisplays_();actionMsg('顯示器配對完成')}
+ catch(e){actionMsg('配對失敗：'+e.message,true)}
+}
+async function loadDisplays_(){
+ displayApiSetInput_();if(!displayApi_())return;
+ try{
+  const r=await displayFetch_({action:'devices'});displayDevicesCache=r.devices||[];
+  const box=$('displayDeviceRows');if(!box)return;
+  box.innerHTML=displayDevicesCache.length?displayDevicesCache.map(d=>{
+   const online=Date.now()-(+d.lastSeen||0)<30000;
+   return `<div class="display-device"><div class="display-device-head"><div><b>${d.name||'未命名顯示器'}</b> <span class="${online?'display-online':'display-offline'}">${online?'● 在線':'○ 離線'}</span><div class="small">設備 ID：${d.deviceId||''}</div></div><button class="danger" onclick="removeDisplay_('${d.deviceId}')">解除配對</button></div>
+   <div class="formgrid" style="grid-template-columns:1fr 1fr auto;margin-top:10px"><div><label>顯示內容</label><select id="displayType_${d.deviceId}">${displayContentOptions_(d.contentType||'boss')}</select></div><div><label>輪播秒數</label><input id="displaySec_${d.deviceId}" type="number" min="5" value="${d.rotateSeconds||15}"></div><div style="align-self:end"><button class="primary" onclick="publishDisplay_('${d.deviceId}')">套用到螢幕</button></div></div>
+   <div class="display-preview small">目前：${d.contentType||'尚未指定'}｜最後連線：${d.lastSeen?new Date(+d.lastSeen).toLocaleString('zh-TW'):'-'}</div></div>`
+  }).join(''):'<div class="small">目前沒有已配對設備</div>';
+ }catch(e){if($('displayDeviceRows'))$('displayDeviceRows').innerHTML='<div class="small">載入失敗：'+e.message+'</div>'}
+}
+async function removeDisplay_(id){if(!confirm('確定解除這台顯示器？'))return;try{await displayFetch_({action:'remove',deviceId:id},true);await loadDisplays_()}catch(e){actionMsg(e.message,true)}}
+
+function displayLeaderboard_(kind){
+ ensureActDb_();const A=db.activityManagement||{},tot={};
+ if(kind==='pioneer'){
+  Object.values(A.pioneer||{}).forEach(P=>{if(P.confirmed===false)return;Object.entries(P.scores||{}).forEach(([id,v])=>tot[id]=(tot[id]||0)+(+v||0))});
+ }else if(kind==='hunter'){
+  (A.hunter||[]).forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));
+ }else if(kind==='umbrella'){
+  (A.umbrella||[]).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
+ }else if(kind==='rank'){
+  // Reuse the activity ranking page's calculated records when available; otherwise derive from rank manual adjustments.
+  Object.entries(A.rankAdjust||{}).forEach(([id,v])=>tot[id]=(+v||0));
+ }
+ return Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score).slice(0,10);
+}
+function displayPayload_(type){
+ ensureActDb_();const A=db.activityManagement||{};
+ if(type==='boss'){
+  const B=A.boss||{},S=bossStats_(),b=activeBoss_(),hp=b?bossCurrentHp_():0,latest=b?.attacks?.[0]||null;
+  return {type,title:'雙十狩王',pool:S.pool||0,cap:+B.cap||14000,attackActive:!!S.active,boss:b?{name:b.name||'魔王',initialHp:+b.initialHp||0,hp,killed:!!b.killed}:null,latest:latest?{member:actMember_(latest.memberId).name||latest.memberId,method:latest.method,damage:+latest.damage||0,success:!!latest.success}:null};
+ }
+ if(type==='weekly'){
+  return {type,title:'每週任務卡',rows:actPlayerStats_().map(x=>({name:x.name||x.id,games:x.games||0,days:x.days||0})).sort((a,b)=>b.games-a.games||b.days-a.days).slice(0,10)};
+ }
+ const titles={pioneer:'開桌先鋒',rank:'週排行榜',hunter:'獵人排行榜',umbrella:'保護傘'};
+ if(type==='rotate')return {type,title:'EPC 活動輪播',slides:['boss','pioneer','rank','hunter','umbrella','weekly'].map(t=>displayPayload_(t))};
+ return {type,title:titles[type]||'EPC 活動',rows:displayLeaderboard_(type)};
+}
+async function publishDisplay_(deviceId,silent=false){
+ const type=$('displayType_'+deviceId)?.value||(displayDevicesCache.find(x=>x.deviceId===deviceId)?.contentType)||'boss';
+ const sec=Math.max(5,+($('displaySec_'+deviceId)?.value||15));
+ try{await displayFetch_({action:'publish',deviceId,contentType:type,rotateSeconds:sec,payload:displayPayload_(type)},true);if(!silent){actionMsg('已更新顯示器');await loadDisplays_()}}
+ catch(e){if(!silent)actionMsg('顯示器更新失敗：'+e.message,true)}
+}
+async function publishAllDisplays_(){
+ if(!displayApi_()||!displayDevicesCache.length)return;
+ for(const d of displayDevicesCache){try{await publishDisplay_(d.deviceId,true)}catch(_){}}
+}
+const _renderActivitiesDisplayBase=typeof renderActivities==='function'?renderActivities:null;
+if(_renderActivitiesDisplayBase){
+ renderActivities=function(){const r=_renderActivitiesDisplayBase.apply(this,arguments);setTimeout(()=>publishAllDisplays_(),250);return r}
+}
+setTimeout(()=>{displayApiSetInput_();if(displayApi_())loadDisplays_()},1200);
+
 </script>
 </body></html>
