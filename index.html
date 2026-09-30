@@ -1877,7 +1877,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  </div>
  <div class="card tablewrap">
   <table>
-   <thead><tr><th>營業日</th><th>場次</th><th>級別</th><th>玩家</th><th>總組數</th><th>獎池</th><th>JP</th><th>狀態</th><th>操作</th></tr></thead>
+   <thead><tr><th>營業日</th><th>場次</th><th>級別</th><th>玩家數</th><th>重買數</th><th>總組數</th><th>獎池</th><th>JP</th><th>狀態</th><th>操作</th></tr></thead>
    <tbody id="eventRows"></tbody>
   </table>
  </div>
@@ -4149,12 +4149,13 @@ function renderEventList(){
  });
  body.innerHTML=rows.map(({e,eventIndex})=>{
    let groups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
+   let rebuys=e.players.reduce((sum,p)=>sum+(+p.rebuy||0),0);
    let pool=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).pool,0);
    let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=raw>0?Math.ceil(raw/unit)*unit:0;
    let reportBtn=`<button type="button" onclick="openEventReportById('${e.id}')">列印報表</button>`;
    let unlockBtn=e.status==='已結算'?`<button type="button" onclick="unlockSettledEvent('${e.id}')">解鎖編輯</button>`:'';
-   return `<tr><td>${businessDateForEvent(e)}</td><td><input value="${eventDisplayName_(e).replace(/&/g,'&amp;').replace(/\"/g,'&quot;')}" style="min-width:120px" onchange="setEventName_('${e.id}',this.value)"></td><td>${e.level}</td><td>${e.players.length}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} ${unlockBtn} <button type="button" class="danger" onclick="deleteEventSafe('${e.id}')">刪除</button></td></tr>`;
- }).join('') || '<tr><td colspan="9" style="text-align:center;color:#91a0b2">此營業日尚無賽事</td></tr>';
+   return `<tr><td>${businessDateForEvent(e)}</td><td><input value="${eventDisplayName_(e).replace(/&/g,'&amp;').replace(/\"/g,'&quot;')}" style="min-width:120px" onchange="setEventName_('${e.id}',this.value)"></td><td>${e.level}</td><td>${e.players.length}</td><td>${rebuys}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} ${unlockBtn} <button type="button" class="danger" onclick="deleteEventSafe('${e.id}')">刪除</button></td></tr>`;
+ }).join('') || '<tr><td colspan="10" style="text-align:center;color:#91a0b2">此營業日尚無賽事</td></tr>';
 }
 function calcPlayerForEvent(p,e){
  let buyin=(+p.buyin||0), rebuy=(+p.rebuy||0), addon=(+p.addon||0);
