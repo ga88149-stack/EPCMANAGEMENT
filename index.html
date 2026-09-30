@@ -1122,7 +1122,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 </head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.2 Web · Full Manual Input Guard + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.3 Web · Device-local Event Selection + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2350,7 +2350,7 @@ function saveBusinessHours(){
 function openEventReportById(id){
  const e=db.events.find(x=>String(x.id)===String(id));
  if(!e){actionMsg('找不到這場賽事',true);return;}
- db.currentEventId=e.id;persist();openEventReport();
+ setCurrentEventDevice_(e.id);localStorage.setItem('epcV1',JSON.stringify(db));openEventReport();
 }
 
 function blankEvent(){
@@ -2364,14 +2364,26 @@ if(!Array.isArray(db.events)){
    db.event.seq=db.event.seq||1;
    db.event.status=db.event.status||'進行中';
    db.events.push(db.event);
-   db.currentEventId=db.event.id;
+   db.currentEventId=db.event.id; localStorage.setItem(EPC_DEVICE_EVENT_KEY,String(db.event.id));
  }
  delete db.event;
 }
+const EPC_DEVICE_EVENT_KEY='epcCurrentEventIdDeviceV1';
+function setCurrentEventDevice_(id){
+ const v=String(id||'');
+ if(v)localStorage.setItem(EPC_DEVICE_EVENT_KEY,v);
+ else localStorage.removeItem(EPC_DEVICE_EVENT_KEY);
+ db.currentEventId=v||null; // compatibility only; UI selection is device-local
+}
 function currentEvent(){
- let e=db.events.find(x=>x.id===db.currentEventId);
- if(!e && db.events.length){e=db.events[0];db.currentEventId=e.id}
- return e;
+ const localId=String(localStorage.getItem(EPC_DEVICE_EVENT_KEY)||'');
+ let e=(db.events||[]).find(x=>String(x.id)===localId);
+ if(!e){
+   e=(db.events||[]).find(x=>String(x.id)===String(db.currentEventId||''));
+ }
+ if(!e && (db.events||[]).length)e=db.events[0];
+ if(e && localId!==String(e.id))localStorage.setItem(EPC_DEVICE_EVENT_KEY,String(e.id));
+ return e||null;
 }
 function requireEvent(){let e=currentEvent();if(!e){alert('請先到「賽事管理」建立一場賽事。');return null}return e}
 
@@ -2786,9 +2798,15 @@ function newEvent(){
  e.startTime=db.settings.businessStart||'16:00';
  let same=db.events.filter(x=>businessDateForEvent(x)===bd);
  e.seq=same.length?Math.max(...same.map(x=>+x.seq||0))+1:1;
- db.events.unshift(e); db.currentEventId=e.id; persist(); showPage('event');
+ db.events.unshift(e); setCurrentEventDevice_(e.id); persist(); showPage('event');
 }
-function openEvent(id){db.currentEventId=id;persist();showPage('event')}
+function openEvent(id){
+ const e=(db.events||[]).find(x=>String(x.id)===String(id));
+ if(!e){actionMsg('找不到這場賽事',true);return;}
+ setCurrentEventDevice_(e.id);
+ localStorage.setItem('epcV1',JSON.stringify(db));
+ showPage('event');
+}
 function deleteEventByIndex(index){
  const e=db.events[index];if(!e){actionMsg('找不到這場賽事',true);return;}
  const label=`${businessDateForEvent(e)} ${eventDisplayName_(e)} ${Number(e.level||0).toLocaleString()}`;
@@ -2805,7 +2823,10 @@ async function performDeleteEventByIndex(index){
  });
  db.events.splice(index,1);
  cleanupOrphanMemberHistory();
- if(String(db.currentEventId)===String(id))db.currentEventId=db.events[0]?.id||null;
+ if(String(localStorage.getItem(EPC_DEVICE_EVENT_KEY)||db.currentEventId||'')===String(id)){
+   const nextId=db.events[0]?.id||null;
+   setCurrentEventDevice_(nextId);
+ }
  localStorage.setItem('epcV1',JSON.stringify(db));
  render();
  actionMsg(`已刪除：${label}；分帳報表已同步更新`);
@@ -3505,7 +3526,7 @@ function renderEventList(){
    let raw=pool*e.jp/100, unit=Math.max(1,e.jpRound||1), jp=raw>0?Math.ceil(raw/unit)*unit:0;
    let reportBtn=`<button type="button" onclick="openEventReportById('${e.id}')">列印報表</button>`;
    let unlockBtn=e.status==='已結算'?`<button type="button" onclick="unlockSettledEvent('${e.id}')">解鎖編輯</button>`:'';
-   return `<tr><td>${businessDateForEvent(e)}</td><td><input value="${eventDisplayName_(e).replace(/&/g,'&amp;').replace(/\"/g,'&quot;')}" style="min-width:120px" onchange="setEventName_('${e.id}',this.value)"></td><td>${e.level}</td><td>${e.players.length}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} ${unlockBtn} <button type="button" class="danger" onclick="deleteEventByIndex(${eventIndex})">刪除</button></td></tr>`;
+   return `<tr><td>${businessDateForEvent(e)}</td><td><input value="${eventDisplayName_(e).replace(/&/g,'&amp;').replace(/\"/g,'&quot;')}" style="min-width:120px" onchange="setEventName_('${e.id}',this.value)"></td><td>${e.level}</td><td>${e.players.length}</td><td>${groups}</td><td>${money(pool)}</td><td>${money(jp)}</td><td><span class="pill">${e.status||'進行中'}</span></td><td><button onclick="openEvent('${e.id}')">進入</button> ${reportBtn} ${unlockBtn} <button type="button" class="danger" onclick="deleteEventSafe('${e.id}')">刪除</button></td></tr>`;
  }).join('') || '<tr><td colspan="9" style="text-align:center;color:#91a0b2">此營業日尚無賽事</td></tr>';
 }
 function calcPlayerForEvent(p,e){
