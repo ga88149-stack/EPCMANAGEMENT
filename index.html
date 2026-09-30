@@ -966,6 +966,17 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 .settlement-group-card .member-summary-title{
   color:#eef5fb!important;
 }
+/* Daily settlement readability */
+#settlementDetailView{font-size:17px}
+#settlementDetailView .small{font-size:14px}
+#settlementDetailView .kpi .l{font-size:14px}
+#settlementDetailView .kpi .v{font-size:26px}
+#settlementDetailView .settlement-group-title{font-size:20px!important}
+#settlementDetailView .member-summary-title{font-size:17px!important}
+#settlementDetailView table th{font-size:15px}
+#settlementDetailView table td{font-size:16px}
+#settlementDetailView .expense,
+#settlementDetailView .paid-expense{color:#e5484d!important;font-weight:800!important}
 .settlement-group-card .settlement-group-title > span,
 .settlement-group-card .member-summary-title > span{
   color:inherit!important;
@@ -2319,7 +2330,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
   <div class="grid">
    <div class="card kpi"><div class="l">已結算場次</div><div class="v" id="dEvents">0</div></div>
    <div class="card kpi"><div class="l">參與會員</div><div class="v" id="dMembers">0</div></div>
-   <div class="card kpi"><div class="l">當日總實付</div><div class="v" id="dPaid">$0</div></div>
+   <div class="card kpi"><div class="l">當日總實付</div><div class="v expense" id="dPaid">$0</div></div>
    <div class="card kpi"><div class="l">當日總獎金</div><div class="v" id="dPrize">$0</div></div>
   </div>
   <div class="card no-print" style="margin-bottom:12px;padding:12px 14px">
@@ -5129,7 +5140,7 @@ function renderDailySettlement(){
    <h3 class="settlement-group-title" style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
      <span>${g.name==='未分組'?'未分組':'群組 '+g.name}</span>
      <span style="font-size:16px;font-weight:900">
-      總實付 ${money(g.paid)}　｜　總領回 ${money(g.prize)}　｜　總折扣 ${money(g.discount)}　｜　
+      <span class="expense">總實付 ${money(g.paid)}</span>　｜　總領回 ${money(g.prize)}　｜　總折扣 ${money(g.discount)}　｜　
       <span class="${g.net>=0?'pos':'neg'}">總輸贏 ${money(g.net)}</span>
      </span>
     </h3>
@@ -5139,7 +5150,7 @@ function renderDailySettlement(){
       <div class="member-summary-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;padding:7px 10px;background:#17222d;border-radius:6px">
        <span style="font-size:17px;font-weight:900">${m.member}</span>
        <span style="font-size:14px;font-weight:800">
-        當日總結｜實付 ${money(m.paid)}　｜　領回 ${money(m.prize)}　｜　折扣 ${money(m.discount)}　｜　
+        當日總結｜<span class="expense">實付 ${money(m.paid)}</span>　｜　領回 ${money(m.prize)}　｜　折扣 ${money(m.discount)}　｜　
         <span class="${m.net>=0?'pos':'neg'}">輸贏 ${money(m.net)}</span>
        </span>
       </div>
@@ -5151,7 +5162,7 @@ function renderDailySettlement(){
         <tbody>
          ${m.events.map(ev=>`<tr>
           <td>第${ev.eventSeq}場｜${ev.eventName}</td>
-          <td>${money(ev.paid)}</td>
+          <td class="paid-expense">${money(ev.paid)}</td>
           <td>${money(ev.prize)}</td>
           <td>${money(ev.discount)}</td>
           <td class="${ev.net>=0?'pos':'neg'}">${money(ev.net)}</td>
