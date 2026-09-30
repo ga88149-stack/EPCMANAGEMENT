@@ -4187,10 +4187,14 @@ function calcPlayerForEvent(p,e){
    // This keeps the same total discount/paid amount while making the two columns meaningful.
    let rebuyDiscountPerGroup=Math.max(0,buyinTotal-rebuyTotal);
    let rebuyDiscount=rebuyDiscountPerGroup*normalRebuyGroups;
-   let overbuyDiscount=rebuyAdmin*overbuyGroups;
+   // Overbuy groups are fully admin-free, so restore/deduct the ORIGINAL buy-in admin,
+   // not the already-discounted rebuy admin.
+   let overbuyDiscount=buyinAdmin*overbuyGroups;
 
-   let accountingGroupDiscount=rebuyAdmin*overbuyGroups;
-   let accountingRebuyDiscount=buyinAdmin*normalRebuyGroups;
+   // Accounting uses the same actual discount amounts: half-price discount for normal
+   // rebuys and full original admin waiver for overbuy groups.
+   let accountingGroupDiscount=overbuyDiscount;
+   let accountingRebuyDiscount=rebuyDiscount;
 
    let auto=rebuyDiscount+overbuyDiscount;
    let totalDiscount=auto+manual;
