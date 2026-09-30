@@ -4190,7 +4190,10 @@ function calcPlayerForEvent(p,e){
 
    // Player/event page: overbuy shows only the extra discount versus the normal rebuy
    // price (e.g. 400 per group), so staff can see the player's payable-price discount.
-   let overbuyDiscountPerGroup=Math.max(0,rebuyAdmin-rebuyDiscountPerGroup);
+   let overbuyDiscountPerGroup=Math.max(0,buyinAdmin-rebuyAdmin);
+   // If rebuyAdmin itself is the discounted admin amount (e.g. 400 from original 800),
+   // the extra waiver to reach zero is that remaining rebuyAdmin amount.
+   if(overbuyDiscountPerGroup===0 || overbuyDiscountPerGroup>rebuyAdmin) overbuyDiscountPerGroup=rebuyAdmin;
    let overbuyDiscount=overbuyDiscountPerGroup*overbuyGroups;
 
    // Accounting: restore the full original admin waiver for overbuy groups (e.g. 800).
