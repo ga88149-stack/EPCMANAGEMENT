@@ -1150,6 +1150,104 @@ table{color:var(--epc-text)!important}th{color:var(--epc-muted)!important;border
 html[data-epc-theme="light"] #epcThemeToggle .themeDot{box-shadow:0 0 9px rgba(169,117,8,.35)}
 html[data-epc-theme="light"] header,html[data-epc-theme="light"] nav{box-shadow:0 4px 18px rgba(31,50,70,.08)}
 </style>
+
+<style id="epcPremiumLightV1505">
+html[data-epc-theme="light"] body{
+ background:
+   radial-gradient(circle at 8% -8%,rgba(37,99,235,.10),transparent 30%),
+   radial-gradient(circle at 92% 0,rgba(202,138,4,.10),transparent 26%),
+   linear-gradient(180deg,#f7f9fc 0%,#edf3f8 100%)!important;
+ color:#172231!important;
+}
+html[data-epc-theme="light"] header,
+html[data-epc-theme="light"] .topbar,
+html[data-epc-theme="light"] nav{
+ background:rgba(255,255,255,.94)!important;
+ color:#172231!important;
+ border-color:#d7e0e9!important;
+ box-shadow:0 8px 26px rgba(34,55,77,.08)!important;
+ backdrop-filter:blur(12px);
+}
+html[data-epc-theme="light"] .card,
+html[data-epc-theme="light"] .panel,
+html[data-epc-theme="light"] .box,
+html[data-epc-theme="light"] section .card{
+ background:linear-gradient(145deg,#ffffff,#f7fafc)!important;
+ color:#172231!important;
+ border-color:#d5e0ea!important;
+ box-shadow:0 10px 28px rgba(37,55,75,.09),0 1px 0 rgba(255,255,255,.9) inset!important;
+}
+html[data-epc-theme="light"] h1,
+html[data-epc-theme="light"] h2,
+html[data-epc-theme="light"] h3,
+html[data-epc-theme="light"] h4,
+html[data-epc-theme="light"] b,
+html[data-epc-theme="light"] strong{color:#162536!important}
+html[data-epc-theme="light"] .small,
+html[data-epc-theme="light"] .muted,
+html[data-epc-theme="light"] label{color:#66798d!important}
+html[data-epc-theme="light"] input,
+html[data-epc-theme="light"] select,
+html[data-epc-theme="light"] textarea{
+ background:#ffffff!important;color:#172231!important;border:1px solid #cbd8e5!important;
+ box-shadow:0 2px 8px rgba(31,50,70,.04)!important;
+}
+html[data-epc-theme="light"] input:focus,
+html[data-epc-theme="light"] select:focus,
+html[data-epc-theme="light"] textarea:focus{
+ border-color:#b98512!important;
+ box-shadow:0 0 0 3px rgba(185,133,18,.13),0 0 18px rgba(185,133,18,.10)!important;
+}
+html[data-epc-theme="light"] button{
+ background:linear-gradient(180deg,#ffffff,#edf3f8)!important;
+ color:#243548!important;border-color:#cbd8e5!important;
+ box-shadow:0 3px 10px rgba(31,50,70,.07)!important;
+}
+html[data-epc-theme="light"] button:hover{
+ border-color:#7ca9d3!important;
+ box-shadow:0 5px 16px rgba(44,112,174,.14),0 0 15px rgba(44,112,174,.08)!important;
+}
+html[data-epc-theme="light"] button.primary,
+html[data-epc-theme="light"] .primary{
+ background:linear-gradient(135deg,#d6aa39,#b98310)!important;
+ color:#fff!important;border-color:#a9760c!important;
+ box-shadow:0 6px 18px rgba(185,131,16,.22)!important;
+}
+html[data-epc-theme="light"] nav button.active,
+html[data-epc-theme="light"] nav button[aria-current="page"],
+html[data-epc-theme="light"] .tab.active{
+ background:linear-gradient(180deg,#fff9e8,#f5e4ad)!important;
+ color:#7a5707!important;border-color:#c89b27!important;
+ box-shadow:0 0 0 1px rgba(200,155,39,.10),0 0 20px rgba(200,155,39,.13)!important;
+}
+html[data-epc-theme="light"] table{background:#fff!important;color:#172231!important}
+html[data-epc-theme="light"] th{
+ background:#edf3f8!important;color:#53697e!important;border-color:#d4dee8!important;
+}
+html[data-epc-theme="light"] td{color:#223447!important;border-color:#dce4ec!important}
+html[data-epc-theme="light"] tbody tr:hover td{background:#f5f9fc!important}
+html[data-epc-theme="light"] .display-device{
+ background:#fff!important;border-color:#d3dee8!important;box-shadow:0 8px 22px rgba(31,50,70,.08)!important
+}
+html[data-epc-theme="light"] #epcThemeToggle{
+ background:linear-gradient(135deg,#24384d,#172635)!important;color:#fff!important;
+ border-color:#38516a!important;box-shadow:0 0 18px rgba(37,99,235,.14)!important
+}
+html[data-epc-theme="light"] #epcThemeToggle .themeDot{
+ background:#7cc5ff!important;box-shadow:0 0 12px #5fb8ff!important
+}
+/* Dark mode: stronger separation and restrained glow */
+html[data-epc-theme="dark"] .card,
+html[data-epc-theme="dark"] .panel,
+html[data-epc-theme="dark"] .box,
+html[data-epc-theme="dark"] section .card{
+ box-shadow:0 12px 30px rgba(0,0,0,.28),0 0 0 1px rgba(82,126,164,.04)!important;
+}
+html[data-epc-theme="dark"] nav button.active,
+html[data-epc-theme="dark"] .tab.active{
+ box-shadow:0 0 0 1px rgba(226,184,79,.16),0 0 20px rgba(226,184,79,.13)!important;
+}
+</style>
 </head>
 <script>
 (function(){
@@ -1159,7 +1257,7 @@ html[data-epc-theme="light"] header,html[data-epc-theme="light"] nav{box-shadow:
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.4 Web · Light/Dark Glow UI + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.5 Web · Premium Light/Dark UI + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -1170,7 +1268,7 @@ html[data-epc-theme="light"] header,html[data-epc-theme="light"] nav{box-shadow:
 <button data-page="activities">活動管理</button>
 <button data-page="displays">顯示設備</button>
 
-<button id="epcThemeToggle" type="button" onclick="toggleEpcTheme_()" title="切換深淺色模式"><span class="themeDot"></span><span id="epcThemeText">深色模式</span></button></nav>
+<button id="epcThemeToggle" type="button" onclick="toggleEpcTheme_()" title="切換深淺色模式"><span class="themeDot"></span><span id="epcThemeText">☀ 切換淺色</span></button></nav>
 <main>
 <div id="actionMsg" style="display:none;position:sticky;top:72px;z-index:20;padding:11px 14px;margin-bottom:12px;border-radius:10px;background:#17212c;border:1px solid #d6b35a;color:#eef3f8;font-weight:700"></div>
 <section id="dashboard" class="page active">
@@ -5010,7 +5108,7 @@ render=function(){
 function epcTheme_(){return document.documentElement.getAttribute('data-epc-theme')==='light'?'light':'dark'}
 function updateEpcThemeButton_(){
  const t=epcTheme_(),el=document.getElementById('epcThemeText');
- if(el)el.textContent=t==='light'?'淺色模式':'深色模式';
+ if(el)el.textContent=t==='light'?'🌙 切換深色':'☀ 切換淺色';
 }
 function setEpcTheme_(t){
  t=t==='light'?'light':'dark';
