@@ -1564,6 +1564,91 @@ html[data-epc-theme="light"] #actionMsg{
  }
 }
 </style>
+
+<style id="epcDeepGlacierV15011">
+html[data-epc-theme="light"]{
+ --epc-bg:#d9f2f5;
+ --epc-bg2:#e9f8fa;
+ --epc-panel:#ffffff;
+ --epc-text:#12333d;
+ --epc-muted:#547982;
+ --epc-line:#b6dce1;
+ --epc-accent:#079eae;
+ --epc-accent2:#22c6cf;
+ --epc-blue:#168eb0;
+}
+html[data-epc-theme="light"] body,
+html[data-epc-theme="light"] #app,
+html[data-epc-theme="light"] main,
+html[data-epc-theme="light"] .wrap,
+html[data-epc-theme="light"] .container,
+html[data-epc-theme="light"] .content{
+ background:
+  radial-gradient(circle at 8% 0%,rgba(20,184,194,.22),transparent 29%),
+  radial-gradient(circle at 92% 8%,rgba(20,137,177,.17),transparent 27%),
+  linear-gradient(135deg,#edfafa 0%,#d9f2f5 48%,#d8edf4 100%)!important;
+ color:#12333d!important;
+}
+html[data-epc-theme="light"] header,
+html[data-epc-theme="light"] nav,
+html[data-epc-theme="light"] .topbar{
+ background:rgba(248,254,255,.96)!important;
+ border-color:#afd7dc!important;
+ box-shadow:0 8px 28px rgba(14,105,122,.12)!important;
+}
+html[data-epc-theme="light"] .card,
+html[data-epc-theme="light"] .panel,
+html[data-epc-theme="light"] .box,
+html[data-epc-theme="light"] .kpi{
+ background:linear-gradient(145deg,#ffffff,#edf9fa)!important;
+ border-color:#b9dce1!important;
+ box-shadow:0 12px 30px rgba(13,103,119,.12),0 0 22px rgba(14,167,179,.07)!important;
+}
+html[data-epc-theme="light"] nav button.active,
+html[data-epc-theme="light"] .tab.active{
+ background:linear-gradient(135deg,#c9f2f3,#b9e7ec)!important;
+ color:#066a76!important;
+ border-color:#1caeba!important;
+ box-shadow:0 0 0 1px rgba(28,174,186,.16),0 0 20px rgba(15,163,175,.18)!important;
+}
+html[data-epc-theme="light"] button.primary,
+html[data-epc-theme="light"] .primary{
+ background:linear-gradient(135deg,#18b8c2,#087f96)!important;
+ color:#fff!important;
+ border-color:#087b8d!important;
+ box-shadow:0 7px 20px rgba(8,127,150,.24)!important;
+}
+html[data-epc-theme="light"] input:focus,
+html[data-epc-theme="light"] select:focus,
+html[data-epc-theme="light"] textarea:focus{
+ border-color:#079eae!important;
+ box-shadow:0 0 0 3px rgba(7,158,174,.15),0 0 20px rgba(7,158,174,.13)!important;
+}
+html[data-epc-theme="light"] th{
+ background:#d3eef1!important;
+ color:#365f69!important;
+}
+html[data-epc-theme="light"] tbody tr:hover td{background:#e8f7f8!important}
+html[data-epc-theme="light"] #epcThemeToggle{
+ background:linear-gradient(135deg,#087f96,#075e79)!important;
+ border-color:#087489!important;
+ box-shadow:0 0 19px rgba(7,127,150,.25)!important;
+}
+/* Keep formal reports paper-white despite the deeper light UI theme. */
+html[data-epc-theme="light"] .report-paper,
+html[data-epc-theme="light"] .print-paper,
+html[data-epc-theme="light"] .paper,
+html[data-epc-theme="light"] .settlement-report,
+html[data-epc-theme="light"] .settle-report,
+html[data-epc-theme="light"] .formal-report,
+html[data-epc-theme="light"] .report-preview,
+html[data-epc-theme="light"] #printArea,
+html[data-epc-theme="light"] #reportPreview,
+html[data-epc-theme="light"] #printPreview,
+html[data-epc-theme="light"] #settlementReport{
+ background:#fff!important;
+}
+</style>
 </head>
 <script>
 (function(){
@@ -1573,7 +1658,7 @@ html[data-epc-theme="light"] #actionMsg{
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.10 Web · Glacier Blue / Graphite Gold UI + White Report + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.11 Web · Deep Glacier Blue / Graphite Gold UI + White Report + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
