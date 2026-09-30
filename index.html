@@ -4482,6 +4482,9 @@ function ensureActDb_(){
  A.pioneer=A.pioneer||{};
  A.pioneerQualify=A.pioneerQualify||{};
  A.rankAdjust=A.rankAdjust||{};
+ A.activityRanges=A.activityRanges||{};
+ ['weekly','pioneer','rank','hunter','umbrella'].forEach(k=>{A.activityRanges[k]=A.activityRanges[k]||{from:'',to:''}});
+
  A.rankMultipliers=Array.isArray(A.rankMultipliers)?A.rankMultipliers:[];
  A.rankRecurringRules=Array.isArray(A.rankRecurringRules)?A.rankRecurringRules:[
   {id:'RR_WEEKEND',name:'六日前兩場 / 日前兩場',enabled:true,days:[6,0],mode:'firstN',firstN:2,mult:2},
@@ -4513,8 +4516,24 @@ function ensureActDb_(){
 function actRange_(){return {from:$('actFrom')?.value||'',to:$('actTo')?.value||'',q:String($('actSearch')?.value||'').trim().toLowerCase()}}
 function actThisMonth_(){const n=new Date(),y=n.getFullYear(),m=String(n.getMonth()+1).padStart(2,'0');$('actFrom').value=`${y}-${m}-01`;$('actTo').value=`${y}-${m}-${String(new Date(y,n.getMonth()+1,0).getDate()).padStart(2,'0')}`;renderActivities()}
 function setActTab_(x){actTab_=x;renderActivities()}
-function actEvents_(){
- const {from,to}=actRange_();
+function actActivityRange_(kind=actTab_){
+ ensureActDb_();
+ if(kind==='boss'){const B=db.activityManagement.boss||{};return {from:B.activityFrom||'',to:B.activityTo||''}}
+ const R=db.activityManagement.activityRanges?.[kind]||{};
+ return {from:R.from||'',to:R.to||''};
+}
+function actSetActivityRange_(kind,field,value){
+ ensureActDb_();
+ if(kind==='boss'){db.activityManagement.boss[field==='from'?'activityFrom':'activityTo']=String(value||'')}
+ else{const R=db.activityManagement.activityRanges[kind]||(db.activityManagement.activityRanges[kind]={from:'',to:''});R[field]=String(value||'')}
+ persist();renderActivities();
+}
+function actRangeEditor_(kind){
+ const names={weekly:'每週任務卡',pioneer:'開桌先鋒',rank:'週排行榜',hunter:'獵人排行榜',umbrella:'保護傘',boss:'雙十狩主'},r=actActivityRange_(kind);
+ return `<div class="card" style="margin-bottom:12px;border-color:#9b7a35"><h3>${names[kind]||'活動'}｜活動區間</h3><div class="small" style="margin-bottom:8px">此區間決定本活動實際計算資料；上方「查詢開始日／查詢結束日」只用於歷史查詢，不會改變活動計算。</div><div class="formgrid" style="grid-template-columns:1fr 1fr"><div><label>活動開始日</label><input type="date" value="${r.from}" onchange="actSetActivityRange_('${kind}','from',this.value)"></div><div><label>活動結束日</label><input type="date" value="${r.to}" onchange="actSetActivityRange_('${kind}','to',this.value)"></div></div></div>`;
+}
+function actEvents_(kind=actTab_){
+ const {from,to}=actActivityRange_(kind);
  return (db.events||[]).filter(e=>(!from||String(e.date||'')>=from)&&(!to||String(e.date||'')<=to));
 }
 function actMember_(id){return (db.members||[]).find(m=>String(m.id)===String(id))||{}}
@@ -4537,12 +4556,12 @@ function actResolveMember_(inputId){
  return m?String(m.id):'';
 }
 
-function actEventOptions_(){return actEvents_().map(e=>`<option value="${e.id}">${e.date||''}｜${eventDisplayName_(e)}｜${e.level||''}</option>`).join('')}
+function actEventOptions_(){return actEvents_(actTab_).map(e=>`<option value="${e.id}">${e.date||''}｜${eventDisplayName_(e)}｜${e.level||''}</option>`).join('')}
 function actEventLabel_(e){return `${e.date||''} ${eventDisplayName_(e)} ${e.level||''}`}
 function actGroups_(p,e){try{return +calcPlayerForEvent(p,e).groups||0}catch(_){return (+p.buyin||0)+(+p.rebuy||0)+(+p.addon||0)}}
-function actPlayerStats_(){
+function actPlayerStats_(kind=actTab_){
  const {q}=actRange_(),map={};
- actEvents_().forEach(e=>(e.players||[]).forEach(p=>{
+ actEvents_(kind).forEach(e=>(e.players||[]).forEach(p=>{
   const m=actMember_(p.memberId),id=String(p.memberId||'');if(!id)return;
   if(!map[id])map[id]={id,name:m.name||id,games:0,dates:new Set(),groups:0};
   map[id].games++;map[id].dates.add(e.date);map[id].groups+=actGroups_(p,e);
@@ -4558,8 +4577,8 @@ function actAdj_(kind,id,field,v){
  persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
 function actWeekly_(){
- const A=db.activityManagement,rows=actPlayerStats_().map(x=>{const ad=A.weeklyAdjust[x.id]||{};return {...x,gameAdj:+ad.games||0,dayAdj:+ad.days||0,totalGames:x.games+(+ad.games||0),totalDays:x.days+(+ad.days||0)}}).sort((a,b)=>b.totalGames-a.totalGames||b.totalDays-a.totalDays);
- return `<div class="card"><h3>每週任務卡｜區間自動統計</h3><div class="small">參賽場次：該會員出現在一場賽事即 +1。簽到天數：同一天不論打幾場，只計 1 次。人工調整會加在自動統計上。</div>
+ const A=db.activityManagement,rows=actPlayerStats_('weekly').map(x=>{const ad=A.weeklyAdjust[x.id]||{};return {...x,gameAdj:+ad.games||0,dayAdj:+ad.days||0,totalGames:x.games+(+ad.games||0),totalDays:x.days+(+ad.days||0)}}).sort((a,b)=>b.totalGames-a.totalGames||b.totalDays-a.totalDays);
+ return actRangeEditor_('weekly')+`<div class="card"><h3>每週任務卡｜區間自動統計</h3><div class="small">參賽場次：該會員出現在一場賽事即 +1。簽到天數：同一天不論打幾場，只計 1 次。人工調整會加在自動統計上。</div>
  <table><thead><tr><th>會員</th><th>ID</th><th>自動場次</th><th>場次調整</th><th>區間總場次</th><th>自動簽到</th><th>簽到調整</th><th>區間總簽到</th></tr></thead><tbody>
  ${rows.map(x=>`<tr><td>${x.name}</td><td>${x.id}</td><td>${x.games}</td><td><input type="number" style="width:80px" value="${x.gameAdj}" onchange="actAdj_('weekly','${x.id}','games',this.value)"></td><td><b>${x.totalGames}</b></td><td>${x.days}</td><td><input type="number" style="width:80px" value="${x.dayAdj}" onchange="actAdj_('weekly','${x.id}','days',this.value)"></td><td><b>${x.totalDays}</b></td></tr>`).join('')||'<tr><td colspan="8">區間內無參賽資料</td></tr>'}</tbody></table></div>`;
 }
@@ -4614,7 +4633,7 @@ function togglePioneerCard_(eventId,btn){
 }
 function actPioneer_(){
  const A=db.activityManagement;
- const cards=actEvents_().map(e=>{const P=A.pioneer[e.id];if(!P)return `<div class="card" style="margin-top:10px"><b>${actEventLabel_(e)}</b><div class="small">${(e.players||[]).length} 位參賽者</div><button style="margin-top:8px" onclick="pioneerLoadEvent_('${e.id}')">建立本場先鋒積分</button></div>`;
+ const cards=actEvents_('pioneer').map(e=>{const P=A.pioneer[e.id];if(!P)return actRangeEditor_('pioneer')+`<div class="card" style="margin-top:10px"><b>${actEventLabel_(e)}</b><div class="small">${(e.players||[]).length} 位參賽者</div><button style="margin-top:8px" onclick="pioneerLoadEvent_('${e.id}')">建立本場先鋒積分</button></div>`;
   const opts='<option value="">--未登記--</option>'+(e.players||[]).map(p=>`<option value="${p.memberId}">${actMember_(p.memberId).name||p.memberId}</option>`).join('');
   return `<div class="card pioneer-event-card" id="pioneerCard_${e.id}" style="margin-top:10px"><div class="pioneer-event-head"><h3>${actEventLabel_(e)}</h3><button type="button" class="pioneer-collapse-btn" onclick="togglePioneerCard_(\'${e.id}\',this)">收合 ▲</button></div><div class="pioneer-event-body"><div class="formgrid" style="grid-template-columns:repeat(4,1fr)">${[0,1,2,3].map(i=>`<div><label>第${i+1}位</label><select id="pioneerFirst_${e.id}_${i}" onchange="pioneerSetFirst_('${e.id}',${i},this.value)">${opts.replace(`value="${P.first4[i]||''}"`,`value="${P.first4[i]||''}" selected`)}</select></div>`).join('')}</div>
   <table style="margin-top:10px"><thead><tr><th>會員</th><th>是否前4</th><th>本場積分（可改）</th></tr></thead><tbody>${(e.players||[]).map(p=>`<tr><td>${actMember_(p.memberId).name||p.memberId}</td><td>${P.first4.includes(p.memberId)?'是':'否'}</td><td><input id="pioneerScore_${e.id}_${p.memberId}" type="number" style="width:90px" value="${P.scores[p.memberId]??1}" onchange="pioneerScore_('${e.id}','${p.memberId}',this.value)"></td></tr>`).join('')}</tbody></table><div style="display:flex;gap:12px;align-items:center;margin-top:12px"><button onclick="pioneerConfirm_('${e.id}')">${P.confirmed?'更新本場排名':'確認本場排名'}</button><span class="small">${P.confirmed?'✓ 已儲存':'尚未確認儲存'}</span></div></div></div>`}).join('');
@@ -4696,7 +4715,7 @@ function eventTopScores_(e){
 }
 function actRank_(){
  const A=db.activityManagement,tot={},dayNames=['日','一','二','三','四','五','六'];
- const detail=actEvents_().map(e=>{const top=eventTopScores_(e);top.forEach(x=>tot[x.id]=(tot[x.id]||0)+x.score);return `<div class="card" style="margin-top:10px"><b>${actEventLabel_(e)}</b> <span class="small">當日第 ${rankEventSeqOfDay_(e)} 場｜倍率 ×${rankMultiplier_(e)}</span><table><thead><tr><th>名次</th><th>會員</th><th>籌碼淨勝值</th><th>下桌籌碼</th><th>得分</th></tr></thead><tbody>${top.map(x=>`<tr><td>${x.rank}</td><td>${x.name}</td><td>${x.net.toFixed(1)}</td><td>${(+x.stack).toLocaleString()}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="5">無資料</td></tr>'}</tbody></table></div>`}).join('');
+ const detail=actEvents_('rank').map(e=>{const top=eventTopScores_(e);top.forEach(x=>tot[x.id]=(tot[x.id]||0)+x.score);return actRangeEditor_('rank')+`<div class="card" style="margin-top:10px"><b>${actEventLabel_(e)}</b> <span class="small">當日第 ${rankEventSeqOfDay_(e)} 場｜倍率 ×${rankMultiplier_(e)}</span><table><thead><tr><th>名次</th><th>會員</th><th>籌碼淨勝值</th><th>下桌籌碼</th><th>得分</th></tr></thead><tbody>${top.map(x=>`<tr><td>${x.rank}</td><td>${x.name}</td><td>${x.net.toFixed(1)}</td><td>${(+x.stack).toLocaleString()}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="5">無資料</td></tr>'}</tbody></table></div>`}).join('');
  const ranking=Object.entries(tot).map(([id,auto])=>({id,name:actMember_(id).name||id,auto,adj:+A.rankAdjust[id]||0})).map(x=>({...x,total:x.auto+x.adj})).sort((a,b)=>b.total-a.total);
  const rules=(A.rankRecurringRules||[]).map(r=>`<div class="card" style="margin-top:8px;padding:12px">
    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -4738,8 +4757,8 @@ function addHunter_(){ensureActDb_();const eventId=$('hunterEvent').value,killer
 function hunterEdit_(id,v){const x=db.activityManagement.hunter.find(z=>z.id===id);if(x){x.points=+v||0;persist();renderActivities()}}
 function hunterDel_(id){db.activityManagement.hunter=db.activityManagement.hunter.filter(x=>x.id!==id);persist();renderActivities()}
 function actHunter_(){
- const {from,to}=actRange_(),rows=db.activityManagement.hunter.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
- return `<div class="card"><h3>獵人排行榜｜擊殺登記</h3><div class="formgrid" style="grid-template-columns:1.4fr 1.2fr .6fr 1.2fr auto"><div><label>場次</label><select id="hunterEvent" onchange="hunterEventChanged_()"><option value="">選擇場次</option>${actEventOptions_()}</select></div><div><label>擊殺者</label><input id="hunterKiller" list="hunterKillerList" autocomplete="off" placeholder="先選場次，再輸入姓名 / ID"><datalist id="hunterKillerList"></datalist></div><div><label>分數</label><input type="number" id="hunterPoints" value="1"></div><div><label>備註</label><input id="hunterNote"></div><div style="align-self:end"><button onclick="addHunter_()">登記擊殺</button></div></div>
+ const {from,to}=actActivityRange_('hunter'),rows=db.activityManagement.hunter.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
+ return actRangeEditor_('hunter')+`<div class="card"><h3>獵人排行榜｜擊殺登記</h3><div class="formgrid" style="grid-template-columns:1.4fr 1.2fr .6fr 1.2fr auto"><div><label>場次</label><select id="hunterEvent" onchange="hunterEventChanged_()"><option value="">選擇場次</option>${actEventOptions_()}</select></div><div><label>擊殺者</label><input id="hunterKiller" list="hunterKillerList" autocomplete="off" placeholder="先選場次，再輸入姓名 / ID"><datalist id="hunterKillerList"></datalist></div><div><label>分數</label><input type="number" id="hunterPoints" value="1"></div><div><label>備註</label><input id="hunterNote"></div><div style="align-self:end"><button onclick="addHunter_()">登記擊殺</button></div></div>
  <h3 style="margin-top:14px">排行榜</h3><table><thead><tr><th>排名</th><th>會員</th><th>總分</th></tr></thead><tbody>${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="3">尚無資料</td></tr>'}</tbody></table>
  <h3 style="margin-top:14px">登記紀錄</h3><table><thead><tr><th>日期</th><th>場次</th><th>擊殺者</th><th>分數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actEventLabel_((db.events||[]).find(e=>e.id===x.eventId)||{})}</td><td>${actMember_(x.killer).name||x.killer}</td><td><input type="number" style="width:90px" value="${x.points}" onchange="hunterEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="hunterDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無登記</td></tr>'}</tbody></table></div>`;
 }
@@ -4749,9 +4768,9 @@ function addUmbrella_(){const id=actResolveMember_('umbrellaMember'),k=$('umbrel
 function umbrellaEdit_(id,v){const x=db.activityManagement.umbrella.find(z=>z.id===id);if(x){x.coupons=+v||0;persist();renderActivities()}}
 function umbrellaDel_(id){db.activityManagement.umbrella=db.activityManagement.umbrella.filter(x=>x.id!==id);persist();renderActivities()}
 function actUmbrella_(){
- const A=db.activityManagement,{from,to}=actRange_(),rows=A.umbrella.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
+ const A=db.activityManagement,{from,to}=actActivityRange_('umbrella'),rows=A.umbrella.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
  const rules=Object.entries(A.umbrellaRules);
- return `<div class="card"><h3>保護傘｜牌型券數設定</h3><div class="formgrid" style="grid-template-columns:repeat(${rules.length},1fr)">${rules.map(([k,v])=>`<div><label>${k}</label><input type="number" value="${v}" onchange="umbrellaRule_('${k}',this.value)"></div>`).join('')}</div>
+ return actRangeEditor_('umbrella')+`<div class="card"><h3>保護傘｜牌型券數設定</h3><div class="formgrid" style="grid-template-columns:repeat(${rules.length},1fr)">${rules.map(([k,v])=>`<div><label>${k}</label><input type="number" value="${v}" onchange="umbrellaRule_('${k}',this.value)"></div>`).join('')}</div>
  <h3 style="margin-top:14px">登記保護傘</h3><div class="formgrid" style="grid-template-columns:.9fr 1.2fr 1.2fr .6fr 1.2fr auto"><div><label>日期</label><input type="date" id="umbrellaDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>會員</label><input id="umbrellaMember" list="umbrellaMemberList" autocomplete="off" placeholder="輸入姓名 / 會員ID"><datalist id="umbrellaMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>被超車牌型</label><select id="umbrellaType" onchange="umbrellaTypeChanged_()">${rules.map(([k])=>`<option>${k}</option>`).join('')}</select></div><div><label>券數</label><input type="number" id="umbrellaCoupons" value="${rules[0]?.[1]||0}"></div><div><label>備註</label><input id="umbrellaNote"></div><div style="align-self:end"><button onclick="addUmbrella_()">登記</button></div></div>
  <h3 style="margin-top:14px">排行榜</h3><table><thead><tr><th>排名</th><th>會員</th><th>券數</th></tr></thead><tbody>${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="3">尚無資料</td></tr>'}</tbody></table>
  <h3 style="margin-top:14px">明細</h3><table><thead><tr><th>日期</th><th>會員</th><th>牌型</th><th>券數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.type}</td><td><input type="number" style="width:90px" value="${x.coupons}" onchange="umbrellaEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="umbrellaDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無資料</td></tr>'}</tbody></table></div>`;
@@ -5531,17 +5550,17 @@ function displayLeaderboard_(kind){
  return Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score).slice(0,20);
 }
 function displayPayload_(type){
- ensureActDb_();const A=db.activityManagement||{};
+ ensureActDb_();const A=db.activityManagement||{},range=actActivityRange_(type);
  if(type==='boss'){
   const B=A.boss||{},S=bossStats_(),b=activeBoss_(),hp=b?bossCurrentHp_():0,latest=b?.attacks?.[0]||null;
-  return {type,title:'雙十狩王',pool:S.pool||0,cap:+B.cap||14000,attackActive:!!S.active,boss:b?{name:b.name||'魔王',initialHp:+b.initialHp||0,hp,killed:!!b.killed}:null,latest:latest?{member:actMember_(latest.memberId).name||latest.memberId,method:latest.method,damage:+latest.damage||0,success:!!latest.success}:null};
+  return {type,title:'雙十狩王',activityFrom:range.from,activityTo:range.to,pool:S.pool||0,cap:+B.cap||14000,attackActive:!!S.active,boss:b?{name:b.name||'魔王',initialHp:+b.initialHp||0,hp,killed:!!b.killed}:null,latest:latest?{member:actMember_(latest.memberId).name||latest.memberId,method:latest.method,damage:+latest.damage||0,success:!!latest.success}:null};
  }
  if(type==='weekly'){
-  return {type,title:'每週任務卡',rows:actPlayerStats_().map(x=>({name:x.name||x.id,games:x.games||0,days:x.days||0})).sort((a,b)=>b.games-a.games||b.days-a.days).slice(0,10)};
+  return {type,title:'每週任務卡',activityFrom:range.from,activityTo:range.to,rows:actPlayerStats_('weekly').map(x=>({name:x.name||x.id,games:x.games||0,days:x.days||0})).sort((a,b)=>b.games-a.games||b.days-a.days).slice(0,10)};
  }
  const titles={pioneer:'開桌先鋒',rank:'週排行榜',hunter:'獵人排行榜',umbrella:'保護傘'};
  if(type==='rotate')return {type,title:'EPC 活動輪播',slides:['boss','pioneer','rank','hunter','umbrella','weekly'].map(t=>displayPayload_(t))};
- return {type,title:titles[type]||'EPC 活動',rows:displayLeaderboard_(type)};
+ return {type,title:titles[type]||'EPC 活動',activityFrom:range.from,activityTo:range.to,rows:displayLeaderboard_(type)};
 }
 async function publishDisplay_(deviceId,silent=false){
  const type=$('displayType_'+deviceId)?.value||(displayDevicesCache.find(x=>x.deviceId===deviceId)?.contentType)||'boss';
