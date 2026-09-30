@@ -1481,6 +1481,89 @@ html[data-epc-theme="light"] #actionMsg{
  box-shadow:0 0 18px rgba(57,203,209,.12)!important;
 }
 </style>
+
+<style id="epcFixedWhiteReportV15010">
+/* Formal settlement/report preview stays paper-white in BOTH UI themes. */
+.report-paper,
+.print-paper,
+.paper,
+.settlement-report,
+.settle-report,
+.formal-report,
+.report-preview,
+#printArea,
+#reportPreview,
+#printPreview,
+#settlementReport{
+ background:#ffffff!important;
+ color:#111827!important;
+ color-scheme:light!important;
+}
+.report-paper *,
+.print-paper *,
+.paper *,
+.settlement-report *,
+.settle-report *,
+.formal-report *,
+.report-preview *,
+#printArea *,
+#reportPreview *,
+#printPreview *,
+#settlementReport *{
+ color:inherit;
+}
+.report-paper table,
+.print-paper table,
+.paper table,
+.settlement-report table,
+.settle-report table,
+.formal-report table,
+.report-preview table,
+#printArea table,
+#reportPreview table,
+#printPreview table,
+#settlementReport table{
+ background:#ffffff!important;
+ color:#111827!important;
+}
+.report-paper td,
+.print-paper td,
+.paper td,
+.settlement-report td,
+.settle-report td,
+.formal-report td,
+.report-preview td,
+#printArea td,
+#reportPreview td,
+#printPreview td,
+#settlementReport td{
+ background:#ffffff!important;
+ color:#111827!important;
+ border-color:#d7dee5!important;
+}
+.report-paper th,
+.print-paper th,
+.paper th,
+.settlement-report th,
+.settle-report th,
+.formal-report th,
+.report-preview th,
+#printArea th,
+#reportPreview th,
+#printPreview th,
+#settlementReport th{
+ background:#23313d!important;
+ color:#ffffff!important;
+ border-color:#394854!important;
+}
+@media print{
+ body{background:#fff!important}
+ .report-paper,.print-paper,.paper,.settlement-report,.settle-report,.formal-report,.report-preview,
+ #printArea,#reportPreview,#printPreview,#settlementReport{
+   background:#fff!important;color:#000!important;box-shadow:none!important;
+ }
+}
+</style>
 </head>
 <script>
 (function(){
@@ -1490,7 +1573,7 @@ html[data-epc-theme="light"] #actionMsg{
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.8 Web · Glacier Blue / Graphite Gold UI FIX + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.10 Web · Glacier Blue / Graphite Gold UI + White Report + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2761,7 +2844,7 @@ function persist(){
  localStorage.setItem('epcLocalDirty','1');
  scheduleCloudSave();
 }
-document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$(b.dataset.page).classList.add('active');render()});
+document.querySelectorAll('#nav button[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const target=$(b.dataset.page);if(target)target.classList.add('active');render()});
 async function addMember(){
  if(editingMemberId)return saveMemberEdit();
  const name=$('mName').value.trim(); if(!name)return alert('請輸入會員名稱');
@@ -3141,7 +3224,7 @@ function actionMsg(msg,isError=false){
 }
 
 function showPage(id){if(id==='members' && $('memberDateFrom') && !$('memberDateFrom').value && !$('memberDateTo').value){const now=new Date(),y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),last=new Date(y,now.getMonth()+1,0).getDate();$('memberDateFrom').value=`${y}-${m}-01`;$('memberDateTo').value=`${y}-${m}-${String(last).padStart(2,'0')}`;}if(id==='eventreport')setTimeout(()=>renderEventReport(),0);
- document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
+ document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));
  render();
 }
