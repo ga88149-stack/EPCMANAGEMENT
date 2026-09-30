@@ -4219,14 +4219,21 @@ function calcPlayerForEvent(p,e){
  let base=groups*((+e.poolUnit||0)+(+e.admin||0));
  let halfPriceGroups=Math.max(0,Math.min(groups,10)-1);
  let freeAdminGroups=Math.max(0,groups-10);
- let auto=halfPriceGroups*(+e.admin||0)*0.5 + freeAdminGroups*(+e.admin||0);
+ let rebuyDiscount=halfPriceGroups*(+e.admin||0)*0.5;
+ let overbuyDiscount=freeAdminGroups*(+e.admin||0);
+ let auto=rebuyDiscount+overbuyDiscount;
  let disc=auto+manual;
  let grossAdmin=groups*(+e.admin||0);
  return {
    groups, auto, manual, totalDiscount:disc,
    original:base, paid:Math.max(0,base-disc),
    pool:groups*(+e.poolUnit||0),
-   grossAdmin, netAdmin:Math.max(0,grossAdmin-disc)
+   grossAdmin, netAdmin:Math.max(0,grossAdmin-disc),
+   rebuyDiscount, overbuyDiscount,
+   accountingRebuyDiscount:rebuyDiscount,
+   accountingGroupDiscount:overbuyDiscount,
+   normalRebuyGroups:halfPriceGroups,
+   overbuyGroups:freeAdminGroups
  };
 }
 
@@ -4890,8 +4897,8 @@ function render(){
     buyin:`<input type="number" min="0" value="${p.buyin}" style="width:100%;min-width:0" onchange="setP(${i},'buyin',this.value)">`,
     rebuy:`<input type="number" min="0" value="${p.rebuy}" style="width:100%;min-width:0" onchange="setP(${i},'rebuy',this.value)">`,
     groups:`<span style="white-space:nowrap">${c.groups}</span>`,
-    rebuyDiscount:`<span style="white-space:nowrap">${money(custom?(c.rebuyDiscount||0):(c.auto||0))}</span>`,
-    overbuyDiscount:`<span style="white-space:nowrap">${money(custom?(c.overbuyDiscount||0):0)}</span>`,
+    rebuyDiscount:`<span style="white-space:nowrap">${money(c.rebuyDiscount||0)}</span>`,
+    overbuyDiscount:`<span style="white-space:nowrap">${money(c.overbuyDiscount||0)}</span>`,
     manualDiscount:`<input type="number" min="0" value="${p.manualDiscount}" style="width:100%;min-width:0" onchange="setP(${i},'manualDiscount',this.value)">`,
     totalDiscount:`<b style="white-space:nowrap">${money(c.totalDiscount||0)}</b>`,
     paid:`<span style="white-space:nowrap">${money(c.paid)}</span>`,
@@ -4904,8 +4911,8 @@ function render(){
  const totals=rowData.reduce((a,r)=>{
    const c=r.c,custom=(currentEvent().pricingMode||'standard')==='custom';
    a.groups+=c.groups||0;
-   a.rebuyDiscount+=custom?(c.rebuyDiscount||0):(c.auto||0);
-   a.overbuyDiscount+=custom?(c.overbuyDiscount||0):0;
+   a.rebuyDiscount+=c.rebuyDiscount||0;
+   a.overbuyDiscount+=c.overbuyDiscount||0;
    a.manualDiscount+=c.manual||(+r.p.manualDiscount||0);
    a.totalDiscount+=c.totalDiscount||0;
    a.paid+=c.paid||0;
