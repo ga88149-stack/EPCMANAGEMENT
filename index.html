@@ -1115,7 +1115,7 @@ textarea[id*="prize" i], input[id*="prize" i]{font-size:16px!important;line-heig
 </style>
 <style>.searchCombo{position:relative}.searchComboMenu{position:absolute;z-index:99999;left:0;right:0;top:100%;max-height:260px;overflow-y:auto;background:#0b141d;border:1px solid #33495b;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:none}.searchComboMenu.open{display:block}.searchComboItem{padding:8px 10px;cursor:pointer;color:#eaf2f8;border-bottom:1px solid #182733}.searchComboItem:hover{background:#17304a}</style></head>
 <body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.49.5 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.49.6 Web · Multi-device Save Compatibility</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3890,18 +3890,38 @@ function pioneerLoadEvent_(id){
  persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
 function pioneerSetFirst_(eventId,pos,memberId){
- ensureActDb_();const P=db.activityManagement.pioneer[eventId]||(db.activityManagement.pioneer[eventId]={eventId,first4:[],scores:{}});
+ ensureActDb_();const P=db.activityManagement.pioneer[eventId]||(db.activityManagement.pioneer[eventId]={eventId,first4:[],scores:{},confirmed:false,updatedAt:''});
+ const previous=P.first4[pos]||'';
  P.first4[pos]=memberId;
+ P.confirmed=false;
  const defaults=[5,4,3,2];
+ // Anyone removed from the top 4 becomes a normal participant = 1 point.
+ if(previous && previous!==memberId && !P.first4.includes(previous))P.scores[previous]=1;
+ // Selected top-4 player receives the position score.
  if(memberId)P.scores[memberId]=defaults[pos];
- const e=(db.events||[]).find(x=>x.id===eventId);(e?.players||[]).forEach(p=>{if(P.scores[p.memberId]==null)P.scores[p.memberId]=1});
- persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
+ // Every participant who is not currently in top 4 defaults to 1 point.
+ const e=(db.events||[]).find(x=>x.id===eventId);
+ (e?.players||[]).forEach(p=>{
+   const idx=P.first4.indexOf(p.memberId);
+   if(idx>=0)P.scores[p.memberId]=defaults[idx];
+   else P.scores[p.memberId]=1;
+ });
+ renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
 function pioneerScore_(eventId,id,v){ensureActDb_();const P=db.activityManagement.pioneer[eventId];if(P){P.scores[id]=Number(v)||0;}}
 function pioneerConfirm_(eventId){
  const P=db.activityManagement.pioneer[eventId],e=(db.events||[]).find(x=>x.id===eventId);if(!P||!e)return;
  [0,1,2,3].forEach(i=>{const el=$('pioneerFirst_'+eventId+'_'+i);if(el)P.first4[i]=el.value||''});
- (e.players||[]).forEach(p=>{const el=$('pioneerScore_'+eventId+'_'+p.memberId);if(el)P.scores[p.memberId]=Number(el.value)||0});
+ (e.players||[]).forEach(p=>{
+ const el=$('pioneerScore_'+eventId+'_'+p.memberId);
+ if(el)P.scores[p.memberId]=Number(el.value)||0;
+});
+const defaults=[5,4,3,2];
+(e.players||[]).forEach(p=>{
+ const idx=P.first4.indexOf(p.memberId);
+ if(idx>=0 && (!Number.isFinite(Number(P.scores[p.memberId])) || Number(P.scores[p.memberId])===0))P.scores[p.memberId]=defaults[idx];
+ else if(idx<0 && (!Number.isFinite(Number(P.scores[p.memberId])) || Number(P.scores[p.memberId])===0))P.scores[p.memberId]=1;
+});
  const chosen=P.first4.filter(Boolean);if(new Set(chosen).size!==chosen.length)return alert('前4名不能重複');
  P.confirmed=true;P.updatedAt=new Date().toISOString();persist();renderActivities();setTimeout(enhanceSearchCombos_,0);setTimeout(()=>alert('本場先鋒排名已儲存'),50);
 }
@@ -4682,7 +4702,7 @@ function printEventReport(){
    clonedPaper.style.setProperty('--report-head-font',reportFont);
    clonedPaper.style.setProperty('--report-body-font',reportFont);
 
-   // V1.49.5: the print clone must contain exactly the same selected columns
+   // V1.49.6: the print clone must contain exactly the same selected columns
    // as the on-screen report. Older print CSS assigned widths only to the first
    // 9 columns, which pushed Signature/Note outside the printable area.
    const pct=(100/Math.max(1,visibleCols)).toFixed(4)+'%';
