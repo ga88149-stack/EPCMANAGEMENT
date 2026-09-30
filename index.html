@@ -1745,7 +1745,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.11 Web · Deep Glacier Blue / Graphite Gold UI + White Report + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.13 Web · Deep Glacier Blue / Graphite Gold UI + White Report + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2389,8 +2389,8 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
 
 <div id="settlementConfirmModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
   <div style="width:min(460px,100%);background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
-    <h3 style="margin-top:0">確認正式結算</h3>
-    <div id="settlementConfirmText" style="line-height:1.7;margin-bottom:18px"></div>
+    <h3 style="margin-top:0;color:#e7c568!important">確認正式結算</h3>
+    <div id="settlementConfirmText" style="line-height:1.7;margin-bottom:18px;color:#f3f7fb!important"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button type="button" onclick="closeSettlementConfirm()">取消</button>
       <button type="button" class="primary" onclick="executeFormalSettlement()">確認正式結算</button>
@@ -4072,10 +4072,10 @@ function confirmSettlement(){
  let info=poolInfo(e);
  let groups=e.players.reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
  $('settlementConfirmText').innerHTML=
-   `即將正式結算並鎖定本場賽事。<br><br>`+
-   `<strong>${e.date}｜${Number(e.level||0).toLocaleString()} 賽事</strong><br>`+
-   `總組數：${groups}<br>總獎池：${money(info.pool)}<br>JP：${money(info.jp)}<br>可發獎金：${money(info.avail)}<br><br>`+
-   `確認後會更新本場正式結算資料，之後仍可編輯並重新正式結算。`;
+   `<span style="color:#f3f7fb!important">即將正式結算並鎖定本場賽事。</span><br><br>`+
+   `<strong style="color:#ffffff!important">${e.date}｜${Number(e.level||0).toLocaleString()} 賽事</strong><br>`+
+   `<span style="color:#f3f7fb!important">總組數：${groups}<br>總獎池：${money(info.pool)}<br>JP：${money(info.jp)}<br>可發獎金：${money(info.avail)}</span><br><br>`+
+   `<span style="color:#cbd6e0!important">確認後會更新本場正式結算資料，之後仍可編輯並重新正式結算。</span>`;
  $('settlementConfirmModal').style.display='flex';
 }
 function closeSettlementConfirm(){
