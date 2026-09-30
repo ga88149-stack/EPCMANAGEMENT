@@ -1248,6 +1248,79 @@ html[data-epc-theme="dark"] .tab.active{
  box-shadow:0 0 0 1px rgba(226,184,79,.16),0 0 20px rgba(226,184,79,.13)!important;
 }
 </style>
+
+<style id="epcTrueLightV1506">
+html[data-epc-theme="light"]{background:#eef3f8!important;color-scheme:light}
+html[data-epc-theme="light"] body,
+html[data-epc-theme="light"] #app,
+html[data-epc-theme="light"] main,
+html[data-epc-theme="light"] .wrap,
+html[data-epc-theme="light"] .container,
+html[data-epc-theme="light"] .content{
+ background:#eef3f8!important;color:#182636!important;
+}
+html[data-epc-theme="light"] body{
+ background:linear-gradient(180deg,#f8fafc 0%,#eef3f8 48%,#e9f0f6 100%)!important;
+}
+html[data-epc-theme="light"] #app{
+ min-height:calc(100vh - 110px);
+ background:
+   radial-gradient(circle at 10% 0%,rgba(68,132,196,.08),transparent 28%),
+   radial-gradient(circle at 90% 2%,rgba(198,151,38,.08),transparent 25%),
+   linear-gradient(180deg,#f8fafc,#edf3f8)!important;
+}
+html[data-epc-theme="light"] #app > div,
+html[data-epc-theme="light"] #app > section{
+ color:#182636!important;
+}
+html[data-epc-theme="light"] header,
+html[data-epc-theme="light"] nav,
+html[data-epc-theme="light"] .topbar{
+ background:#ffffff!important;color:#182636!important;border-color:#d5dfe8!important;
+ box-shadow:0 5px 18px rgba(29,49,69,.08)!important;
+}
+html[data-epc-theme="light"] .card,
+html[data-epc-theme="light"] .panel,
+html[data-epc-theme="light"] .box{
+ background:#fff!important;color:#182636!important;border:1px solid #d6e0e9!important;
+ box-shadow:0 8px 24px rgba(35,55,76,.08)!important;
+}
+html[data-epc-theme="light"] input,
+html[data-epc-theme="light"] select,
+html[data-epc-theme="light"] textarea{
+ background:#fff!important;color:#152536!important;border-color:#c8d5e1!important;
+}
+html[data-epc-theme="light"] table{background:#fff!important;color:#1d2d3e!important}
+html[data-epc-theme="light"] th{background:#eaf1f7!important;color:#526a80!important}
+html[data-epc-theme="light"] td{background:#fff!important;color:#213448!important}
+html[data-epc-theme="light"] hr{border-color:#d8e2eb!important}
+html[data-epc-theme="light"] .small,
+html[data-epc-theme="light"] .muted,
+html[data-epc-theme="light"] label{color:#62778b!important}
+html[data-epc-theme="light"] a{color:#176fb3}
+html[data-epc-theme="light"] button:not(.primary):not(.danger){
+ background:#fff!important;color:#24384b!important;border-color:#cbd7e2!important;
+}
+html[data-epc-theme="light"] nav button.active,
+html[data-epc-theme="light"] .tab.active{
+ background:#fff5d7!important;color:#795706!important;border-color:#c79b2b!important;
+ box-shadow:0 0 0 1px rgba(199,155,43,.12),0 0 18px rgba(199,155,43,.12)!important;
+}
+html[data-epc-theme="light"] #epcThemeToggle{
+ background:#172a3c!important;color:#fff!important;border-color:#29455f!important;
+ box-shadow:0 0 16px rgba(42,114,176,.15)!important;
+}
+html[data-epc-theme="light"] #epcThemeToggle .themeDot{
+ background:#8bd1ff!important;box-shadow:0 0 12px #65c2ff!important;
+}
+/* Generic hard-coded dark inline backgrounds inside the rendered application. */
+html[data-epc-theme="light"] #app [style*="background:#0"],
+html[data-epc-theme="light"] #app [style*="background: #0"],
+html[data-epc-theme="light"] #app [style*="background:#1"],
+html[data-epc-theme="light"] #app [style*="background: #1"]{
+ background:#fff!important;color:#182636!important;
+}
+</style>
 </head>
 <script>
 (function(){
@@ -1257,7 +1330,7 @@ html[data-epc-theme="dark"] .tab.active{
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.5 Web · Premium Light/Dark UI + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.6 Web · True White/Dark UI + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5104,20 +5177,39 @@ render=function(){
 };
 
 
-/* ===== V1.50.4 Theme Controller ===== */
-function epcTheme_(){return document.documentElement.getAttribute('data-epc-theme')==='light'?'light':'dark'}
-function updateEpcThemeButton_(){
- const t=epcTheme_(),el=document.getElementById('epcThemeText');
+/* ===== V1.50.6 Robust Theme Controller ===== */
+function epcTheme_(){
+ return localStorage.getItem('epcThemeV1')==='light'?'light':'dark';
+}
+function applyEpcTheme_(){
+ const t=epcTheme_();
+ document.documentElement.setAttribute('data-epc-theme',t);
+ if(document.body){
+   document.body.setAttribute('data-epc-theme',t);
+   document.body.classList.toggle('epc-light',t==='light');
+   document.body.classList.toggle('epc-dark',t==='dark');
+ }
+ const el=document.getElementById('epcThemeText');
  if(el)el.textContent=t==='light'?'🌙 切換深色':'☀ 切換淺色';
 }
 function setEpcTheme_(t){
- t=t==='light'?'light':'dark';
- document.documentElement.setAttribute('data-epc-theme',t);
- localStorage.setItem('epcThemeV1',t);
- updateEpcThemeButton_();
+ localStorage.setItem('epcThemeV1',t==='light'?'light':'dark');
+ applyEpcTheme_();
 }
-function toggleEpcTheme_(){setEpcTheme_(epcTheme_()==='dark'?'light':'dark')}
-setTimeout(updateEpcThemeButton_,0);
+function toggleEpcTheme_(){
+ setEpcTheme_(epcTheme_()==='light'?'dark':'light');
+}
+setTimeout(applyEpcTheme_,0);
+window.addEventListener('load',applyEpcTheme_);
+
+
+/* Re-apply visual theme after dynamic page rendering. */
+const epcRenderBeforeThemeV1506_=render;
+render=function(){
+ const r=epcRenderBeforeThemeV1506_.apply(this,arguments);
+ setTimeout(applyEpcTheme_,0);
+ return r;
+};
 
 </script>
 </body></html>
