@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.15 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.16 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4000,8 +4000,8 @@ function renderDailyAccountingDetail(){
      const c=calcPlayerForEvent(p,e);
      const custom=(e.pricingMode||'standard')==='custom';
      g+=c.groups; gross+=c.grossAdmin||0; manual+=c.manual||0; net+=c.netAdmin||0;
-     if(custom){rebuy+=c.rebuyDiscount||0;group+=c.overbuyDiscount||0;}
-     else group+=c.auto||0;
+     rebuy+=c.accountingRebuyDiscount??(c.rebuyDiscount||0);
+     group+=c.accountingGroupDiscount??(c.overbuyDiscount||0);
    });
    const disc=rebuy+group+manual;
    const ag=accountingGroupForEvent(e);
@@ -4037,8 +4037,8 @@ function printDailyAccounting(){
      const c=calcPlayerForEvent(p,e);
      const custom=(e.pricingMode||'standard')==='custom';
      g+=c.groups; gross+=c.grossAdmin||0; manual+=c.manual||0; net+=c.netAdmin||0;
-     if(custom){rebuy+=c.rebuyDiscount||0;group+=c.overbuyDiscount||0;}
-     else group+=c.auto||0;
+     rebuy+=c.accountingRebuyDiscount??(c.rebuyDiscount||0);
+     group+=c.accountingGroupDiscount??(c.overbuyDiscount||0);
    });
    const disc=rebuy+group+manual;
    return `<tr>
@@ -4317,8 +4317,10 @@ function calcPlayerForEvent(p,e){
    pool:groups*(+e.poolUnit||0),
    grossAdmin, netAdmin:Math.max(0,grossAdmin-disc),
    rebuyDiscount, overbuyDiscount,
-   accountingRebuyDiscount:halfPriceGroups*(+e.admin||0),
-   accountingGroupDiscount:freeAdminGroups*(+e.admin||0),
+   // Standard mode accounting uses the ACTUAL admin discount:
+   // groups 2-10 = half admin discount; groups 11+ = full admin waiver.
+   accountingRebuyDiscount:rebuyDiscount,
+   accountingGroupDiscount:overbuyDiscount,
    normalRebuyGroups:halfPriceGroups,
    overbuyGroups:freeAdminGroups
  };
