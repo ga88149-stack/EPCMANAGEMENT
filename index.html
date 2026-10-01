@@ -2560,6 +2560,29 @@ function mergeCloud3_(base,local,remote){
  }
  return cloneCloud_(local);
 }
+function preserveManualDiscountEdits_(local,remote){
+ const le=(local&&local.events)||[], re=(remote&&remote.events)||[];
+ const rem=new Map(re.map(e=>[String(e.id||''),e]));
+ for(const e of le){
+   const rr=rem.get(String(e.id||'')); if(!rr)continue;
+   const rpm=new Map((rr.players||[]).map(p=>[String(p.memberId||''),p]));
+   for(const p of (e.players||[])){
+     const rp=rpm.get(String(p.memberId||'')); if(!rp)continue;
+     const edited=Number(p._manualDiscountEditedAt||0);
+     if(!edited)continue;
+     const localValue=Number(p._manualDiscountEditedValue!==undefined?p._manualDiscountEditedValue:p.manualDiscount)||0;
+     const remoteValue=Number(rp.manualDiscount||0);
+     // A blank/default 0 on another computer is not an instruction to erase a
+     // manually entered discount. Only a real explicit edit can replace it.
+     if(localValue!==0 && remoteValue===0){
+       rp.manualDiscount=localValue;
+       rp._manualDiscountEditedAt=edited;
+       rp._manualDiscountEditedValue=localValue;
+     }
+   }
+ }
+ return remote;
+}
 function setCloudBase_(data){cloudBase=cloneCloud_(data);try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(e){}}
 let epcActiveEdit_=null;
 function epcEditingField_(){
@@ -2647,7 +2670,7 @@ function startLiveSync_(){
      const loadedRev=Number(res.revision||0);
      if(!(loadedRev>cloudRevision) || !res.data || typeof res.data!=='object')return;
 
-     const remote=cloneCloud_(res.data);
+     const remote=preserveManualDiscountEdits_(db,cloneCloud_(res.data));
      remote.members=mergeFormMembers(remote.members,res.members);
 
      if(!localDirty){
@@ -2783,6 +2806,7 @@ async function saveCloudNow(force=false){
    const res=await cloudPost({action:'save',data:sentLocal,baseData:sentBase,revision:cloudRevision,writeId});
    const savedRevision=Number(res.revision||0);
    if(!res.data||typeof res.data!=='object')throw new Error('CLOUD_MERGE_RESPONSE_INVALID');
+   res.data=preserveManualDiscountEdits_(db,res.data);
 
    // If the user edited again while this request was in flight, merge those newest
    // local edits over the server-merged result instead of discarding either side.
@@ -3233,7 +3257,15 @@ function addPlayer(){
 function setP(i,k,v){
  let e=currentEvent();if(!e)return;
  if(e.status==='已結算')return alert('此賽事已完成結算並鎖定，不能再修改。');
- e.players[i][k]=((k==='group'||k==='nickname'||k==='seat')?v:+v);persist();render();
+ const p=e.players[i]; if(!p)return;
+ p[k]=((k==='group'||k==='nickname'||k==='seat')?v:+v);
+ // Commit the field to local DB immediately. Do not let a remote revision that
+ // simply omitted this edit be interpreted as an intentional reset to 0.
+ if(k==='manualDiscount'){
+   p._manualDiscountEditedAt=Date.now();
+   p._manualDiscountEditedValue=+v||0;
+ }
+ persist();render();
 }
 function removePlayerSafe(memberId){
  const e=currentEvent();if(!e)return;
