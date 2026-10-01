@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.13 Web · Deep Glacier Blue / Graphite Gold UI + White Report + Display Devices</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.14 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2682,49 +2682,94 @@ render=function(){
 };
 
 function startLiveSync_(){
- // ACCOUNTING SAFE MODE:
- // Background sync may observe newer cloud revisions, but it must never replace/merge
- // the working accounting DB automatically. This prevents a stale/partial snapshot from
- // rolling back buy-ins, rebuys, discounts or settlements while staff are operating.
  if(liveSyncTimer)clearInterval(liveSyncTimer);
  liveSyncTimer=setInterval(async()=>{
    if(cloudSaving||document.hidden||epcEditingField_()||epcActiveEdit_)return;
    try{
      const meta=await cloudGet('revision');
      const rev=Number(meta.revision||0);
-     if(rev>cloudRevision){
-       setCloudState('● 雲端有較新版本 '+rev+'｜為保護帳務不自動覆蓋');
+     if(!(rev>cloudRevision))return;
+
+     const res=await cloudGet('load');
+     const loadedRev=Number(res.revision||0);
+     if(!(loadedRev>cloudRevision)||!res.data||typeof res.data!=='object')return;
+
+     let remote=cloneCloud_(res.data);
+     remote.members=mergeFormMembers(remote.members,res.members);
+
+     if(!localDirty){
+       backupLocal('before-live-remote-apply-v2');
+       db=remote;
+       cloudRevision=loadedRev;
+       setCloudBase_(remote);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localStorage.setItem('epcCloudRevision',String(loadedRev));
+       localStorage.removeItem('epcLocalDirty');
+       render();
+       setCloudState('☁ 已同步另一台電腦｜Revision '+loadedRev);
+       return;
      }
+
+     // Unsaved work exists locally: three-way merge, never overwrite it.
+     backupLocal('before-live-merge-v2');
+     db=mergeCloud3_(cloudBase||remote,db,remote);
+     db=preserveManualDiscountEdits_(db,remote);
+     db.members=mergeFormMembers(db.members,res.members);
+     cloudRevision=loadedRev;
+     setCloudBase_(remote);
+     localStorage.setItem('epcV1',JSON.stringify(db));
+     localStorage.setItem('epcCloudRevision',String(loadedRev));
+     localStorage.setItem('epcLocalDirty','1');
+     localDirty=true;
+     render();
+     setCloudState('● 已合併另一台電腦｜正在同步本機修改…');
+     scheduleCloudSave();
    }catch(e){
-     console.warn('safe live sync poll failed',e);
+     console.warn('live sync v2 failed',e);
    }
- },3000);
+ },1500);
 }
 async function initializeCloud(){
  setCloudState('● 本機已儲存｜正在連接雲端…');
  try{
    const res=await cloudGet('load');
    const serverRevision=Number(res.revision||0);
+   const hasRemote=!!(res.data&&typeof res.data==='object');
+   let remote=hasRemote?cloneCloud_(res.data):null;
+   if(remote)remote.members=mergeFormMembers(remote.members,res.members);
 
-   // Never replace an existing local accounting database automatically on startup.
-   // Cloud is used as the initial source only when this browser has no local EPC database.
-   const hasLocalDb=!!localStorage.getItem('epcV1');
-   if(!hasLocalDb && res.data && typeof res.data==='object'){
-     db=cloneCloud_(res.data);
+   if(remote){
+     if(localDirty){
+       backupLocal('startup-three-way-merge-v2');
+       db=mergeCloud3_(cloudBase||remote,db,remote);
+       db=preserveManualDiscountEdits_(db,remote);
+       db.members=mergeFormMembers(db.members,res.members);
+       cloudRevision=serverRevision;
+       setCloudBase_(remote);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localStorage.setItem('epcCloudRevision',String(cloudRevision));
+       localStorage.setItem('epcLocalDirty','1');
+       cloudReady=true;
+       render();
+       setCloudState('● 已合併雲端｜正在補同步本機修改…');
+       await saveCloudNow(false);
+       return;
+     }else{
+       backupLocal('startup-cloud-load-v2');
+       db=remote;
+       cloudRevision=serverRevision;
+       setCloudBase_(remote);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localStorage.setItem('epcCloudRevision',String(cloudRevision));
+       localStorage.removeItem('epcLocalDirty');
+       localDirty=false;
+     }
+   }else{
      db.members=mergeFormMembers(db.members,res.members);
      cloudRevision=serverRevision;
      setCloudBase_(db);
-     localStorage.setItem('epcV1',JSON.stringify(db));
-     localStorage.setItem('epcCloudRevision',String(cloudRevision));
-     localStorage.removeItem('epcLocalDirty');
-     localDirty=false;
-   }else{
-     db.members=mergeFormMembers(db.members,res.members);
-     // Keep the browser's working DB untouched. A newer cloud revision is surfaced,
-     // not silently applied.
-     if(serverRevision>cloudRevision){
-       setCloudState('● 雲端有較新版本 '+serverRevision+'｜本機帳務已保護');
-     }
+     localDirty=true;
+     localStorage.setItem('epcLocalDirty','1');
    }
 
    if(!db.settings)db.settings={};
@@ -2732,10 +2777,14 @@ async function initializeCloud(){
    if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
    if(!Array.isArray(db.dailySettlementReports))db.dailySettlementReports=[];
    cloudReady=true;
+   localStorage.setItem('epcV1',JSON.stringify(db));
    render();
 
-   const t=res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
-   if(serverRevision<=cloudRevision)setCloudState('☁ 本機帳務已保護｜Revision '+cloudRevision+'｜'+t);
+   if(!hasRemote)await saveCloudNow(false);
+   else{
+     const t=res.updatedAt?new Date(res.updatedAt).toLocaleTimeString():new Date().toLocaleTimeString();
+     setCloudState('☁ 雲端已載入｜Revision '+cloudRevision+'｜'+t);
+   }
  }catch(err){
    cloudReady=false;
    setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
@@ -2778,83 +2827,69 @@ async function saveCloudNow(force=false){
    return false;
  }
  cloudSaving=true; cloudPending=false;
- setCloudState('☁ 正在上傳雲端…');
- backupLocal('before-cloud-save');
+ setCloudState('☁ 正在比對雲端最新資料…');
+ backupLocal('before-cloud-save-v2');
  const writeId=makeWriteId();
  try{
-   const sentLocal=cloneCloud_(db);
-   const sentBase=cloneCloud_(cloudBase||db);
-   const res=await cloudPost({action:'save',data:sentLocal,baseData:sentBase,revision:cloudRevision,writeId});
-   const savedRevision=Number(res.revision||0);
-   if(!res.data||typeof res.data!=='object')throw new Error('CLOUD_MERGE_RESPONSE_INVALID');
-   // Keep the exact server snapshot BEFORE protecting local manual-discount edits.
-   // If the server response is still behind the explicit local field revision, do not
-   // falsely mark the write as complete: retain the raw server snapshot as merge base
-   // and immediately perform one more save against the new revision.
-   const rawServerData=cloneCloud_(res.data);
-   const manualNeedsRetry=manualDiscountAhead_(sentLocal,rawServerData);
+   // Always read the newest server snapshot immediately before writing.
+   // This makes A/B computers merge against the same current revision instead of
+   // blindly posting a whole stale database over each other.
+   const latest=await cloudGet('load');
+   const remote=(latest.data&&typeof latest.data==='object')?cloneCloud_(latest.data):{};
+   const remoteRevision=Number(latest.revision||0);
+   const base=cloudBase&&typeof cloudBase==='object'?cloneCloud_(cloudBase):cloneCloud_(remote);
+   const localAtStart=cloneCloud_(db);
 
-   // SAFETY FIRST: a successful POST must NEVER replace this browser's just-entered
-   // accounting data with an older/partial server snapshot. Keep the local snapshot that
-   // was actually sent, and merge only concurrent server changes around it.
-   if(!sameCloud_(db,sentLocal)){
-     db=mergeCloud3_(sentLocal,db,rawServerData);
-     db=preserveManualDiscountEdits_(db,rawServerData);
-     localDirty=true; localStorage.setItem('epcLocalDirty','1'); cloudPending=true;
-   }else{
-     db=mergeCloud3_(sentBase,sentLocal,rawServerData);
-     db=preserveManualDiscountEdits_(sentLocal,db);
-     localDirty=false; localStorage.removeItem('epcLocalDirty');
-   }
-   cloudRevision=savedRevision;
-   if(manualNeedsRetry){
-     // Server acknowledged a revision but did not yet contain the newest manual-discount field.
-     // Use the REAL server snapshot as base and keep this device dirty until a verified retry.
-     setCloudBase_(rawServerData);
+   let candidate=mergeCloud3_(base,localAtStart,remote);
+   candidate=preserveManualDiscountEdits_(localAtStart,candidate);
+   candidate.members=mergeFormMembers(candidate.members,latest.members);
+
+   setCloudState('☁ 正在儲存合併後資料…');
+   const res=await cloudPost({
+     action:'save',
+     data:candidate,
+     baseData:remote,
+     revision:remoteRevision,
+     writeId
+   });
+   if(!res.data||typeof res.data!=='object')throw new Error('CLOUD_MERGE_RESPONSE_INVALID');
+
+   const server=cloneCloud_(res.data);
+   const savedRevision=Number(res.revision||remoteRevision);
+
+   // If the operator changed something while the request was in flight, merge those
+   // new local edits on top of the confirmed server snapshot and immediately queue them.
+   const changedDuringSave=!sameCloud_(db,localAtStart);
+   if(changedDuringSave){
+     db=mergeCloud3_(localAtStart,db,server);
+     db=preserveManualDiscountEdits_(db,server);
      localDirty=true;
      localStorage.setItem('epcLocalDirty','1');
      cloudPending=true;
    }else{
-     setCloudBase_(rawServerData);
+     // Server response is authoritative after a successful save. Explicit manual
+     // discount timestamps are preserved so a stale zero can never win later.
+     db=preserveManualDiscountEdits_(candidate,server);
+     localDirty=false;
+     localStorage.removeItem('epcLocalDirty');
    }
+
+   cloudRevision=savedRevision;
+   setCloudBase_(server);
    localStorage.setItem('epcCloudRevision',String(cloudRevision));
    localStorage.setItem('epcV1',JSON.stringify(db));
-   const t=res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
-   setCloudState(manualNeedsRetry?'● 手動優惠正在補同步…':(localDirty?'● 已合併其他裝置｜本機新變更待同步':'☁ 即時雲端已同步｜Revision '+cloudRevision+'｜'+t));
+   render();
+   const t=res.updatedAt?new Date(res.updatedAt).toLocaleTimeString():new Date().toLocaleTimeString();
+   setCloudState(changedDuringSave?'● 雲端已儲存｜剛才的新修改繼續同步中…':'☁ 雲端同步完成｜Revision '+cloudRevision+'｜'+t);
    return true;
  }catch(err){
    console.error('cloud save failed',err);
    localDirty=true;
    localStorage.setItem('epcLocalDirty','1');
    const msg=String(err&&err.message||err||'UNKNOWN');
-   if(msg.includes('CLOUD_CONFLICT')){
-     setCloudState('⚠ 雲端已有較新版本｜本機資料未被覆蓋',true);
-   }else if(msg.includes('CLOUD_VERIFY_FAILED')||msg.includes('CLOUD_WRITE_VERIFY_FAILED')){
-     setCloudState('⚠ 上傳後驗證失敗｜本機資料已保留',true);
-   }else{
-     // A failed POST does not prove the API is offline. Apps Script may have completed the
-     // write after a redirect/network interruption. Verify with a fresh load before retrying.
-     try{
-       const check=await cloudGet('load');
-       cloudReady=true;
-       if(String(check.writeId||'')===String(writeId)){
-         db=preserveManualDiscountEdits_(db,check.data||db);
-         cloudRevision=Number(check.revision||cloudRevision);
-         setCloudBase_(check.data||db);
-         localDirty=false; localStorage.removeItem('epcLocalDirty');
-         localStorage.setItem('epcCloudRevision',String(cloudRevision));
-         localStorage.setItem('epcV1',JSON.stringify(db));
-         setCloudState('☁ 雲端已確認儲存｜Revision '+cloudRevision);
-         return true;
-       }
-       setCloudState('● 雲端可連線｜本次儲存未確認｜將自動重送｜'+msg,true);
-       cloudPending=true;
-     }catch(checkErr){
-       cloudReady=false;
-       setCloudState('⚠ 雲端連線異常｜本機資料安全保存｜'+msg,true);
-       scheduleCloudReconnect_();
-     }
-   }
+   setCloudState('⚠ 本機資料已保留｜雲端儲存未完成｜'+msg,true);
+   if(!isConflictError_(err))scheduleCloudReconnect_();
+   else cloudPending=true;
    return false;
  }finally{
    cloudSaving=false;
@@ -2939,6 +2974,7 @@ async function manualCloudLoad(){
    db=res.data;
    db.members=mergeFormMembers(db.members,res.members);
    cloudRevision=Number(res.revision||0);
+   setCloudBase_(db);
    localStorage.setItem('epcV1',JSON.stringify(db));
    localStorage.setItem('epcCloudRevision',String(cloudRevision));
    localStorage.removeItem('epcLocalDirty');
