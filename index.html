@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.14 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.15 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2161,7 +2161,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
      <div class="kpi"><div class="l">EPC 總收入</div><div class="v" id="aRevenue">$0</div></div>
      <div class="kpi"><div class="l">EPC 總支出</div><div class="v" id="aExpense">$0</div></div>
      <div class="kpi"><div class="l">當日淨收入</div><div class="v" id="aNet">$0</div></div>
-     <div class="kpi"><div class="l">JP 提撥（獨立）</div><div class="v" id="aJP">$0</div></div>
+     <div class="kpi"><div class="l">JP 提撥（由獎池扣，不扣行政費）</div><div class="v" id="aJP">$0</div></div>
     </div>
    </div>
 
@@ -2219,7 +2219,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
      <div class="kpi"><span>EPC 總收入</span><b id="eaRevenue">$0</b></div>
      <div class="kpi"><span>EPC 總支出</span><b id="eaExpense">$0</b></div>
      <div class="kpi"><span>單場淨收入</span><b id="eaNet">$0</b></div>
-     <div class="kpi"><span>JP 提撥（獨立）</span><b id="eaJP">$0</b></div>
+     <div class="kpi"><span>JP 提撥（由獎池扣，不扣行政費）</span><b id="eaJP">$0</b></div>
     </div>
    </div>
    <div class="card tablewrap">
@@ -3611,6 +3611,10 @@ function accountingTotalsForEvents(events){
    jp+=eventOwnJP(e);
  });
  const discountExpense=rebuyDiscount+groupDiscount+manual;
+ // Accounting invariant: JP belongs to the prize pool, never to EPC admin expense.
+ // Therefore actual admin receipts are ALWAYS gross admin minus admin discounts only.
+ // Do not subtract JP here or anywhere in EPC revenue/expense/net calculations.
+ netAdmin=Math.max(0,gross-discountExpense);
  return {gross,auto,manual,netAdmin,jp,groups,rebuyDiscount,groupDiscount,discountExpense};
 }
 let editingAccountingEventId=null;
@@ -4090,7 +4094,7 @@ function printDailyAccounting(){
    <div><span>EPC 總收入</span><strong>${money(ai.revenue)}</strong></div>
    <div><span>EPC 總支出</span><strong>${money(ai.expense)}</strong></div>
    <div><span>當日淨收入</span><strong>${money(ai.net)}</strong></div>
-   <div><span>JP 提撥（獨立）</span><strong>${money(ai.jp)}</strong></div>
+   <div><span>JP 提撥（由獎池扣，不扣行政費）</span><strong>${money(ai.jp)}</strong></div>
   </div>
   <h2>其他收支</h2>
   <table><thead><tr><th>類型</th><th>項目</th><th>金額</th></tr></thead><tbody>${itemRows}</tbody></table>
