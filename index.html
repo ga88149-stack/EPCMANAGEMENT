@@ -2568,16 +2568,25 @@ function preserveManualDiscountEdits_(local,remote){
    const rpm=new Map((rr.players||[]).map(p=>[String(p.memberId||''),p]));
    for(const p of (e.players||[])){
      const rp=rpm.get(String(p.memberId||'')); if(!rp)continue;
-     const edited=Number(p._manualDiscountEditedAt||0);
-     if(!edited)continue;
-     const localValue=Number(p._manualDiscountEditedValue!==undefined?p._manualDiscountEditedValue:p.manualDiscount)||0;
-     const remoteValue=Number(rp.manualDiscount||0);
-     // A blank/default 0 on another computer is not an instruction to erase a
-     // manually entered discount. Only a real explicit edit can replace it.
-     if(localValue!==0 && remoteValue===0){
-       rp.manualDiscount=localValue;
-       rp._manualDiscountEditedAt=edited;
-       rp._manualDiscountEditedValue=localValue;
+     const lt=Number(p._manualDiscountEditedAt||0);
+     const rt=Number(rp._manualDiscountEditedAt||0);
+     // manualDiscount is a shared field, not a device-local/default field.
+     // The newest explicit edit wins. A stale computer's untouched 0 has no timestamp
+     // and therefore can never roll back a newer value such as 100.
+     if(lt>rt){
+       const v=Number(p._manualDiscountEditedValue!==undefined?p._manualDiscountEditedValue:p.manualDiscount)||0;
+       rp.manualDiscount=v;
+       rp._manualDiscountEditedAt=lt;
+       rp._manualDiscountEditedValue=v;
+     }else if(rt>lt){
+       const v=Number(rp._manualDiscountEditedValue!==undefined?rp._manualDiscountEditedValue:rp.manualDiscount)||0;
+       rp.manualDiscount=v;
+       rp._manualDiscountEditedValue=v;
+     }else if(lt>0 && rt>0){
+       // Equal timestamp is extremely rare; retain non-destructive local value if values differ.
+       const lv=Number(p._manualDiscountEditedValue!==undefined?p._manualDiscountEditedValue:p.manualDiscount)||0;
+       const rv=Number(rp._manualDiscountEditedValue!==undefined?rp._manualDiscountEditedValue:rp.manualDiscount)||0;
+       if(lv!==rv){rp.manualDiscount=lv;rp._manualDiscountEditedValue=lv;}
      }
    }
  }
@@ -2688,6 +2697,7 @@ function startLiveSync_(){
      // Both sides changed: merge against the last common cloud snapshot.
      backupLocal('before-live-three-way-merge');
      db=mergeCloud3_(cloudBase||remote,db,remote);
+     db=preserveManualDiscountEdits_(db,remote);
      db.members=mergeFormMembers(db.members,res.members);
      cloudRevision=loadedRev;
      setCloudBase_(remote);
@@ -2812,12 +2822,14 @@ async function saveCloudNow(force=false){
    // local edits over the server-merged result instead of discarding either side.
    if(!sameCloud_(db,sentLocal)){
      db=mergeCloud3_(sentLocal,db,res.data);
+     db=preserveManualDiscountEdits_(db,res.data);
      localDirty=true; localStorage.setItem('epcLocalDirty','1'); cloudPending=true;
    }else{
      // The server response may include a concurrent edit from another device.
      // Three-way merge it against the exact snapshot we sent instead of replacing
      // the local DB wholesale.
      db=mergeCloud3_(sentBase,sentLocal,res.data);
+     db=preserveManualDiscountEdits_(db,res.data);
      localDirty=false; localStorage.removeItem('epcLocalDirty');
    }
    cloudRevision=savedRevision; setCloudBase_(res.data);
@@ -2842,7 +2854,7 @@ async function saveCloudNow(force=false){
        const check=await cloudGet('load');
        cloudReady=true;
        if(String(check.writeId||'')===String(writeId)){
-         db=check.data||db;
+         db=preserveManualDiscountEdits_(db,check.data||db);
          cloudRevision=Number(check.revision||cloudRevision);
          setCloudBase_(check.data||db);
          localDirty=false; localStorage.removeItem('epcLocalDirty');
@@ -3259,9 +3271,9 @@ function setP(i,k,v){
  if(e.status==='已結算')return alert('此賽事已完成結算並鎖定，不能再修改。');
  const p=e.players[i]; if(!p)return;
  p[k]=((k==='group'||k==='nickname'||k==='seat')?v:+v);
- // Commit the field to local DB immediately. Do not let a remote revision that
- // simply omitted this edit be interpreted as an intentional reset to 0.
  if(k==='manualDiscount'){
+   // Field-level revision: newest explicit edit wins across computers.
+   // This also allows an intentional reset back to 0.
    p._manualDiscountEditedAt=Date.now();
    p._manualDiscountEditedValue=+v||0;
  }
