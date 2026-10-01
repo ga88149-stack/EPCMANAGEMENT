@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.20 Web · Phone Stack Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.21 Web · Global Input Lock</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2667,11 +2667,16 @@ function manualDiscountAhead_(local,remote){
 }
 function setCloudBase_(data){cloudBase=cloneCloud_(data);try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(e){}}
 let epcActiveEdit_=null;
+let epcEditLockUntil_=0;
+let epcEditCommitTimer_=null;
 function epcEditingField_(){
  const a=document.activeElement;
  if(!a)return false;
  const t=String(a.tagName||'').toUpperCase();
  return t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||a.isContentEditable;
+}
+function epcEditLocked_(){
+ return epcEditingField_()||!!epcActiveEdit_||Date.now()<epcEditLockUntil_;
 }
 function epcEditKey_(el){
  if(!el)return '';
@@ -2682,14 +2687,15 @@ function epcCaptureEdit_(el){
  const t=String(el.tagName||'').toUpperCase();
  if(!(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||el.isContentEditable))return;
  epcActiveEdit_={
-   key:epcEditKey_(el),
-   id:el.id||'',
-   name:el.name||'',
+   key:epcEditKey_(el),id:el.id||'',name:el.name||'',
    value:el.isContentEditable?el.textContent:el.value,
    checked:el.type==='checkbox'||el.type==='radio'?!!el.checked:null,
    selectionStart:typeof el.selectionStart==='number'?el.selectionStart:null,
    selectionEnd:typeof el.selectionEnd==='number'?el.selectionEnd:null
  };
+ // Universal operator lock: while typing/selecting, no background cloud refresh may
+ // redraw any report/activity/accounting/event form.
+ epcEditLockUntil_=Date.now()+5000;
 }
 function epcRestoreEdit_(){
  const e=epcActiveEdit_; if(!e)return;
@@ -2701,45 +2707,50 @@ function epcRestoreEdit_(){
    el=all.find(x=>epcEditKey_(x)===e.key)||null;
  }
  if(!el)return;
- if(el.isContentEditable)el.textContent=e.value;
- else el.value=e.value;
+ if(el.isContentEditable)el.textContent=e.value; else el.value=e.value;
  if(e.checked!==null)el.checked=e.checked;
  try{
    el.focus({preventScroll:true});
-   if(e.selectionStart!==null&&typeof el.setSelectionRange==='function')
-     el.setSelectionRange(e.selectionStart,e.selectionEnd);
+   if(e.selectionStart!==null&&typeof el.setSelectionRange==='function')el.setSelectionRange(e.selectionStart,e.selectionEnd);
  }catch(_){}
 }
-document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
 function epcMarkLocalEdit_(el){
  epcCaptureEdit_(el);
  localDirty=true;
  try{localStorage.setItem('epcLocalDirty','1');}catch(_){}
+ // Keep a local snapshot immediately. Existing field handlers then commit their model
+ // value; the delayed cloud save runs only after the operator has finished the edit.
+ clearTimeout(epcEditCommitTimer_);
+ epcEditCommitTimer_=setTimeout(()=>{
+   try{localStorage.setItem('epcV1',JSON.stringify(db));}catch(_){}
+   if(cloudReady&&!epcEditingField_())scheduleCloudSave();
+ },1800);
 }
+document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
 document.addEventListener('input',e=>epcMarkLocalEdit_(e.target),true);
 document.addEventListener('change',e=>epcMarkLocalEdit_(e.target),true);
 document.addEventListener('focusout',e=>{
- // Keep the snapshot through the current event loop so onchange/blur handlers
- // can commit first; then release the edit lock.
+ // After leaving a manual field, keep cloud/background redraw locked long enough for
+ // onchange/persist/render/save handlers to finish. This applies globally.
+ epcEditLockUntil_=Date.now()+3000;
  setTimeout(()=>{
    if(document.activeElement!==e.target)epcActiveEdit_=null;
- },1200);
+ },400);
 },true);
 
-// Wrap render globally. If any existing code renders while the operator is typing,
-// immediately restore the exact in-progress value/caret instead of letting an old
-// db/cloud snapshot visibly reset the field.
+// Global render guard: background renders are blocked while the operator is editing.
+// Direct handler renders in the same interaction can still happen; the exact in-progress
+// value/caret is restored immediately.
 const epcOriginalRender_=render;
 render=function(){
  const had=!!epcActiveEdit_;
  epcOriginalRender_.apply(this,arguments);
  if(had)epcRestoreEdit_();
 };
-
 function startLiveSync_(){
  if(liveSyncTimer)clearInterval(liveSyncTimer);
  liveSyncTimer=setInterval(async()=>{
-   if(cloudSaving||document.hidden||epcEditingField_()||epcActiveEdit_)return;
+   if(cloudSaving||document.hidden||epcEditLocked_())return;
    try{
      const meta=await cloudGet('revision');
      const rev=Number(meta.revision||0);
@@ -2853,7 +2864,7 @@ async function initializeCloud(){
  }
 }
 async function refreshFormMembers(saveAfter=true){
- if(epcEditingField_())return false;
+ if(epcEditLocked_())return false;
  try{
    const res=await cloudGet('members');
    const before=JSON.stringify((db.members||[]).map(m=>[m.id,m.name,m.group,m.note,m.createdDate]));
