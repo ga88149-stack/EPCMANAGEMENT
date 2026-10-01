@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.16 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.17 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3597,23 +3597,22 @@ function setEventAccountingGroup(eventId,value){
  renderDailyAccountingDetail();
 }
 function accountingTotalsForEvents(events){
+ // Use exactly the same per-event accounting figures shown in the top event-detail table.
+ // This prevents the summary KPIs from drifting to a second/legacy discount formula.
  let gross=0,auto=0,manual=0,netAdmin=0,jp=0,groups=0,rebuyDiscount=0,groupDiscount=0;
  (events||[]).forEach(e=>{
    (Array.isArray(e.players)?e.players:[]).forEach(p=>{
-     const c=calcPlayerForEvent(p,e);
-     groups+=c.groups; gross+=c.grossAdmin||0; auto+=c.auto||0; manual+=c.manual||0; netAdmin+=c.netAdmin||0;
-     // Accounting restores the full original admin fee for every discounted group.
-     // Player/event UI still shows only the actual discount split (e.g. half-price = 400),
-     // while accounting expense shows the original admin value (e.g. 800).
-     rebuyDiscount+=c.accountingRebuyDiscount??(c.rebuyDiscount||0);
-     groupDiscount+=c.accountingGroupDiscount??(c.overbuyDiscount||0);
+     const x=calcPlayerForEvent(p,e);
+     groups+=x.groups||0;
+     gross+=x.grossAdmin||0;
+     auto+=x.auto||0;
+     manual+=x.manual||0;
+     rebuyDiscount+=x.rebuyDiscount||0;
+     groupDiscount+=x.overbuyDiscount||0;
    });
    jp+=eventOwnJP(e);
  });
  const discountExpense=rebuyDiscount+groupDiscount+manual;
- // Accounting invariant: JP belongs to the prize pool, never to EPC admin expense.
- // Therefore actual admin receipts are ALWAYS gross admin minus admin discounts only.
- // Do not subtract JP here or anywhere in EPC revenue/expense/net calculations.
  netAdmin=Math.max(0,gross-discountExpense);
  return {gross,auto,manual,netAdmin,jp,groups,rebuyDiscount,groupDiscount,discountExpense};
 }
