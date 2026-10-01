@@ -2682,95 +2682,49 @@ render=function(){
 };
 
 function startLiveSync_(){
+ // ACCOUNTING SAFE MODE:
+ // Background sync may observe newer cloud revisions, but it must never replace/merge
+ // the working accounting DB automatically. This prevents a stale/partial snapshot from
+ // rolling back buy-ins, rebuys, discounts or settlements while staff are operating.
  if(liveSyncTimer)clearInterval(liveSyncTimer);
  liveSyncTimer=setInterval(async()=>{
    if(cloudSaving||document.hidden||epcEditingField_()||epcActiveEdit_)return;
    try{
-     // Fast path: read only EPC_DATA revision metadata. Do NOT download/parse the full DB
-     // unless another device has actually committed a newer revision.
      const meta=await cloudGet('revision');
      const rev=Number(meta.revision||0);
-     if(!(rev>cloudRevision))return;
-
-     // New revision exists: now fetch the full database exactly once.
-     const res=await cloudGet('load');
-     const loadedRev=Number(res.revision||0);
-     if(!(loadedRev>cloudRevision) || !res.data || typeof res.data!=='object')return;
-
-     // A clean device has no unsaved local work: the newer cloud revision is authoritative.
-     // Do NOT protect a stale local manualDiscount here, otherwise an old local timestamp/value
-     // can mask the value that another computer already committed to cloud.
-     let remote=cloneCloud_(res.data);
-     remote.members=mergeFormMembers(remote.members,res.members);
-
-     if(!localDirty){
-       backupLocal('before-live-remote-apply');
-       db=remote;
-       cloudRevision=loadedRev;
-       setCloudBase_(remote);
-       localStorage.setItem('epcV1',JSON.stringify(db));
-       localStorage.setItem('epcCloudRevision',String(loadedRev));
-       render();
-       setCloudState('☁ 已即時同步｜Revision '+loadedRev);
-       return;
+     if(rev>cloudRevision){
+       setCloudState('● 雲端有較新版本 '+rev+'｜為保護帳務不自動覆蓋');
      }
-
-     // Both sides changed: only now protect explicit unsaved local manual-discount edits.
-     // This branch is the sole case where local values are allowed to compete with cloud.
-     remote=preserveManualDiscountEdits_(db,remote);
-     backupLocal('before-live-three-way-merge');
-     db=mergeCloud3_(cloudBase||remote,db,remote);
-     db=preserveManualDiscountEdits_(db,remote);
-     db.members=mergeFormMembers(db.members,res.members);
-     cloudRevision=loadedRev;
-     setCloudBase_(remote);
-     localStorage.setItem('epcV1',JSON.stringify(db));
-     localStorage.setItem('epcCloudRevision',String(loadedRev));
-     localStorage.setItem('epcLocalDirty','1');
-     localDirty=true;
-     render();
-     setCloudState('● 已合併雲端新版本｜正在同步本機變更…');
-     scheduleCloudSave();
    }catch(e){
-     console.warn('fast live sync poll failed',e);
+     console.warn('safe live sync poll failed',e);
    }
- },1000);
+ },3000);
 }
-
 async function initializeCloud(){
  setCloudState('● 本機已儲存｜正在連接雲端…');
  try{
    const res=await cloudGet('load');
    const serverRevision=Number(res.revision||0);
 
-   if(localDirty){
-     // 本機有未完成上傳的工作：只保留本機，不自動用雲端覆蓋。
-     backupLocal('startup-local-dirty');
-     db.members=mergeFormMembers(db.members,res.members);
-     setCloudBase_(res.data||cloudBase||db);
-     cloudRevision=serverRevision;
-     localStorage.setItem('epcCloudRevision',String(cloudRevision));
-     cloudReady=true;
-     render();
-     setCloudState('● 本機有未上傳資料｜準備儲存雲端');
-     await saveCloudNow();
-     return;
-   }
-
-   if(res.data && typeof res.data==='object'){
-     backupLocal('before-startup-cloud-load');
-     db=res.data;
+   // Never replace an existing local accounting database automatically on startup.
+   // Cloud is used as the initial source only when this browser has no local EPC database.
+   const hasLocalDb=!!localStorage.getItem('epcV1');
+   if(!hasLocalDb && res.data && typeof res.data==='object'){
+     db=cloneCloud_(res.data);
      db.members=mergeFormMembers(db.members,res.members);
      cloudRevision=serverRevision;
-     localStorage.setItem('epcV1',JSON.stringify(db));
      setCloudBase_(db);
+     localStorage.setItem('epcV1',JSON.stringify(db));
      localStorage.setItem('epcCloudRevision',String(cloudRevision));
      localStorage.removeItem('epcLocalDirty');
      localDirty=false;
    }else{
      db.members=mergeFormMembers(db.members,res.members);
-     cloudRevision=serverRevision;
-     localStorage.setItem('epcV1',JSON.stringify(db));
+     // Keep the browser's working DB untouched. A newer cloud revision is surfaced,
+     // not silently applied.
+     if(serverRevision>cloudRevision){
+       setCloudState('● 雲端有較新版本 '+serverRevision+'｜本機帳務已保護');
+     }
    }
 
    if(!db.settings)db.settings={};
@@ -2780,14 +2734,8 @@ async function initializeCloud(){
    cloudReady=true;
    render();
 
-   if(!res.data){
-     localDirty=true;
-     localStorage.setItem('epcLocalDirty','1');
-     await saveCloudNow();
-   }else{
-     const t=res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
-     setCloudState('☁ 雲端已載入｜Revision '+cloudRevision+'｜'+t);
-   }
+   const t=res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
+   if(serverRevision<=cloudRevision)setCloudState('☁ 本機帳務已保護｜Revision '+cloudRevision+'｜'+t);
  }catch(err){
    cloudReady=false;
    setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
