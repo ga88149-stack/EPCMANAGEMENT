@@ -5616,7 +5616,7 @@ function displayPayload_(type){
  if(type==='boss'){
   const B=A.boss||{},S=bossStats_(),b=activeBoss_(),hp=b?bossCurrentHp_():0,attacks=(b?.attacks||[]);
   return {type,title:'雙十狩王',activityFrom:range.from,activityTo:range.to,
-   participants:(+S.np||0)+(+S.hp||0),participantAmount:(+S.npb||0)+(+S.hpb||0),groups:(+S.ng||0)+(+S.hg||0),groupAmount:(+S.ngb||0)+(+S.hgb||0),
+   participants:(+S.np||0)+(+S.hp||0),participantAmount:(+S.npb||0)+(+S.hpb||0),groups:(+S.ng||0)+(+S.hg||0),groupAmount:(+S.ngb||0)+(+S.hgb||0),personStep:+B.normalPersonStep||1,personAmount:+B.normalPersonAmount||100,personIgnore:+B.normalPersonIgnore||0,groupStep:+B.normalGroupStep||8,groupBonus:+B.normalGroupAmount||200,groupIgnore:+B.normalGroupIgnore||0,
    pool:S.pool||0,cap:+B.cap||14000,attackActive:!!S.active,
    boss:b?{name:b.name||'魔王',initialHp:+b.initialHp||0,hp,killed:!!b.killed}:null,
    attacks:attacks.slice(0,12).map(x=>({date:x.date||'',member:actMember_(x.memberId).name||x.memberId,method:x.method||'',damage:+x.damage||0,success:!!x.success,execute:+x.execute||0})),
