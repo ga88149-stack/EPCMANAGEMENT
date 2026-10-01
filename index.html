@@ -2846,19 +2846,16 @@ async function saveCloudNow(force=false){
    const rawServerData=cloneCloud_(res.data);
    const manualNeedsRetry=manualDiscountAhead_(sentLocal,rawServerData);
 
-   // IMPORTANT: the server merge result is authoritative for everything that was part
-   // of the request we just sent. Re-merging sentLocal against that response here used
-   // to resurrect stale values (especially manualDiscount=0) and could make two devices
-   // show the same Revision with different data.
+   // SAFETY FIRST: a successful POST must NEVER replace this browser's just-entered
+   // accounting data with an older/partial server snapshot. Keep the local snapshot that
+   // was actually sent, and merge only concurrent server changes around it.
    if(!sameCloud_(db,sentLocal)){
-     // The operator changed something AFTER the request left this browser. Preserve only
-     // those truly in-flight edits by merging current db against the exact sent snapshot.
      db=mergeCloud3_(sentLocal,db,rawServerData);
      db=preserveManualDiscountEdits_(db,rawServerData);
      localDirty=true; localStorage.setItem('epcLocalDirty','1'); cloudPending=true;
    }else{
-     // No new local edit occurred while saving: accept the exact cloud snapshot.
-     db=cloneCloud_(rawServerData);
+     db=mergeCloud3_(sentBase,sentLocal,rawServerData);
+     db=preserveManualDiscountEdits_(sentLocal,db);
      localDirty=false; localStorage.removeItem('epcLocalDirty');
    }
    cloudRevision=savedRevision;
