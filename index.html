@@ -4501,6 +4501,8 @@ function ensureActDb_(){
  if(!db.activityManagement||typeof db.activityManagement!=='object')db.activityManagement={};
  const A=db.activityManagement;
  A.weeklyAdjust=A.weeklyAdjust||{};
+ A.weeklyTarget=Math.max(1,+A.weeklyTarget||15);
+ A.weeklyClaims=A.weeklyClaims||{};
  A.pioneer=A.pioneer||{};
  A.pioneerQualify=A.pioneerQualify||{};
  A.rankAdjust=A.rankAdjust||{};
@@ -4598,11 +4600,18 @@ function actAdj_(kind,id,field,v){
  if(kind==='rank'){A.rankAdjust[id]=Number(v)||0}
  persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
+function actWeeklyTarget_(v){ensureActDb_();db.activityManagement.weeklyTarget=Math.max(1,Number(v)||15);persist();renderActivities()}
+function actWeeklyClaim_(id,v){ensureActDb_();const r=actActivityRange_('weekly'),key=(r.from||'')+'_'+(r.to||'')+'_'+id;db.activityManagement.weeklyClaims[key]=!!v;persist();renderActivities()}
 function actWeekly_(){
- const A=db.activityManagement,rows=actPlayerStats_('weekly').map(x=>{const ad=A.weeklyAdjust[x.id]||{};return {...x,gameAdj:+ad.games||0,dayAdj:+ad.days||0,totalGames:x.games+(+ad.games||0),totalDays:x.days+(+ad.days||0)}}).sort((a,b)=>b.totalGames-a.totalGames||b.totalDays-a.totalDays);
- return `<div class="card"><h3>每週任務卡｜區間自動統計</h3><div class="small">參賽場次：該會員出現在一場賽事即 +1。簽到天數：同一天不論打幾場，只計 1 次。人工調整會加在自動統計上。</div>
- <table><thead><tr><th>會員</th><th>ID</th><th>自動場次</th><th>場次調整</th><th>區間總場次</th><th>自動簽到</th><th>簽到調整</th><th>區間總簽到</th></tr></thead><tbody>
- ${rows.map(x=>`<tr><td>${x.name}</td><td>${x.id}</td><td>${x.games}</td><td><input type="number" style="width:80px" value="${x.gameAdj}" onchange="actAdj_('weekly','${x.id}','games',this.value)"></td><td><b>${x.totalGames}</b></td><td>${x.days}</td><td><input type="number" style="width:80px" value="${x.dayAdj}" onchange="actAdj_('weekly','${x.id}','days',this.value)"></td><td><b>${x.totalDays}</b></td></tr>`).join('')||'<tr><td colspan="8">區間內無參賽資料</td></tr>'}</tbody></table></div>`;
+ const A=db.activityManagement,target=Math.max(1,+A.weeklyTarget||15),range=actActivityRange_('weekly');
+ const rows=actPlayerStats_('weekly').map(x=>{const ad=A.weeklyAdjust[x.id]||{},totalGames=x.games+(+ad.games||0),totalDays=x.days+(+ad.days||0),key=(range.from||'')+'_'+(range.to||'')+'_'+x.id;return {...x,gameAdj:+ad.games||0,dayAdj:+ad.days||0,totalGames,totalDays,qualified:totalGames>=target,claimed:!!A.weeklyClaims[key]}}).sort((a,b)=>(+b.qualified)-(+a.qualified)||b.totalGames-a.totalGames||b.totalDays-a.totalDays);
+ const qualified=rows.filter(x=>x.qualified),progress=rows.filter(x=>!x.qualified);
+ const rowHtml=x=>`<tr style="${x.qualified?'background:rgba(38,166,91,.10)':''}"><td><b>${x.name}</b></td><td>${x.id}</td><td>${x.games}</td><td><input type="number" style="width:72px" value="${x.gameAdj}" onchange="actAdj_('weekly','${x.id}','games',this.value)"></td><td><b>${x.totalGames}</b></td><td>${x.days}</td><td><input type="number" style="width:72px" value="${x.dayAdj}" onchange="actAdj_('weekly','${x.id}','days',this.value)"></td><td><b>${x.totalDays}</b></td><td>${x.qualified?'<b style="color:#27ae60">✓ 已達標</b>':'差 '+Math.max(0,target-x.totalGames)+' 場'}</td><td>${x.qualified?`<label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" ${x.claimed?'checked':''} onchange="actWeeklyClaim_('${x.id}',this.checked)"> 已領取</label>`:'—'}</td></tr>`;
+ return `<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap"><div><h3 style="margin-bottom:4px">每週任務卡｜符合條件自動名單</h3><div class="small">系統依活動區間自動統計；會員達到指定場次後會自動跳到最上方。人工調整也會計入。</div></div><div><label>達標場次</label><input type="number" min="1" value="${target}" style="width:100px" onchange="actWeeklyTarget_(this.value)"></div></div>
+ <div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0"><div class="card kpi" style="margin:0;min-width:150px"><div class="l">目前達標</div><div class="v">${qualified.length} 人</div></div><div class="card kpi" style="margin:0;min-width:150px"><div class="l">進行中</div><div class="v">${progress.length} 人</div></div></div>
+ <div class="tablewrap"><table><thead><tr><th>會員</th><th>ID</th><th>自動場次</th><th>場次調整</th><th>總場次</th><th>自動簽到</th><th>簽到調整</th><th>總簽到</th><th>狀態</th><th>領取</th></tr></thead><tbody>
+ ${qualified.map(rowHtml).join('')||'<tr><td colspan="10">目前尚無達標會員</td></tr>'}
+ ${progress.map(rowHtml).join('')}</tbody></table></div></div>`;
 }
 function pioneerLoadEvent_(id){
  ensureActDb_();const A=db.activityManagement,e=(db.events||[]).find(x=>x.id===id);if(!e)return;
