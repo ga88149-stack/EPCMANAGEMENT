@@ -4601,20 +4601,37 @@ function actAdj_(kind,id,field,v){
  if(kind==='rank'){A.rankAdjust[id]=Number(v)||0}
  persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
-function actWeeklyTarget_(v){ensureActDb_();db.activityManagement.weeklyTarget=Math.max(1,Number(v)||15);persist();renderActivities()}
-function actWeeklyDayTarget_(v){ensureActDb_();db.activityManagement.weeklyDayTarget=Math.max(1,Number(v)||5);persist();renderActivities()}
 function actWeeklyClaim_(id,v){ensureActDb_();const r=actActivityRange_('weekly'),key=(r.from||'')+'_'+(r.to||'')+'_'+id;db.activityManagement.weeklyClaims[key]=!!v;persist();renderActivities()}
 function actWeekly_(){
- const A=db.activityManagement,gameTarget=Math.max(1,+A.weeklyTarget||15),dayTarget=Math.max(1,+A.weeklyDayTarget||5),range=actActivityRange_('weekly');
- const rows=actPlayerStats_('weekly').map(x=>{const ad=A.weeklyAdjust[x.id]||{},totalGames=x.games+(+ad.games||0),totalDays=x.days+(+ad.days||0),gameQualified=totalGames>=gameTarget,dayQualified=totalDays>=dayTarget,key=(range.from||'')+'_'+(range.to||'')+'_'+x.id;return {...x,gameAdj:+ad.games||0,dayAdj:+ad.days||0,totalGames,totalDays,gameQualified,dayQualified,qualified:gameQualified||dayQualified,claimed:!!A.weeklyClaims[key]}}).sort((a,b)=>(+b.qualified)-(+a.qualified)||(+b.gameQualified)-(+a.gameQualified)||(+b.dayQualified)-(+a.dayQualified)||b.totalGames-a.totalGames||b.totalDays-a.totalDays);
+ const A=db.activityManagement,range=actActivityRange_('weekly');
+ const rows=actPlayerStats_('weekly').map(x=>{
+  const ad=A.weeklyAdjust[x.id]||{},totalGames=x.games+(+ad.games||0),totalDays=x.days+(+ad.days||0);
+  const gameLevel=totalGames>=15?3:totalGames>=10?2:totalGames>=5?1:0;
+  const dayLevel=totalDays>=7?3:totalDays>=5?2:totalDays>=3?1:0;
+  const key=(range.from||'')+'_'+(range.to||'')+'_'+x.id;
+  // Each line: L1 200 coupon, L2 +200 coupon, L3 converts prior 400 coupon to cash and adds 600 prize => 1000 cash total.
+  const reward=(lvl)=>lvl>=3?{coupon:0,cash:1000,label:'$1,000 獎金（前兩階 $400 折價卡轉現金＋$600 獎金）'}:lvl===2?{coupon:400,cash:0,label:'$400 折價卡'}:lvl===1?{coupon:200,cash:0,label:'$200 折價卡'}:{coupon:0,cash:0,label:'—'};
+  const gr=reward(gameLevel),dr=reward(dayLevel);
+  return {...x,gameAdj:+ad.games||0,dayAdj:+ad.days||0,totalGames,totalDays,gameLevel,dayLevel,gameReward:gr,dayReward:dr,totalCoupon:gr.coupon+dr.coupon,totalCash:gr.cash+dr.cash,qualified:gameLevel>0||dayLevel>0,claimed:!!A.weeklyClaims[key]};
+ }).sort((a,b)=>(+b.qualified)-(+a.qualified)||b.gameLevel-a.gameLevel||b.dayLevel-a.dayLevel||b.totalGames-a.totalGames||b.totalDays-a.totalDays);
  const qualified=rows.filter(x=>x.qualified),progress=rows.filter(x=>!x.qualified);
- const status=x=>{const a=[];if(x.gameQualified)a.push('場次達標');if(x.dayQualified)a.push('簽到達標');return a.length?'<b style="color:#27ae60">✓ '+a.join('＋')+'</b>':'場次差 '+Math.max(0,gameTarget-x.totalGames)+'｜簽到差 '+Math.max(0,dayTarget-x.totalDays)};
- const rowHtml=x=>`<tr style="${x.qualified?'background:rgba(38,166,91,.10)':''}"><td><b>${x.name}</b></td><td>${x.id}</td><td>${x.games}</td><td><input type="number" style="width:72px" value="${x.gameAdj}" onchange="actAdj_('weekly','${x.id}','games',this.value)"></td><td><b>${x.totalGames}</b></td><td>${x.days}</td><td><input type="number" style="width:72px" value="${x.dayAdj}" onchange="actAdj_('weekly','${x.id}','days',this.value)"></td><td><b>${x.totalDays}</b></td><td>${status(x)}</td><td>${x.qualified?`<label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" ${x.claimed?'checked':''} onchange="actWeeklyClaim_('${x.id}',this.checked)"> 已領取</label>`:'—'}</td></tr>`;
- return `<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap"><div><h3 style="margin-bottom:4px">每週任務卡｜雙線達標自動名單</h3><div class="small">場次與簽到為兩條獨立達標線；任一條達標即自動跳到最上方。人工調整會計入。</div></div><div style="display:flex;gap:10px"><div><label>達標場次</label><input type="number" min="1" value="${gameTarget}" style="width:100px" onchange="actWeeklyTarget_(this.value)"></div><div><label>達標簽到</label><input type="number" min="1" value="${dayTarget}" style="width:100px" onchange="actWeeklyDayTarget_(this.value)"></div></div></div>
- <div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0"><div class="card kpi" style="margin:0;min-width:150px"><div class="l">任一線達標</div><div class="v">${qualified.length} 人</div></div><div class="card kpi" style="margin:0;min-width:150px"><div class="l">進行中</div><div class="v">${progress.length} 人</div></div></div>
- <div class="tablewrap"><table><thead><tr><th>會員</th><th>ID</th><th>自動場次</th><th>場次調整</th><th>總場次</th><th>自動簽到</th><th>簽到調整</th><th>總簽到</th><th>達標狀態</th><th>領取</th></tr></thead><tbody>
- ${qualified.map(rowHtml).join('')||'<tr><td colspan="10">目前尚無達標會員</td></tr>'}
- ${progress.map(rowHtml).join('')}</tbody></table></div></div>`;
+ const lvl=(n,type)=>n?'<b style="color:#27ae60">第 '+n+' 階</b>':'<span class="small">未達標</span>';
+ const rowHtml=x=>`<tr style="${x.qualified?'background:rgba(38,166,91,.08)':''}"><td><b>${x.name}</b></td><td>${x.id}</td><td><b>${x.totalDays}</b> 天<br>${lvl(x.dayLevel)}</td><td>${x.dayReward.label}</td><td><b>${x.totalGames}</b> 場<br>${lvl(x.gameLevel)}</td><td>${x.gameReward.label}</td><td><b>${x.totalCoupon?money(x.totalCoupon)+' 折價卡':'—'}</b></td><td><b style="color:${x.totalCash?'#27ae60':'inherit'}">${x.totalCash?money(x.totalCash)+' 獎金':'—'}</b></td><td>${x.qualified?`<label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" ${x.claimed?'checked':''} onchange="actWeeklyClaim_('${x.id}',this.checked)"> 已領取</label>`:'—'}</td></tr>`;
+ const tier=(title,items)=>`<div class="card" style="margin:8px 0;padding:10px 12px"><b>${title}</b><div class="small" style="margin-top:5px">${items.length?items.map(x=>x.name+'（'+x.id+'）').join('、'):'目前無'}</div></div>`;
+ return `<div class="card"><h3 style="margin-bottom:4px">每週任務卡｜雙線三階自動統計</h3>
+ <div class="small">簽到線：3 / 5 / 7 天；場次線：5 / 10 / 15 場。每條線第 1 階 $200 折價卡、第 2 階累計 $400 折價卡；到第 3 階時，前兩階 $400 折價卡直接轉為現金，再加 $600 獎金，因此該線最終為 $1,000 獎金。</div>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:12px 0">
+  ${tier('簽到第 1 階｜3 天｜$200 折價卡',rows.filter(x=>x.dayLevel===1))}
+  ${tier('簽到第 2 階｜5 天｜累計 $400 折價卡',rows.filter(x=>x.dayLevel===2))}
+  ${tier('簽到第 3 階｜7 天｜$1,000 獎金',rows.filter(x=>x.dayLevel===3))}
+  ${tier('場次第 1 階｜5 場｜$200 折價卡',rows.filter(x=>x.gameLevel===1))}
+  ${tier('場次第 2 階｜10 場｜累計 $400 折價卡',rows.filter(x=>x.gameLevel===2))}
+  ${tier('場次第 3 階｜15 場｜$1,000 獎金',rows.filter(x=>x.gameLevel===3))}
+ </div>
+ <div class="tablewrap"><table><thead><tr><th>會員</th><th>ID</th><th>簽到進度</th><th>簽到可領</th><th>場次進度</th><th>場次可領</th><th>目前折價卡</th><th>目前獎金</th><th>領取</th></tr></thead><tbody>
+ ${qualified.map(rowHtml).join('')||'<tr><td colspan="9">目前尚無達標會員</td></tr>'}
+ ${progress.map(rowHtml).join('')}</tbody></table></div>
+ <div class="small" style="margin-top:10px">※ 第 3 階「轉現金」為同一條線前兩階累計 $400 折價卡轉為現金；若兩條線都完成第 3 階，兩條線各自計算。</div></div>`;
 }
 function pioneerLoadEvent_(id){
  ensureActDb_();const A=db.activityManagement,e=(db.events||[]).find(x=>x.id===id);if(!e)return;
