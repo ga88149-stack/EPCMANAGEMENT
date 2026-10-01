@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.17 Web · Multi-device Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.18 Web · Activity Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2519,6 +2519,39 @@ function scheduleCloudReconnect_(){
 }
 
 function cloneCloud_(v){return v===undefined?undefined:JSON.parse(JSON.stringify(v));}
+function activityStamp_(item){
+ return Number(item&&item._updatedAt||0);
+}
+function stampActivityRecord_(item){
+ if(item&&typeof item==='object')item._updatedAt=Date.now();
+ return item;
+}
+function mergeActivityRecords_(localArr,remoteArr){
+ const l=Array.isArray(localArr)?localArr:[],r=Array.isArray(remoteArr)?remoteArr:[];
+ const m=new Map();
+ for(const x of r){if(x&&x.id!=null)m.set(String(x.id),cloneCloud_(x));}
+ for(const x of l){
+   if(!x||x.id==null)continue;
+   const k=String(x.id),rx=m.get(k);
+   if(!rx || activityStamp_(x)>=activityStamp_(rx))m.set(k,cloneCloud_(x));
+ }
+ return [...m.values()];
+}
+function preserveActivityEdits_(local,merged){
+ const la=local&&local.activityManagement,ma=merged&&merged.activityManagement;
+ if(!la||!ma)return merged;
+ for(const k of ['hunter','umbrella','rankMultipliers','rankRecurringRules']){
+   if(Array.isArray(la[k]))ma[k]=mergeActivityRecords_(la[k],ma[k]);
+ }
+ ma.hunterDeleted={...(ma.hunterDeleted||{}),...(la.hunterDeleted||{})};
+ if(Array.isArray(ma.hunter)){
+   ma.hunter=ma.hunter.filter(x=>{
+     const deletedAt=Number(ma.hunterDeleted&&ma.hunterDeleted[String(x.id)]||0);
+     return !deletedAt || activityStamp_(x)>deletedAt;
+   });
+ }
+ return merged;
+}
 function sameCloud_(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e){return false;}}
 function cloudRecKey_(x){
  if(!x||typeof x!=='object'||Array.isArray(x))return '';
@@ -2714,6 +2747,7 @@ function startLiveSync_(){
      backupLocal('before-live-merge-v2');
      db=mergeCloud3_(cloudBase||remote,db,remote);
      db=preserveManualDiscountEdits_(db,remote);
+     db=preserveActivityEdits_(db,remote);
      db.members=mergeFormMembers(db.members,res.members);
      cloudRevision=loadedRev;
      setCloudBase_(remote);
@@ -2743,6 +2777,7 @@ async function initializeCloud(){
        backupLocal('startup-three-way-merge-v2');
        db=mergeCloud3_(cloudBase||remote,db,remote);
        db=preserveManualDiscountEdits_(db,remote);
+     db=preserveActivityEdits_(db,remote);
        db.members=mergeFormMembers(db.members,res.members);
        cloudRevision=serverRevision;
        setCloudBase_(remote);
@@ -2863,6 +2898,7 @@ async function saveCloudNow(force=false){
    if(changedDuringSave){
      db=mergeCloud3_(localAtStart,db,server);
      db=preserveManualDiscountEdits_(db,server);
+     db=preserveActivityEdits_(db,server);
      localDirty=true;
      localStorage.setItem('epcLocalDirty','1');
      cloudPending=true;
@@ -2870,6 +2906,7 @@ async function saveCloudNow(force=false){
      // Server response is authoritative after a successful save. Explicit manual
      // discount timestamps are preserved so a stale zero can never win later.
      db=preserveManualDiscountEdits_(candidate,server);
+     db=preserveActivityEdits_(candidate,db);
      localDirty=false;
      localStorage.removeItem('epcLocalDirty');
    }
@@ -4887,9 +4924,28 @@ function actRank_(){
  <table><thead><tr><th>排名</th><th>會員</th><th>自動得分</th><th>人工調整</th><th>總得分</th></tr></thead><tbody>${ranking.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.auto}</td><td><input type="number" style="width:90px" value="${x.adj}" onchange="actAdj_('rank','${x.id}','adj',this.value)"></td><td><b>${x.total}</b></td></tr>`).join('')||'<tr><td colspan="5">區間內無得分</td></tr>'}</tbody></table></div>${detail}`;
 }
 function hunterEventChanged_(){const e=(db.events||[]).find(x=>x.id===$('hunterEvent')?.value),list=$('hunterKillerList'),inp=$('hunterKiller');if(inp)inp.value='';if(list)list.innerHTML=actMemberSearchOptions_(e?.players||[])}
-function addHunter_(){ensureActDb_();const eventId=$('hunterEvent').value,killer=actResolveMember_('hunterKiller');if(!eventId||!killer)return actionMsg('請選場次與擊殺者',true);db.activityManagement.hunter.unshift({id:'H'+Date.now(),date:(db.events||[]).find(e=>e.id===eventId)?.date||'',eventId,killer,points:+$('hunterPoints').value||1,note:$('hunterNote').value||''});persist();renderActivities()}
-function hunterEdit_(id,v){const x=db.activityManagement.hunter.find(z=>z.id===id);if(x){x.points=+v||0;persist();renderActivities()}}
-function hunterDel_(id){db.activityManagement.hunter=db.activityManagement.hunter.filter(x=>x.id!==id);persist();renderActivities()}
+async function addHunter_(){
+ ensureActDb_();
+ const eventId=$('hunterEvent').value,killer=actResolveMember_('hunterKiller');
+ if(!eventId||!killer)return actionMsg('請選場次與擊殺者',true);
+ const rec=stampActivityRecord_({id:'H'+Date.now(),date:(db.events||[]).find(e=>e.id===eventId)?.date||'',eventId,killer,points:+$('hunterPoints').value||1,note:$('hunterNote').value||''});
+ db.activityManagement.hunter.unshift(rec);
+ persist();renderActivities();
+ if(cloudReady)await saveCloudNow(false);
+}
+async function hunterEdit_(id,v){
+ const x=db.activityManagement.hunter.find(z=>z.id===id);
+ if(x){x.points=+v||0;stampActivityRecord_(x);persist();renderActivities();if(cloudReady)await saveCloudNow(false);}
+}
+async function hunterDel_(id){
+ const x=db.activityManagement.hunter.find(z=>z.id===id);
+ db.activityManagement.hunter=db.activityManagement.hunter.filter(z=>z.id!==id);
+ // Tombstone prevents another computer's stale copy from resurrecting a deleted hunter record.
+ db.activityManagement.hunterDeleted=db.activityManagement.hunterDeleted||{};
+ db.activityManagement.hunterDeleted[String(id)]=Date.now();
+ persist();renderActivities();
+ if(cloudReady)await saveCloudNow(false);
+}
 function actHunter_(){
  const {from,to}=actActivityRange_('hunter'),rows=db.activityManagement.hunter.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
  return `<div class="card"><h3>獵人排行榜｜擊殺登記</h3><div class="formgrid" style="grid-template-columns:1.4fr 1.2fr .6fr 1.2fr auto"><div><label>場次</label><select id="hunterEvent" onchange="hunterEventChanged_()"><option value="">選擇場次</option>${actEventOptions_()}</select></div><div><label>擊殺者</label><input id="hunterKiller" list="hunterKillerList" autocomplete="off" placeholder="先選場次，再輸入姓名 / ID"><datalist id="hunterKillerList"></datalist></div><div><label>分數</label><input type="number" id="hunterPoints" value="1"></div><div><label>備註</label><input id="hunterNote"></div><div style="align-self:end"><button onclick="addHunter_()">登記擊殺</button></div></div>
