@@ -2697,7 +2697,10 @@ function startLiveSync_(){
      const loadedRev=Number(res.revision||0);
      if(!(loadedRev>cloudRevision) || !res.data || typeof res.data!=='object')return;
 
-     const remote=preserveManualDiscountEdits_(db,cloneCloud_(res.data));
+     // A clean device has no unsaved local work: the newer cloud revision is authoritative.
+     // Do NOT protect a stale local manualDiscount here, otherwise an old local timestamp/value
+     // can mask the value that another computer already committed to cloud.
+     let remote=cloneCloud_(res.data);
      remote.members=mergeFormMembers(remote.members,res.members);
 
      if(!localDirty){
@@ -2712,7 +2715,9 @@ function startLiveSync_(){
        return;
      }
 
-     // Both sides changed: merge against the last common cloud snapshot.
+     // Both sides changed: only now protect explicit unsaved local manual-discount edits.
+     // This branch is the sole case where local values are allowed to compete with cloud.
+     remote=preserveManualDiscountEdits_(db,remote);
      backupLocal('before-live-three-way-merge');
      db=mergeCloud3_(cloudBase||remote,db,remote);
      db=preserveManualDiscountEdits_(db,remote);
