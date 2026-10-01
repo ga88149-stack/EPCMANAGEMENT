@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.18 Web · Activity Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.19 Web · Event Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2537,6 +2537,28 @@ function mergeActivityRecords_(localArr,remoteArr){
  }
  return [...m.values()];
 }
+function preserveEventEdits_(local,merged){
+ const le=Array.isArray(local&&local.events)?local.events:[];
+ const me=Array.isArray(merged&&merged.events)?merged.events:[];
+ const mm=new Map(me.map(e=>[String(e.id||''),e]));
+ for(const e of le){
+   const k=String(e&&e.id||''); if(!k)continue;
+   const r=mm.get(k);
+   if(!r){me.push(cloneCloud_(e));continue;}
+   const lt=Number(e._eventUpdatedAt||0),rt=Number(r._eventUpdatedAt||0);
+   if(lt>rt){
+     const idx=me.indexOf(r);
+     me[idx]=cloneCloud_(e);
+     mm.set(k,me[idx]);
+   }
+ }
+ if(merged)merged.events=me;
+ return merged;
+}
+function touchEvent_(e){
+ if(e&&typeof e==='object')e._eventUpdatedAt=Date.now();
+ return e;
+}
 function preserveActivityEdits_(local,merged){
  const la=local&&local.activityManagement,ma=merged&&merged.activityManagement;
  if(!la||!ma)return merged;
@@ -2748,6 +2770,7 @@ function startLiveSync_(){
      db=mergeCloud3_(cloudBase||remote,db,remote);
      db=preserveManualDiscountEdits_(db,remote);
      db=preserveActivityEdits_(db,remote);
+     db=preserveEventEdits_(db,remote);
      db.members=mergeFormMembers(db.members,res.members);
      cloudRevision=loadedRev;
      setCloudBase_(remote);
@@ -2778,6 +2801,7 @@ async function initializeCloud(){
        db=mergeCloud3_(cloudBase||remote,db,remote);
        db=preserveManualDiscountEdits_(db,remote);
      db=preserveActivityEdits_(db,remote);
+     db=preserveEventEdits_(db,remote);
        db.members=mergeFormMembers(db.members,res.members);
        cloudRevision=serverRevision;
        setCloudBase_(remote);
@@ -2899,6 +2923,7 @@ async function saveCloudNow(force=false){
      db=mergeCloud3_(localAtStart,db,server);
      db=preserveManualDiscountEdits_(db,server);
      db=preserveActivityEdits_(db,server);
+     db=preserveEventEdits_(db,server);
      localDirty=true;
      localStorage.setItem('epcLocalDirty','1');
      cloudPending=true;
@@ -2907,6 +2932,7 @@ async function saveCloudNow(force=false){
      // discount timestamps are preserved so a stale zero can never win later.
      db=preserveManualDiscountEdits_(candidate,server);
      db=preserveActivityEdits_(candidate,db);
+     db=preserveEventEdits_(candidate,db);
      localDirty=false;
      localStorage.removeItem('epcLocalDirty');
    }
@@ -4213,7 +4239,7 @@ function confirmSettlement(){
 function closeSettlementConfirm(){
  $('settlementConfirmModal').style.display='none';
 }
-function executeFormalSettlement(){
+async function executeFormalSettlement(){
  let e=requireEvent();if(!e)return;
  
  let v=validateSettlement();
@@ -4229,14 +4255,16 @@ function executeFormalSettlement(){
  e.finalJP=poolInfo(e).jp;
  e.finalAccounting={...acc};
  e.status='已結算';
+ touchEvent_(e);
  persist();
  closeSettlementConfirm();
  render();
+ if(cloudReady)await saveCloudNow(false);
  showPage('events');
  actionMsg('正式結算完成，可在該場操作欄直接列印報表。');
 }
 
-function unlockSettledEvent(id){
+async function unlockSettledEvent(id){
  const e=(db.events||[]).find(x=>String(x.id)===String(id));
  if(!e)return actionMsg('找不到這場賽事',true);
  if(e.status!=='已結算')return actionMsg('這場賽事目前不是已結算狀態',true);
@@ -4248,8 +4276,10 @@ function unlockSettledEvent(id){
  e.status='進行中';
  delete e.finalJP;
  delete e.finalAccounting;
+ touchEvent_(e);
  persist();
  render();
+ if(cloudReady)await saveCloudNow(false);
  actionMsg(`已解鎖：${label}；修改完成後請重新正式結算`);
 }
 
@@ -4257,6 +4287,7 @@ function setEventName_(id,value){
  const e=(db.events||[]).find(x=>String(x.id)===String(id));if(!e)return;
  const v=String(value||'').trim();
  e.name=v&&v!==eventOrdinalName_(e.seq||1)?v:'';
+ touchEvent_(e);
  persist();render();
 }
 function renderEventList(){
