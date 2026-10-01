@@ -2592,6 +2592,24 @@ function preserveManualDiscountEdits_(local,remote){
  }
  return remote;
 }
+function manualDiscountAhead_(local,remote){
+ const rem=new Map(((remote&&remote.events)||[]).map(e=>[String(e.id||''),e]));
+ for(const e of ((local&&local.events)||[])){
+   const rr=rem.get(String(e.id||'')); if(!rr)continue;
+   const rpm=new Map((rr.players||[]).map(p=>[String(p.memberId||''),p]));
+   for(const p of (e.players||[])){
+     const rp=rpm.get(String(p.memberId||'')); if(!rp)continue;
+     const lt=Number(p._manualDiscountEditedAt||0), rt=Number(rp._manualDiscountEditedAt||0);
+     if(lt>rt)return true;
+     if(lt>0&&lt===rt){
+       const lv=Number(p._manualDiscountEditedValue!==undefined?p._manualDiscountEditedValue:p.manualDiscount)||0;
+       const rv=Number(rp._manualDiscountEditedValue!==undefined?rp._manualDiscountEditedValue:rp.manualDiscount)||0;
+       if(lv!==rv)return true;
+     }
+   }
+ }
+ return false;
+}
 function setCloudBase_(data){cloudBase=cloneCloud_(data);try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(e){}}
 let epcActiveEdit_=null;
 function epcEditingField_(){
@@ -2816,6 +2834,12 @@ async function saveCloudNow(force=false){
    const res=await cloudPost({action:'save',data:sentLocal,baseData:sentBase,revision:cloudRevision,writeId});
    const savedRevision=Number(res.revision||0);
    if(!res.data||typeof res.data!=='object')throw new Error('CLOUD_MERGE_RESPONSE_INVALID');
+   // Keep the exact server snapshot BEFORE protecting local manual-discount edits.
+   // If the server response is still behind the explicit local field revision, do not
+   // falsely mark the write as complete: retain the raw server snapshot as merge base
+   // and immediately perform one more save against the new revision.
+   const rawServerData=cloneCloud_(res.data);
+   const manualNeedsRetry=manualDiscountAhead_(sentLocal,rawServerData);
    res.data=preserveManualDiscountEdits_(db,res.data);
 
    // If the user edited again while this request was in flight, merge those newest
@@ -2832,11 +2856,21 @@ async function saveCloudNow(force=false){
      db=preserveManualDiscountEdits_(db,res.data);
      localDirty=false; localStorage.removeItem('epcLocalDirty');
    }
-   cloudRevision=savedRevision; setCloudBase_(res.data);
+   cloudRevision=savedRevision;
+   if(manualNeedsRetry){
+     // Server acknowledged a revision but did not yet contain the newest manual-discount field.
+     // Use the REAL server snapshot as base and keep this device dirty until a verified retry.
+     setCloudBase_(rawServerData);
+     localDirty=true;
+     localStorage.setItem('epcLocalDirty','1');
+     cloudPending=true;
+   }else{
+     setCloudBase_(res.data);
+   }
    localStorage.setItem('epcCloudRevision',String(cloudRevision));
    localStorage.setItem('epcV1',JSON.stringify(db));
    const t=res.updatedAt ? new Date(res.updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
-   setCloudState(localDirty?'● 已合併其他裝置｜本機新變更待同步':'☁ 即時雲端已同步｜Revision '+cloudRevision+'｜'+t);
+   setCloudState(manualNeedsRetry?'● 手動優惠正在補同步…':(localDirty?'● 已合併其他裝置｜本機新變更待同步':'☁ 即時雲端已同步｜Revision '+cloudRevision+'｜'+t));
    return true;
  }catch(err){
    console.error('cloud save failed',err);
