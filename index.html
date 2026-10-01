@@ -4534,8 +4534,8 @@ function ensureActDb_(){
  if(B.huntGroupStep==null)B.huntGroupStep=8;if(B.huntGroupAmount==null)B.huntGroupAmount=200;if(B.huntGroupIgnore==null)B.huntGroupIgnore=0;
  if(B.huntPersonEnabled==null)B.huntPersonEnabled=false;if(B.activityFrom==null)B.activityFrom='';if(B.activityTo==null)B.activityTo='';B.excludedEventIds=Array.isArray(B.excludedEventIds)?B.excludedEventIds:[];
  if(B.attackEnabled==null)B.attackEnabled=false;if(B.attackThreshold==null)B.attackThreshold=14000;
- B.bosses=Array.isArray(B.bosses)?B.bosses:[];if(!B.bosses.length)B.bosses.push({id:'BOSS1',name:'魔王 1',initialHp:+B.initialHp||200,attacks:Array.isArray(B.attacks)?B.attacks:[],killed:false});if(!B.activeBossId)B.activeBossId=B.bosses[0].id;
- if(B.initialHp==null)B.initialHp=200;
+ B.bosses=Array.isArray(B.bosses)?B.bosses:[];if(!B.bosses.length)B.bosses.push({id:'BOSS1',name:'魔王 1',initialHp:+B.initialHp||250,attacks:Array.isArray(B.attacks)?B.attacks:[],killed:false});if(!B.activeBossId)B.activeBossId=B.bosses[0].id;
+ if(B.initialHp==null)B.initialHp=250;if(+B.initialHp===200)B.initialHp=250;const _ab=(B.bosses||[]).find(x=>x.id===B.activeBossId);if(_ab&&+_ab.initialHp===200&&(_ab.attacks||[]).length<=1){const dealt=(_ab.attacks||[]).reduce((n,x)=>n+(+x.damage||0),0);_ab.initialHp=250;}
  B.attacks=Array.isArray(B.attacks)?B.attacks:[];
 }
 function actRange_(){return {from:$('actFrom')?.value||'',to:$('actTo')?.value||'',q:String($('actSearch')?.value||'').trim().toLowerCase()}}
@@ -4838,7 +4838,7 @@ function bossExclude_(id,on){const B=db.activityManagement.boss;B.excludedEventI
 function bossAddExclude_(){const id=$('bossExcludeSelect')?.value;if(id)bossExclude_(id,true)}
 function bossRemoveExclude_(id){bossExclude_(id,false)}
 function bossToggleAttack_(on){const B=db.activityManagement.boss;B.attackEnabled=!!on;if(on&&!B.huntStartedAt)B.huntStartedAt=new Date().toISOString().slice(0,16);if(!on)B.huntStartedAt='';persist();renderActivities()}
-function addNewBoss_(){const B=db.activityManagement.boss,id='BOSS'+Date.now();B.bosses.push({id,name:'魔王 '+((B.bosses||[]).length+1),initialHp:+B.initialHp||200,attacks:[],killed:false});B.activeBossId=id;persist();renderActivities()}
+function addNewBoss_(){const B=db.activityManagement.boss,id='BOSS'+Date.now();B.bosses.push({id,name:'魔王 '+((B.bosses||[]).length+1),initialHp:+B.initialHp||250,attacks:[],killed:false});B.activeBossId=id;persist();renderActivities()}
 function bossRename_(id,v){const B=db.activityManagement.boss,x=(B.bosses||[]).find(y=>String(y.id)===String(id));if(!x)return;x.name=String(v||'').trim()||'未命名魔王';persist();renderActivities()}
 function deleteBoss_(id){const B=db.activityManagement.boss;if(!confirm('確定刪除此魔王？'))return;B.bosses=B.bosses.filter(x=>x.id!==id);B.activeBossId=B.bosses.at(-1)?.id||'';persist();renderActivities()}
 function selectBoss_(id){db.activityManagement.boss.activeBossId=id;persist();renderActivities()}
