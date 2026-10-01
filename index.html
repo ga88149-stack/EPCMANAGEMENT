@@ -5614,8 +5614,13 @@ function displayLeaderboard_(kind){
 function displayPayload_(type){
  ensureActDb_();const A=db.activityManagement||{},range=actActivityRange_(type);
  if(type==='boss'){
-  const B=A.boss||{},S=bossStats_(),b=activeBoss_(),hp=b?bossCurrentHp_():0,latest=b?.attacks?.[0]||null;
-  return {type,title:'雙十狩王',activityFrom:range.from,activityTo:range.to,pool:S.pool||0,cap:+B.cap||14000,attackActive:!!S.active,boss:b?{name:b.name||'魔王',initialHp:+b.initialHp||0,hp,killed:!!b.killed}:null,latest:latest?{member:actMember_(latest.memberId).name||latest.memberId,method:latest.method,damage:+latest.damage||0,success:!!latest.success}:null};
+  const B=A.boss||{},S=bossStats_(),b=activeBoss_(),hp=b?bossCurrentHp_():0,attacks=(b?.attacks||[]);
+  return {type,title:'雙十狩王',activityFrom:range.from,activityTo:range.to,
+   participants:(+S.np||0)+(+S.hp||0),groups:(+S.ng||0)+(+S.hg||0),
+   pool:S.pool||0,cap:+B.cap||14000,attackActive:!!S.active,
+   boss:b?{name:b.name||'魔王',initialHp:+b.initialHp||0,hp,killed:!!b.killed}:null,
+   attacks:attacks.slice(0,12).map(x=>({date:x.date||'',member:actMember_(x.memberId).name||x.memberId,method:x.method||'',damage:+x.damage||0,success:!!x.success,execute:+x.execute||0})),
+   latest:attacks[0]?{member:actMember_(attacks[0].memberId).name||attacks[0].memberId,method:attacks[0].method,damage:+attacks[0].damage||0,success:!!attacks[0].success}:null};
  }
  if(type==='weekly'){
   return {type,title:'每週任務卡',activityFrom:range.from,activityTo:range.to,rows:actPlayerStats_('weekly').map(x=>({name:x.name||x.id,games:x.games||0,days:x.days||0})).sort((a,b)=>b.games-a.games||b.days-a.days).slice(0,10)};
