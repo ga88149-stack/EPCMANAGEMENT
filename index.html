@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.19 Web · Event Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.20 Web · Phone Stack Safe Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3010,11 +3010,18 @@ async function syncPhoneStacksOnly(){
     if(!Number.isFinite(stack)||stack<0){missing++;return;}
     if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;
   });
-  // 安全原則：只更新本機 stack，不自動呼叫 persist() 或覆寫 EPC_DATA 雲端。
-  if(updated>0)localStorage.setItem('epcV1',JSON.stringify(db));
+  // 手機籌碼讀回後必須成為正式賽事資料，否則下一次 EPC_DATA 雲端同步
+  // 會把剛讀到的 stack 當成本機暫存而覆蓋掉。
+  if(updated>0){
+    touchEvent_(localEvent);
+    localDirty=true;
+    localStorage.setItem('epcLocalDirty','1');
+    localStorage.setItem('epcV1',JSON.stringify(db));
+  }
   render();
+  if(updated>0 && cloudReady)await saveCloudNow(false);
   actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
-  setCloudState('☁ 手機籌碼已同步｜只更新下桌籌碼');
+  setCloudState(updated>0?'☁ 手機籌碼已同步至電腦與雲端':'☁ 手機籌碼已同步｜資料相同');
  }catch(err){
   console.error(err);
   setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
