@@ -2595,20 +2595,19 @@ function epcRestoreEdit_(){
  }catch(_){}
 }
 document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
-document.addEventListener('input',e=>epcCaptureEdit_(e.target),true);
-document.addEventListener('change',e=>{
- epcCaptureEdit_(e.target);
- // A changed form value is local work. Prevent a remote clean-load from winning
- // during the debounce window before the existing handler persists it.
+function epcMarkLocalEdit_(el){
+ epcCaptureEdit_(el);
  localDirty=true;
  try{localStorage.setItem('epcLocalDirty','1');}catch(_){}
-},true);
+}
+document.addEventListener('input',e=>epcMarkLocalEdit_(e.target),true);
+document.addEventListener('change',e=>epcMarkLocalEdit_(e.target),true);
 document.addEventListener('focusout',e=>{
  // Keep the snapshot through the current event loop so onchange/blur handlers
  // can commit first; then release the edit lock.
  setTimeout(()=>{
    if(document.activeElement!==e.target)epcActiveEdit_=null;
- },250);
+ },1200);
 },true);
 
 // Wrap render globally. If any existing code renders while the operator is typing,
@@ -2624,7 +2623,7 @@ render=function(){
 function startLiveSync_(){
  if(liveSyncTimer)clearInterval(liveSyncTimer);
  liveSyncTimer=setInterval(async()=>{
-   if(cloudSaving||document.hidden||epcEditingField_())return;
+   if(cloudSaving||document.hidden||epcEditingField_()||epcActiveEdit_)return;
    try{
      // Fast path: read only EPC_DATA revision metadata. Do NOT download/parse the full DB
      // unless another device has actually committed a newer revision.
