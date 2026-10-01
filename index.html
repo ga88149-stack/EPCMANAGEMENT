@@ -5561,7 +5561,7 @@ function displaySpecificControls_(id,type,sec,ui){
  if(type==='hunter')return '<div><label>顯示獵人</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>前 5 名</option><option value="10" '+(limit==='10'?'selected':'')+'>前 10 名</option></select></div><div><label>顯示內容</label><select id="displayHunterMode_'+id+'"><option value="points">獵人積分</option></select></div>'+common;
  if(type==='weekly')return '<div><label>顯示玩家</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>5 位</option><option value="10" '+(limit==='10'?'selected':'')+'>10 位</option><option value="20" '+(limit==='20'?'selected':'')+'>20 位</option></select></div><div><label>任務資訊</label><select id="displayWeeklyMode_'+id+'"><option value="progress">出席天數＋參賽場次</option></select></div>'+common;
  if(type==='umbrella')return '<div><label>顯示玩家</label><select id="displayLimit_'+id+'"><option value="5" '+(limit==='5'?'selected':'')+'>5 位</option><option value="10" '+(limit==='10'?'selected':'')+'>10 位</option></select></div><div><label>顯示內容</label><select id="displayUmbrellaMode_'+id+'"><option value="coupons">保護傘／折價券數</option></select></div>'+common;
- if(type==='boss')return '<div><label>BOSS 畫面</label><select id="displayBossMode_'+id+'"><option value="battle">獎池＋HP血條＋最新攻擊</option></select></div><div><label>畫面更新</label><select disabled><option>即時更新</option></select></div>'+common;
+ if(type==='boss')return '<div><label>BOSS 畫面</label><select id="displayBossMode_'+id+'"><option value="battle">完整戰況：人數＋組數＋獎池＋HP＋攻擊紀錄</option></select></div><div><label>背景</label><select disabled><option>雙十狩王專屬背景</option></select></div>'+common;
  return common;
 }
 function refreshDisplayControls_(id,type,sec){
