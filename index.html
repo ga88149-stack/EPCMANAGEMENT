@@ -2845,20 +2845,20 @@ async function saveCloudNow(force=false){
    // and immediately perform one more save against the new revision.
    const rawServerData=cloneCloud_(res.data);
    const manualNeedsRetry=manualDiscountAhead_(sentLocal,rawServerData);
-   res.data=preserveManualDiscountEdits_(db,res.data);
 
-   // If the user edited again while this request was in flight, merge those newest
-   // local edits over the server-merged result instead of discarding either side.
+   // IMPORTANT: the server merge result is authoritative for everything that was part
+   // of the request we just sent. Re-merging sentLocal against that response here used
+   // to resurrect stale values (especially manualDiscount=0) and could make two devices
+   // show the same Revision with different data.
    if(!sameCloud_(db,sentLocal)){
-     db=mergeCloud3_(sentLocal,db,res.data);
-     db=preserveManualDiscountEdits_(db,res.data);
+     // The operator changed something AFTER the request left this browser. Preserve only
+     // those truly in-flight edits by merging current db against the exact sent snapshot.
+     db=mergeCloud3_(sentLocal,db,rawServerData);
+     db=preserveManualDiscountEdits_(db,rawServerData);
      localDirty=true; localStorage.setItem('epcLocalDirty','1'); cloudPending=true;
    }else{
-     // The server response may include a concurrent edit from another device.
-     // Three-way merge it against the exact snapshot we sent instead of replacing
-     // the local DB wholesale.
-     db=mergeCloud3_(sentBase,sentLocal,res.data);
-     db=preserveManualDiscountEdits_(db,res.data);
+     // No new local edit occurred while saving: accept the exact cloud snapshot.
+     db=cloneCloud_(rawServerData);
      localDirty=false; localStorage.removeItem('epcLocalDirty');
    }
    cloudRevision=savedRevision;
@@ -2870,7 +2870,7 @@ async function saveCloudNow(force=false){
      localStorage.setItem('epcLocalDirty','1');
      cloudPending=true;
    }else{
-     setCloudBase_(res.data);
+     setCloudBase_(rawServerData);
    }
    localStorage.setItem('epcCloudRevision',String(cloudRevision));
    localStorage.setItem('epcV1',JSON.stringify(db));
