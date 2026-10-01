@@ -2520,7 +2520,15 @@ function scheduleCloudReconnect_(){
 
 function cloneCloud_(v){return v===undefined?undefined:JSON.parse(JSON.stringify(v));}
 function sameCloud_(a,b){try{return JSON.stringify(a)===JSON.stringify(b);}catch(e){return false;}}
-function cloudRecKey_(x){if(!x||typeof x!=='object'||Array.isArray(x))return '';for(const k of ['id','memberId','playerId','eventId','reportId','writeId','date','key'])if(x[k]!==undefined&&x[k]!==null&&String(x[k])!=='')return k+':'+String(x[k]);return '';}
+function cloudRecKey_(x){
+ if(!x||typeof x!=='object'||Array.isArray(x))return '';
+ // Event player rows do not have their own id. memberId is therefore the stable
+ // identity that lets concurrent edits merge player-by-player instead of treating
+ // the whole players[] array as one indivisible value.
+ for(const k of ['id','memberId','playerId','eventId','reportId','writeId','date','key'])
+   if(x[k]!==undefined&&x[k]!==null&&String(x[k])!=='')return k+':'+String(x[k]);
+ return '';
+}
 function cloudKeyedArray_(a){return Array.isArray(a)&&a.length>0&&a.every(x=>!!cloudRecKey_(x));}
 function mergeCloud3_(base,local,remote){
  if(sameCloud_(local,base))return cloneCloud_(remote);
@@ -2528,7 +2536,10 @@ function mergeCloud3_(base,local,remote){
  if(Array.isArray(local)||Array.isArray(remote)||Array.isArray(base)){
    const b=Array.isArray(base)?base:[],l=Array.isArray(local)?local:[],r=Array.isArray(remote)?remote:[];
    const all=[...b,...l,...r];
-   if(!cloudKeyedArray_(all))return cloneCloud_(l);
+   // Empty arrays are valid. When the non-empty records have stable keys, merge
+   // each record independently so edits from two computers to different players survive.
+   const keyed=all.length>0 && all.every(x=>!!cloudRecKey_(x));
+   if(!keyed)return cloneCloud_(l);
    const bm=new Map(b.map(x=>[cloudRecKey_(x),x])),lm=new Map(l.map(x=>[cloudRecKey_(x),x])),rm=new Map(r.map(x=>[cloudRecKey_(x),x]));
    const keys=[...new Set([...r.map(cloudRecKey_),...l.map(cloudRecKey_),...b.map(cloudRecKey_)])],out=[];
    for(const k of keys){const bv=bm.get(k),lv=lm.get(k),rv=rm.get(k);
@@ -2779,7 +2790,11 @@ async function saveCloudNow(force=false){
      db=mergeCloud3_(sentLocal,db,res.data);
      localDirty=true; localStorage.setItem('epcLocalDirty','1'); cloudPending=true;
    }else{
-     db=res.data; localDirty=false; localStorage.removeItem('epcLocalDirty');
+     // The server response may include a concurrent edit from another device.
+     // Three-way merge it against the exact snapshot we sent instead of replacing
+     // the local DB wholesale.
+     db=mergeCloud3_(sentBase,sentLocal,res.data);
+     localDirty=false; localStorage.removeItem('epcLocalDirty');
    }
    cloudRevision=savedRevision; setCloudBase_(res.data);
    localStorage.setItem('epcCloudRevision',String(cloudRevision));
