@@ -174,7 +174,473 @@ function renderPayload(p){
   const b=p.boss||{},max=Math.max(1,+b.initialHp||1),hp=Math.max(0,+b.hp||0),pct=Math.max(0,Math.min(100,hp/max*100)),logs=Array.isArray(p.attacks)?p.attacks:[];
   const logHtml=logs.length?logs.map(x=>'<div class="boss-log-row"><span>'+escapeHtml(x.date||'—')+'</span><b>'+escapeHtml(x.member||'')+'</b><span>'+escapeHtml(x.method||'')+'</span><span>'+Number(x.damage||0).toLocaleString()+' HP'+(x.success?' 👑':'')+'</span></div>').join(''):'<div class="boss-latest">目前尚無攻擊紀錄</div>';
   root.innerHTML='<div class="boss-screen"><div class="boss-head"><div class="en">EPC BOSS BATTLE</div><h1>👑 '+escapeHtml(p.title||'雙十狩王')+'</h1></div>'+
-  '<div class="boss-dashboard"><div class="boss-stat"><span>累積參賽人數</span><b>'+Number(p.participants||0).toLocaleString()+' 人</b></div><div class="boss-stat"><span>累積總組數</span><b>'+Number(p.groups||0).toLocaleString()+' 組</b></div><div class="boss-stat"><span>目前總累積</span><b>$'+Number(p.pool||0).toLocaleString()+'</b></div><div class="boss-stat"><span>剩餘血量</span><b>'+hp.toLocaleString()+' HP</b></div><div class="boss-stat"><span>攻擊階段</span><b class="'+(p.attackActive?'boss-status-on':'boss-status-off')+'">'+(p.attackActive?'已啟用':'尚未啟用')+'</b></div></div>'+
+  '<div class="boss-dashboard"><div class="boss-stat"><span>累積參賽人數</span><b>'+Number(p.participants||0).toLocaleString()+' 人</b></div><div class="boss-stat"><span>累積總組數</span><b>'+Number(p.groups||0).toLocaleString()+' 組</b><small style="display:block;margin-top:.25em;color:#ffd27b;font-size:.62em">'+Number(p.groupQualifyingEvents||0).toLocaleString()+' 場符合｜加碼 <div class="boss-stat"><span>目前總累積</span><b>$'+Number(p.pool||0).toLocaleString()+'</b></div><div class="boss-stat"><span>剩餘血量</span><b>'+hp.toLocaleString()+' HP</b></div><div class="boss-stat"><span>攻擊階段</span><b class="'+(p.attackActive?'boss-status-on':'boss-status-off')+'">'+(p.attackActive?'已啟用':'尚未啟用')+'</b></div></div>'+
+  '<div class="boss-main"><div class="boss-card"><div class="boss-name">'+escapeHtml(b.name||'等待魔王登場')+'</div><div class="boss-hpbar"><div class="boss-hpfill" style="width:'+pct+'%"></div></div><div class="boss-hptxt">HP　'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div class="boss-pool">目前獎池 <b></div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+ }
+ if(rows.length||Array.isArray(p.rows)){
+  const limit=Math.max(3,+ui.limit||10),rws=rows.slice(0,limit),medals=['🥇','🥈','🥉'];
+  if(type==='rank'){
+   const top=rws.slice(0,3),rest=rws.slice(3);
+   const period=escapeHtml(p.period||p.dateRange||p.range||'活動進行中');
+   const card=(r,i,first)=>r?'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>':'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">—</div><div class="rp-points">0<small>分</small></div></div>';
+   root.innerHTML='<div class="rank-poster"><div class="rp-casino-deco"><div class="rp-card c1">A<br>♠</div><div class="rp-card c2">A<br>♥</div><div class="rp-chipstack left"><i></i><i></i><i></i><i></i></div><div class="rp-chipstack right"><i></i><i></i><i></i><i></i></div></div><div class="rp-topline"><div class="rp-brand"><div class="rp-brand-main">♠ EPC</div><div class="rp-brand-sub">EIGHT POKER CLUB</div></div><div class="rp-head"><div class="rp-kicker">WEEKLY LEADERBOARD</div><div class="rp-title">週排行榜</div><div class="rp-sub">用實力爭取榮耀！</div></div><div class="rp-period"><b>活動區間</b><span>'+period+'</span></div></div><div class="rp-podium">'+card(top[1],1,false)+card(top[0],0,true)+card(top[2],2,false)+'</div><div class="rp-rest-wrap"><div class="rp-rest-head"><span>名次</span><span>玩家</span><span>總分</span></div><div class="rp-rest"><div class="rp-rest-col">'+rest.slice(0,4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+4)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div><div class="rp-rest-col">'+rest.slice(4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+8)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div></div></div><div class="rp-foot">EPC ・ MORE THAN POKER</div></div>';return;
+  }
+  let value=x=>type==='weekly'?((x.days||0)+' 天 / '+(x.games||0)+' 場'):type==='umbrella'?((x.score||0)+' 張'):((x.score??x.total??0)+' 分');
+  const meta={weekly:['WEEKLY MISSION','每週任務卡','累積出席・完成任務'],pioneer:['OPENING PIONEER','開桌先鋒榜','搶先報名・累積先鋒積分'],hunter:['HUNTER RANKING','獵人榜','淘汰對手・成為獵人'],umbrella:['UMBRELLA REWARDS','保護傘','累積獎勵・即時掌握進度']}[type]||['EPC ACTIVITY',p.title||'EPC 活動',''];
+  const left=rws.slice(0,Math.ceil(rws.length/2)),right=rws.slice(Math.ceil(rws.length/2));
+  const mk=(arr,offset)=>arr.map((r,i)=>'<div class="as-row"><div class="as-no">#'+(offset+i+1)+'</div><div class="as-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="as-value">'+escapeHtml(value(r))+'</div></div>').join('');
+  root.innerHTML='<div class="activity-screen '+escapeHtml(type)+'"><div class="as-head"><div class="as-brand"><b>♠ EPC</b><small>EIGHT POKER CLUB</small></div><div class="as-title"><div class="en">'+meta[0]+'</div><h1>'+meta[1]+'</h1><p>'+meta[2]+'</p></div><div></div></div><div class="as-main"><div class="as-grid"><div class="rp-rest-col">'+mk(left,0)+'</div><div class="rp-rest-col">'+mk(right,left.length)+'</div></div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+
+ if(p.title||p.subtitle){root.innerHTML='<div class="empty"><h2>'+escapeHtml(p.title||'')+'</h2><p>'+escapeHtml(p.subtitle||'')+'</p></div>';return}
+ root.innerHTML="<pre>"+escapeHtml(JSON.stringify(p,null,2))+"</pre>";
+}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+let heartbeatTimer=null;
+function paired(){
+  $("pairScreen").style.display="none";
+  $("displayScreen").classList.add("active");
+}
+function startHeartbeat(id){
+  if(heartbeatTimer) return;
+  const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
+  beat();
+  heartbeatTimer=setInterval(beat,10000);
+}
+async function poll(id){
+  try{
+    const s=await getState(id);
+    if(s.ok && s.paired){
+      paired();
+      startHeartbeat(id);
+      renderPayload(s.payload);
+    }else if(s.ok){
+      if(s.code) showCode(s.code);
+    }
+  }catch(e){}
+  setTimeout(()=>poll(id),POLL_MS);
+}
+async function boot(){
+  showCode("");
+  const id=deviceId();
+  try{
+    const j=await post({action:"register",deviceId:id});
+    if(!j.code) throw new Error("REGISTER 成功，但 API 沒有回傳 code");
+    showCode(j.code);
+    if(j.paired){
+      status("此顯示器已配對，正在載入內容…","ok");
+      paired();
+      startHeartbeat(id);
+    }else{
+      status("配對碼已產生，請到管理後台輸入上方 6 位數","ok");
+    }
+    poll(id);
+  }catch(e){
+    fail("無法取得配對碼",String(e && e.message || e));
+  }
+}
+boot();
+</script>
+</body>
+</html>+Number(p.groupAmount||0).toLocaleString()+'</small></div><div class="boss-stat"><span>目前總累積</span><b>$'+Number(p.pool||0).toLocaleString()+'</b></div><div class="boss-stat"><span>剩餘血量</span><b>'+hp.toLocaleString()+' HP</b></div><div class="boss-stat"><span>攻擊階段</span><b class="'+(p.attackActive?'boss-status-on':'boss-status-off')+'">'+(p.attackActive?'已啟用':'尚未啟用')+'</b></div></div>'+
+  '<div class="boss-main"><div class="boss-card"><div class="boss-name">'+escapeHtml(b.name||'等待魔王登場')+'</div><div class="boss-hpbar"><div class="boss-hpfill" style="width:'+pct+'%"></div></div><div class="boss-hptxt">HP　'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div class="boss-pool">目前獎池 <b>$'+Number(p.pool||0).toLocaleString()+'</b> / $'+Number(p.cap||0).toLocaleString()+'</div></div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+ }
+ if(rows.length||Array.isArray(p.rows)){
+  const limit=Math.max(3,+ui.limit||10),rws=rows.slice(0,limit),medals=['🥇','🥈','🥉'];
+  if(type==='rank'){
+   const top=rws.slice(0,3),rest=rws.slice(3);
+   const period=escapeHtml(p.period||p.dateRange||p.range||'活動進行中');
+   const card=(r,i,first)=>r?'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>':'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">—</div><div class="rp-points">0<small>分</small></div></div>';
+   root.innerHTML='<div class="rank-poster"><div class="rp-casino-deco"><div class="rp-card c1">A<br>♠</div><div class="rp-card c2">A<br>♥</div><div class="rp-chipstack left"><i></i><i></i><i></i><i></i></div><div class="rp-chipstack right"><i></i><i></i><i></i><i></i></div></div><div class="rp-topline"><div class="rp-brand"><div class="rp-brand-main">♠ EPC</div><div class="rp-brand-sub">EIGHT POKER CLUB</div></div><div class="rp-head"><div class="rp-kicker">WEEKLY LEADERBOARD</div><div class="rp-title">週排行榜</div><div class="rp-sub">用實力爭取榮耀！</div></div><div class="rp-period"><b>活動區間</b><span>'+period+'</span></div></div><div class="rp-podium">'+card(top[1],1,false)+card(top[0],0,true)+card(top[2],2,false)+'</div><div class="rp-rest-wrap"><div class="rp-rest-head"><span>名次</span><span>玩家</span><span>總分</span></div><div class="rp-rest"><div class="rp-rest-col">'+rest.slice(0,4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+4)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div><div class="rp-rest-col">'+rest.slice(4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+8)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div></div></div><div class="rp-foot">EPC ・ MORE THAN POKER</div></div>';return;
+  }
+  let value=x=>type==='weekly'?((x.days||0)+' 天 / '+(x.games||0)+' 場'):type==='umbrella'?((x.score||0)+' 張'):((x.score??x.total??0)+' 分');
+  const meta={weekly:['WEEKLY MISSION','每週任務卡','累積出席・完成任務'],pioneer:['OPENING PIONEER','開桌先鋒榜','搶先報名・累積先鋒積分'],hunter:['HUNTER RANKING','獵人榜','淘汰對手・成為獵人'],umbrella:['UMBRELLA REWARDS','保護傘','累積獎勵・即時掌握進度']}[type]||['EPC ACTIVITY',p.title||'EPC 活動',''];
+  const left=rws.slice(0,Math.ceil(rws.length/2)),right=rws.slice(Math.ceil(rws.length/2));
+  const mk=(arr,offset)=>arr.map((r,i)=>'<div class="as-row"><div class="as-no">#'+(offset+i+1)+'</div><div class="as-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="as-value">'+escapeHtml(value(r))+'</div></div>').join('');
+  root.innerHTML='<div class="activity-screen '+escapeHtml(type)+'"><div class="as-head"><div class="as-brand"><b>♠ EPC</b><small>EIGHT POKER CLUB</small></div><div class="as-title"><div class="en">'+meta[0]+'</div><h1>'+meta[1]+'</h1><p>'+meta[2]+'</p></div><div></div></div><div class="as-main"><div class="as-grid"><div class="rp-rest-col">'+mk(left,0)+'</div><div class="rp-rest-col">'+mk(right,left.length)+'</div></div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+
+ if(p.title||p.subtitle){root.innerHTML='<div class="empty"><h2>'+escapeHtml(p.title||'')+'</h2><p>'+escapeHtml(p.subtitle||'')+'</p></div>';return}
+ root.innerHTML="<pre>"+escapeHtml(JSON.stringify(p,null,2))+"</pre>";
+}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+let heartbeatTimer=null;
+function paired(){
+  $("pairScreen").style.display="none";
+  $("displayScreen").classList.add("active");
+}
+function startHeartbeat(id){
+  if(heartbeatTimer) return;
+  const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
+  beat();
+  heartbeatTimer=setInterval(beat,10000);
+}
+async function poll(id){
+  try{
+    const s=await getState(id);
+    if(s.ok && s.paired){
+      paired();
+      startHeartbeat(id);
+      renderPayload(s.payload);
+    }else if(s.ok){
+      if(s.code) showCode(s.code);
+    }
+  }catch(e){}
+  setTimeout(()=>poll(id),POLL_MS);
+}
+async function boot(){
+  showCode("");
+  const id=deviceId();
+  try{
+    const j=await post({action:"register",deviceId:id});
+    if(!j.code) throw new Error("REGISTER 成功，但 API 沒有回傳 code");
+    showCode(j.code);
+    if(j.paired){
+      status("此顯示器已配對，正在載入內容…","ok");
+      paired();
+      startHeartbeat(id);
+    }else{
+      status("配對碼已產生，請到管理後台輸入上方 6 位數","ok");
+    }
+    poll(id);
+  }catch(e){
+    fail("無法取得配對碼",String(e && e.message || e));
+  }
+}
+boot();
+</script>
+</body>
+</html>+Number(p.pool||0).toLocaleString()+'</b> / </div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+ }
+ if(rows.length||Array.isArray(p.rows)){
+  const limit=Math.max(3,+ui.limit||10),rws=rows.slice(0,limit),medals=['🥇','🥈','🥉'];
+  if(type==='rank'){
+   const top=rws.slice(0,3),rest=rws.slice(3);
+   const period=escapeHtml(p.period||p.dateRange||p.range||'活動進行中');
+   const card=(r,i,first)=>r?'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>':'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">—</div><div class="rp-points">0<small>分</small></div></div>';
+   root.innerHTML='<div class="rank-poster"><div class="rp-casino-deco"><div class="rp-card c1">A<br>♠</div><div class="rp-card c2">A<br>♥</div><div class="rp-chipstack left"><i></i><i></i><i></i><i></i></div><div class="rp-chipstack right"><i></i><i></i><i></i><i></i></div></div><div class="rp-topline"><div class="rp-brand"><div class="rp-brand-main">♠ EPC</div><div class="rp-brand-sub">EIGHT POKER CLUB</div></div><div class="rp-head"><div class="rp-kicker">WEEKLY LEADERBOARD</div><div class="rp-title">週排行榜</div><div class="rp-sub">用實力爭取榮耀！</div></div><div class="rp-period"><b>活動區間</b><span>'+period+'</span></div></div><div class="rp-podium">'+card(top[1],1,false)+card(top[0],0,true)+card(top[2],2,false)+'</div><div class="rp-rest-wrap"><div class="rp-rest-head"><span>名次</span><span>玩家</span><span>總分</span></div><div class="rp-rest"><div class="rp-rest-col">'+rest.slice(0,4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+4)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div><div class="rp-rest-col">'+rest.slice(4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+8)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div></div></div><div class="rp-foot">EPC ・ MORE THAN POKER</div></div>';return;
+  }
+  let value=x=>type==='weekly'?((x.days||0)+' 天 / '+(x.games||0)+' 場'):type==='umbrella'?((x.score||0)+' 張'):((x.score??x.total??0)+' 分');
+  const meta={weekly:['WEEKLY MISSION','每週任務卡','累積出席・完成任務'],pioneer:['OPENING PIONEER','開桌先鋒榜','搶先報名・累積先鋒積分'],hunter:['HUNTER RANKING','獵人榜','淘汰對手・成為獵人'],umbrella:['UMBRELLA REWARDS','保護傘','累積獎勵・即時掌握進度']}[type]||['EPC ACTIVITY',p.title||'EPC 活動',''];
+  const left=rws.slice(0,Math.ceil(rws.length/2)),right=rws.slice(Math.ceil(rws.length/2));
+  const mk=(arr,offset)=>arr.map((r,i)=>'<div class="as-row"><div class="as-no">#'+(offset+i+1)+'</div><div class="as-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="as-value">'+escapeHtml(value(r))+'</div></div>').join('');
+  root.innerHTML='<div class="activity-screen '+escapeHtml(type)+'"><div class="as-head"><div class="as-brand"><b>♠ EPC</b><small>EIGHT POKER CLUB</small></div><div class="as-title"><div class="en">'+meta[0]+'</div><h1>'+meta[1]+'</h1><p>'+meta[2]+'</p></div><div></div></div><div class="as-main"><div class="as-grid"><div class="rp-rest-col">'+mk(left,0)+'</div><div class="rp-rest-col">'+mk(right,left.length)+'</div></div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+
+ if(p.title||p.subtitle){root.innerHTML='<div class="empty"><h2>'+escapeHtml(p.title||'')+'</h2><p>'+escapeHtml(p.subtitle||'')+'</p></div>';return}
+ root.innerHTML="<pre>"+escapeHtml(JSON.stringify(p,null,2))+"</pre>";
+}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+let heartbeatTimer=null;
+function paired(){
+  $("pairScreen").style.display="none";
+  $("displayScreen").classList.add("active");
+}
+function startHeartbeat(id){
+  if(heartbeatTimer) return;
+  const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
+  beat();
+  heartbeatTimer=setInterval(beat,10000);
+}
+async function poll(id){
+  try{
+    const s=await getState(id);
+    if(s.ok && s.paired){
+      paired();
+      startHeartbeat(id);
+      renderPayload(s.payload);
+    }else if(s.ok){
+      if(s.code) showCode(s.code);
+    }
+  }catch(e){}
+  setTimeout(()=>poll(id),POLL_MS);
+}
+async function boot(){
+  showCode("");
+  const id=deviceId();
+  try{
+    const j=await post({action:"register",deviceId:id});
+    if(!j.code) throw new Error("REGISTER 成功，但 API 沒有回傳 code");
+    showCode(j.code);
+    if(j.paired){
+      status("此顯示器已配對，正在載入內容…","ok");
+      paired();
+      startHeartbeat(id);
+    }else{
+      status("配對碼已產生，請到管理後台輸入上方 6 位數","ok");
+    }
+    poll(id);
+  }catch(e){
+    fail("無法取得配對碼",String(e && e.message || e));
+  }
+}
+boot();
+</script>
+</body>
+</html>+Number(p.groupAmount||0).toLocaleString()+'</small></div><div class="boss-stat"><span>目前總累積</span><b>$'+Number(p.pool||0).toLocaleString()+'</b></div><div class="boss-stat"><span>剩餘血量</span><b>'+hp.toLocaleString()+' HP</b></div><div class="boss-stat"><span>攻擊階段</span><b class="'+(p.attackActive?'boss-status-on':'boss-status-off')+'">'+(p.attackActive?'已啟用':'尚未啟用')+'</b></div></div>'+
+  '<div class="boss-main"><div class="boss-card"><div class="boss-name">'+escapeHtml(b.name||'等待魔王登場')+'</div><div class="boss-hpbar"><div class="boss-hpfill" style="width:'+pct+'%"></div></div><div class="boss-hptxt">HP　'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div class="boss-pool">目前獎池 <b>$'+Number(p.pool||0).toLocaleString()+'</b> / $'+Number(p.cap||0).toLocaleString()+'</div></div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+ }
+ if(rows.length||Array.isArray(p.rows)){
+  const limit=Math.max(3,+ui.limit||10),rws=rows.slice(0,limit),medals=['🥇','🥈','🥉'];
+  if(type==='rank'){
+   const top=rws.slice(0,3),rest=rws.slice(3);
+   const period=escapeHtml(p.period||p.dateRange||p.range||'活動進行中');
+   const card=(r,i,first)=>r?'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>':'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">—</div><div class="rp-points">0<small>分</small></div></div>';
+   root.innerHTML='<div class="rank-poster"><div class="rp-casino-deco"><div class="rp-card c1">A<br>♠</div><div class="rp-card c2">A<br>♥</div><div class="rp-chipstack left"><i></i><i></i><i></i><i></i></div><div class="rp-chipstack right"><i></i><i></i><i></i><i></i></div></div><div class="rp-topline"><div class="rp-brand"><div class="rp-brand-main">♠ EPC</div><div class="rp-brand-sub">EIGHT POKER CLUB</div></div><div class="rp-head"><div class="rp-kicker">WEEKLY LEADERBOARD</div><div class="rp-title">週排行榜</div><div class="rp-sub">用實力爭取榮耀！</div></div><div class="rp-period"><b>活動區間</b><span>'+period+'</span></div></div><div class="rp-podium">'+card(top[1],1,false)+card(top[0],0,true)+card(top[2],2,false)+'</div><div class="rp-rest-wrap"><div class="rp-rest-head"><span>名次</span><span>玩家</span><span>總分</span></div><div class="rp-rest"><div class="rp-rest-col">'+rest.slice(0,4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+4)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div><div class="rp-rest-col">'+rest.slice(4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+8)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div></div></div><div class="rp-foot">EPC ・ MORE THAN POKER</div></div>';return;
+  }
+  let value=x=>type==='weekly'?((x.days||0)+' 天 / '+(x.games||0)+' 場'):type==='umbrella'?((x.score||0)+' 張'):((x.score??x.total??0)+' 分');
+  const meta={weekly:['WEEKLY MISSION','每週任務卡','累積出席・完成任務'],pioneer:['OPENING PIONEER','開桌先鋒榜','搶先報名・累積先鋒積分'],hunter:['HUNTER RANKING','獵人榜','淘汰對手・成為獵人'],umbrella:['UMBRELLA REWARDS','保護傘','累積獎勵・即時掌握進度']}[type]||['EPC ACTIVITY',p.title||'EPC 活動',''];
+  const left=rws.slice(0,Math.ceil(rws.length/2)),right=rws.slice(Math.ceil(rws.length/2));
+  const mk=(arr,offset)=>arr.map((r,i)=>'<div class="as-row"><div class="as-no">#'+(offset+i+1)+'</div><div class="as-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="as-value">'+escapeHtml(value(r))+'</div></div>').join('');
+  root.innerHTML='<div class="activity-screen '+escapeHtml(type)+'"><div class="as-head"><div class="as-brand"><b>♠ EPC</b><small>EIGHT POKER CLUB</small></div><div class="as-title"><div class="en">'+meta[0]+'</div><h1>'+meta[1]+'</h1><p>'+meta[2]+'</p></div><div></div></div><div class="as-main"><div class="as-grid"><div class="rp-rest-col">'+mk(left,0)+'</div><div class="rp-rest-col">'+mk(right,left.length)+'</div></div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+
+ if(p.title||p.subtitle){root.innerHTML='<div class="empty"><h2>'+escapeHtml(p.title||'')+'</h2><p>'+escapeHtml(p.subtitle||'')+'</p></div>';return}
+ root.innerHTML="<pre>"+escapeHtml(JSON.stringify(p,null,2))+"</pre>";
+}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+let heartbeatTimer=null;
+function paired(){
+  $("pairScreen").style.display="none";
+  $("displayScreen").classList.add("active");
+}
+function startHeartbeat(id){
+  if(heartbeatTimer) return;
+  const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
+  beat();
+  heartbeatTimer=setInterval(beat,10000);
+}
+async function poll(id){
+  try{
+    const s=await getState(id);
+    if(s.ok && s.paired){
+      paired();
+      startHeartbeat(id);
+      renderPayload(s.payload);
+    }else if(s.ok){
+      if(s.code) showCode(s.code);
+    }
+  }catch(e){}
+  setTimeout(()=>poll(id),POLL_MS);
+}
+async function boot(){
+  showCode("");
+  const id=deviceId();
+  try{
+    const j=await post({action:"register",deviceId:id});
+    if(!j.code) throw new Error("REGISTER 成功，但 API 沒有回傳 code");
+    showCode(j.code);
+    if(j.paired){
+      status("此顯示器已配對，正在載入內容…","ok");
+      paired();
+      startHeartbeat(id);
+    }else{
+      status("配對碼已產生，請到管理後台輸入上方 6 位數","ok");
+    }
+    poll(id);
+  }catch(e){
+    fail("無法取得配對碼",String(e && e.message || e));
+  }
+}
+boot();
+</script>
+</body>
+</html>+Number(p.cap||0).toLocaleString()+'<div style="font-size:.58em;margin-top:.35em;color:#ffd27b">組數加碼採單場獨立計算｜16組起，每8組再 +</div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+ }
+ if(rows.length||Array.isArray(p.rows)){
+  const limit=Math.max(3,+ui.limit||10),rws=rows.slice(0,limit),medals=['🥇','🥈','🥉'];
+  if(type==='rank'){
+   const top=rws.slice(0,3),rest=rws.slice(3);
+   const period=escapeHtml(p.period||p.dateRange||p.range||'活動進行中');
+   const card=(r,i,first)=>r?'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>':'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">—</div><div class="rp-points">0<small>分</small></div></div>';
+   root.innerHTML='<div class="rank-poster"><div class="rp-casino-deco"><div class="rp-card c1">A<br>♠</div><div class="rp-card c2">A<br>♥</div><div class="rp-chipstack left"><i></i><i></i><i></i><i></i></div><div class="rp-chipstack right"><i></i><i></i><i></i><i></i></div></div><div class="rp-topline"><div class="rp-brand"><div class="rp-brand-main">♠ EPC</div><div class="rp-brand-sub">EIGHT POKER CLUB</div></div><div class="rp-head"><div class="rp-kicker">WEEKLY LEADERBOARD</div><div class="rp-title">週排行榜</div><div class="rp-sub">用實力爭取榮耀！</div></div><div class="rp-period"><b>活動區間</b><span>'+period+'</span></div></div><div class="rp-podium">'+card(top[1],1,false)+card(top[0],0,true)+card(top[2],2,false)+'</div><div class="rp-rest-wrap"><div class="rp-rest-head"><span>名次</span><span>玩家</span><span>總分</span></div><div class="rp-rest"><div class="rp-rest-col">'+rest.slice(0,4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+4)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div><div class="rp-rest-col">'+rest.slice(4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+8)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div></div></div><div class="rp-foot">EPC ・ MORE THAN POKER</div></div>';return;
+  }
+  let value=x=>type==='weekly'?((x.days||0)+' 天 / '+(x.games||0)+' 場'):type==='umbrella'?((x.score||0)+' 張'):((x.score??x.total??0)+' 分');
+  const meta={weekly:['WEEKLY MISSION','每週任務卡','累積出席・完成任務'],pioneer:['OPENING PIONEER','開桌先鋒榜','搶先報名・累積先鋒積分'],hunter:['HUNTER RANKING','獵人榜','淘汰對手・成為獵人'],umbrella:['UMBRELLA REWARDS','保護傘','累積獎勵・即時掌握進度']}[type]||['EPC ACTIVITY',p.title||'EPC 活動',''];
+  const left=rws.slice(0,Math.ceil(rws.length/2)),right=rws.slice(Math.ceil(rws.length/2));
+  const mk=(arr,offset)=>arr.map((r,i)=>'<div class="as-row"><div class="as-no">#'+(offset+i+1)+'</div><div class="as-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="as-value">'+escapeHtml(value(r))+'</div></div>').join('');
+  root.innerHTML='<div class="activity-screen '+escapeHtml(type)+'"><div class="as-head"><div class="as-brand"><b>♠ EPC</b><small>EIGHT POKER CLUB</small></div><div class="as-title"><div class="en">'+meta[0]+'</div><h1>'+meta[1]+'</h1><p>'+meta[2]+'</p></div><div></div></div><div class="as-main"><div class="as-grid"><div class="rp-rest-col">'+mk(left,0)+'</div><div class="rp-rest-col">'+mk(right,left.length)+'</div></div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+
+ if(p.title||p.subtitle){root.innerHTML='<div class="empty"><h2>'+escapeHtml(p.title||'')+'</h2><p>'+escapeHtml(p.subtitle||'')+'</p></div>';return}
+ root.innerHTML="<pre>"+escapeHtml(JSON.stringify(p,null,2))+"</pre>";
+}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+let heartbeatTimer=null;
+function paired(){
+  $("pairScreen").style.display="none";
+  $("displayScreen").classList.add("active");
+}
+function startHeartbeat(id){
+  if(heartbeatTimer) return;
+  const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
+  beat();
+  heartbeatTimer=setInterval(beat,10000);
+}
+async function poll(id){
+  try{
+    const s=await getState(id);
+    if(s.ok && s.paired){
+      paired();
+      startHeartbeat(id);
+      renderPayload(s.payload);
+    }else if(s.ok){
+      if(s.code) showCode(s.code);
+    }
+  }catch(e){}
+  setTimeout(()=>poll(id),POLL_MS);
+}
+async function boot(){
+  showCode("");
+  const id=deviceId();
+  try{
+    const j=await post({action:"register",deviceId:id});
+    if(!j.code) throw new Error("REGISTER 成功，但 API 沒有回傳 code");
+    showCode(j.code);
+    if(j.paired){
+      status("此顯示器已配對，正在載入內容…","ok");
+      paired();
+      startHeartbeat(id);
+    }else{
+      status("配對碼已產生，請到管理後台輸入上方 6 位數","ok");
+    }
+    poll(id);
+  }catch(e){
+    fail("無法取得配對碼",String(e && e.message || e));
+  }
+}
+boot();
+</script>
+</body>
+</html>+Number(p.groupAmount||0).toLocaleString()+'</small></div><div class="boss-stat"><span>目前總累積</span><b>$'+Number(p.pool||0).toLocaleString()+'</b></div><div class="boss-stat"><span>剩餘血量</span><b>'+hp.toLocaleString()+' HP</b></div><div class="boss-stat"><span>攻擊階段</span><b class="'+(p.attackActive?'boss-status-on':'boss-status-off')+'">'+(p.attackActive?'已啟用':'尚未啟用')+'</b></div></div>'+
+  '<div class="boss-main"><div class="boss-card"><div class="boss-name">'+escapeHtml(b.name||'等待魔王登場')+'</div><div class="boss-hpbar"><div class="boss-hpfill" style="width:'+pct+'%"></div></div><div class="boss-hptxt">HP　'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div class="boss-pool">目前獎池 <b>$'+Number(p.pool||0).toLocaleString()+'</b> / $'+Number(p.cap||0).toLocaleString()+'</div></div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+ }
+ if(rows.length||Array.isArray(p.rows)){
+  const limit=Math.max(3,+ui.limit||10),rws=rows.slice(0,limit),medals=['🥇','🥈','🥉'];
+  if(type==='rank'){
+   const top=rws.slice(0,3),rest=rws.slice(3);
+   const period=escapeHtml(p.period||p.dateRange||p.range||'活動進行中');
+   const card=(r,i,first)=>r?'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>':'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">—</div><div class="rp-points">0<small>分</small></div></div>';
+   root.innerHTML='<div class="rank-poster"><div class="rp-casino-deco"><div class="rp-card c1">A<br>♠</div><div class="rp-card c2">A<br>♥</div><div class="rp-chipstack left"><i></i><i></i><i></i><i></i></div><div class="rp-chipstack right"><i></i><i></i><i></i><i></i></div></div><div class="rp-topline"><div class="rp-brand"><div class="rp-brand-main">♠ EPC</div><div class="rp-brand-sub">EIGHT POKER CLUB</div></div><div class="rp-head"><div class="rp-kicker">WEEKLY LEADERBOARD</div><div class="rp-title">週排行榜</div><div class="rp-sub">用實力爭取榮耀！</div></div><div class="rp-period"><b>活動區間</b><span>'+period+'</span></div></div><div class="rp-podium">'+card(top[1],1,false)+card(top[0],0,true)+card(top[2],2,false)+'</div><div class="rp-rest-wrap"><div class="rp-rest-head"><span>名次</span><span>玩家</span><span>總分</span></div><div class="rp-rest"><div class="rp-rest-col">'+rest.slice(0,4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+4)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div><div class="rp-rest-col">'+rest.slice(4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+8)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div></div></div><div class="rp-foot">EPC ・ MORE THAN POKER</div></div>';return;
+  }
+  let value=x=>type==='weekly'?((x.days||0)+' 天 / '+(x.games||0)+' 場'):type==='umbrella'?((x.score||0)+' 張'):((x.score??x.total??0)+' 分');
+  const meta={weekly:['WEEKLY MISSION','每週任務卡','累積出席・完成任務'],pioneer:['OPENING PIONEER','開桌先鋒榜','搶先報名・累積先鋒積分'],hunter:['HUNTER RANKING','獵人榜','淘汰對手・成為獵人'],umbrella:['UMBRELLA REWARDS','保護傘','累積獎勵・即時掌握進度']}[type]||['EPC ACTIVITY',p.title||'EPC 活動',''];
+  const left=rws.slice(0,Math.ceil(rws.length/2)),right=rws.slice(Math.ceil(rws.length/2));
+  const mk=(arr,offset)=>arr.map((r,i)=>'<div class="as-row"><div class="as-no">#'+(offset+i+1)+'</div><div class="as-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="as-value">'+escapeHtml(value(r))+'</div></div>').join('');
+  root.innerHTML='<div class="activity-screen '+escapeHtml(type)+'"><div class="as-head"><div class="as-brand"><b>♠ EPC</b><small>EIGHT POKER CLUB</small></div><div class="as-title"><div class="en">'+meta[0]+'</div><h1>'+meta[1]+'</h1><p>'+meta[2]+'</p></div><div></div></div><div class="as-main"><div class="as-grid"><div class="rp-rest-col">'+mk(left,0)+'</div><div class="rp-rest-col">'+mk(right,left.length)+'</div></div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+
+ if(p.title||p.subtitle){root.innerHTML='<div class="empty"><h2>'+escapeHtml(p.title||'')+'</h2><p>'+escapeHtml(p.subtitle||'')+'</p></div>';return}
+ root.innerHTML="<pre>"+escapeHtml(JSON.stringify(p,null,2))+"</pre>";
+}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+let heartbeatTimer=null;
+function paired(){
+  $("pairScreen").style.display="none";
+  $("displayScreen").classList.add("active");
+}
+function startHeartbeat(id){
+  if(heartbeatTimer) return;
+  const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
+  beat();
+  heartbeatTimer=setInterval(beat,10000);
+}
+async function poll(id){
+  try{
+    const s=await getState(id);
+    if(s.ok && s.paired){
+      paired();
+      startHeartbeat(id);
+      renderPayload(s.payload);
+    }else if(s.ok){
+      if(s.code) showCode(s.code);
+    }
+  }catch(e){}
+  setTimeout(()=>poll(id),POLL_MS);
+}
+async function boot(){
+  showCode("");
+  const id=deviceId();
+  try{
+    const j=await post({action:"register",deviceId:id});
+    if(!j.code) throw new Error("REGISTER 成功，但 API 沒有回傳 code");
+    showCode(j.code);
+    if(j.paired){
+      status("此顯示器已配對，正在載入內容…","ok");
+      paired();
+      startHeartbeat(id);
+    }else{
+      status("配對碼已產生，請到管理後台輸入上方 6 位數","ok");
+    }
+    poll(id);
+  }catch(e){
+    fail("無法取得配對碼",String(e && e.message || e));
+  }
+}
+boot();
+</script>
+</body>
+</html>+Number(p.groupBonus||0).toLocaleString()+'</div></div></div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+ }
+ if(rows.length||Array.isArray(p.rows)){
+  const limit=Math.max(3,+ui.limit||10),rws=rows.slice(0,limit),medals=['🥇','🥈','🥉'];
+  if(type==='rank'){
+   const top=rws.slice(0,3),rest=rws.slice(3);
+   const period=escapeHtml(p.period||p.dateRange||p.range||'活動進行中');
+   const card=(r,i,first)=>r?'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>':'<div class="rp-winner '+(first?'first':'')+'"><div class="rp-medal">'+medals[i]+'</div><div class="rp-name">—</div><div class="rp-points">0<small>分</small></div></div>';
+   root.innerHTML='<div class="rank-poster"><div class="rp-casino-deco"><div class="rp-card c1">A<br>♠</div><div class="rp-card c2">A<br>♥</div><div class="rp-chipstack left"><i></i><i></i><i></i><i></i></div><div class="rp-chipstack right"><i></i><i></i><i></i><i></i></div></div><div class="rp-topline"><div class="rp-brand"><div class="rp-brand-main">♠ EPC</div><div class="rp-brand-sub">EIGHT POKER CLUB</div></div><div class="rp-head"><div class="rp-kicker">WEEKLY LEADERBOARD</div><div class="rp-title">週排行榜</div><div class="rp-sub">用實力爭取榮耀！</div></div><div class="rp-period"><b>活動區間</b><span>'+period+'</span></div></div><div class="rp-podium">'+card(top[1],1,false)+card(top[0],0,true)+card(top[2],2,false)+'</div><div class="rp-rest-wrap"><div class="rp-rest-head"><span>名次</span><span>玩家</span><span>總分</span></div><div class="rp-rest"><div class="rp-rest-col">'+rest.slice(0,4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+4)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div><div class="rp-rest-col">'+rest.slice(4).map((r,i)=>'<div class="rp-row"><div class="rp-no">#'+(i+8)+'</div><div class="rp-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="rp-points">'+Number(r.score??0)+'<small>分</small></div></div>').join('')+'</div></div></div><div class="rp-foot">EPC ・ MORE THAN POKER</div></div>';return;
+  }
+  let value=x=>type==='weekly'?((x.days||0)+' 天 / '+(x.games||0)+' 場'):type==='umbrella'?((x.score||0)+' 張'):((x.score??x.total??0)+' 分');
+  const meta={weekly:['WEEKLY MISSION','每週任務卡','累積出席・完成任務'],pioneer:['OPENING PIONEER','開桌先鋒榜','搶先報名・累積先鋒積分'],hunter:['HUNTER RANKING','獵人榜','淘汰對手・成為獵人'],umbrella:['UMBRELLA REWARDS','保護傘','累積獎勵・即時掌握進度']}[type]||['EPC ACTIVITY',p.title||'EPC 活動',''];
+  const left=rws.slice(0,Math.ceil(rws.length/2)),right=rws.slice(Math.ceil(rws.length/2));
+  const mk=(arr,offset)=>arr.map((r,i)=>'<div class="as-row"><div class="as-no">#'+(offset+i+1)+'</div><div class="as-name">'+escapeHtml(r.name||r.id||'')+'</div><div class="as-value">'+escapeHtml(value(r))+'</div></div>').join('');
+  root.innerHTML='<div class="activity-screen '+escapeHtml(type)+'"><div class="as-head"><div class="as-brand"><b>♠ EPC</b><small>EIGHT POKER CLUB</small></div><div class="as-title"><div class="en">'+meta[0]+'</div><h1>'+meta[1]+'</h1><p>'+meta[2]+'</p></div><div></div></div><div class="as-main"><div class="as-grid"><div class="rp-rest-col">'+mk(left,0)+'</div><div class="rp-rest-col">'+mk(right,left.length)+'</div></div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
+
+ if(p.title||p.subtitle){root.innerHTML='<div class="empty"><h2>'+escapeHtml(p.title||'')+'</h2><p>'+escapeHtml(p.subtitle||'')+'</p></div>';return}
+ root.innerHTML="<pre>"+escapeHtml(JSON.stringify(p,null,2))+"</pre>";
+}
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+let heartbeatTimer=null;
+function paired(){
+  $("pairScreen").style.display="none";
+  $("displayScreen").classList.add("active");
+}
+function startHeartbeat(id){
+  if(heartbeatTimer) return;
+  const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
+  beat();
+  heartbeatTimer=setInterval(beat,10000);
+}
+async function poll(id){
+  try{
+    const s=await getState(id);
+    if(s.ok && s.paired){
+      paired();
+      startHeartbeat(id);
+      renderPayload(s.payload);
+    }else if(s.ok){
+      if(s.code) showCode(s.code);
+    }
+  }catch(e){}
+  setTimeout(()=>poll(id),POLL_MS);
+}
+async function boot(){
+  showCode("");
+  const id=deviceId();
+  try{
+    const j=await post({action:"register",deviceId:id});
+    if(!j.code) throw new Error("REGISTER 成功，但 API 沒有回傳 code");
+    showCode(j.code);
+    if(j.paired){
+      status("此顯示器已配對，正在載入內容…","ok");
+      paired();
+      startHeartbeat(id);
+    }else{
+      status("配對碼已產生，請到管理後台輸入上方 6 位數","ok");
+    }
+    poll(id);
+  }catch(e){
+    fail("無法取得配對碼",String(e && e.message || e));
+  }
+}
+boot();
+</script>
+</body>
+</html>+Number(p.groupAmount||0).toLocaleString()+'</small></div><div class="boss-stat"><span>目前總累積</span><b>$'+Number(p.pool||0).toLocaleString()+'</b></div><div class="boss-stat"><span>剩餘血量</span><b>'+hp.toLocaleString()+' HP</b></div><div class="boss-stat"><span>攻擊階段</span><b class="'+(p.attackActive?'boss-status-on':'boss-status-off')+'">'+(p.attackActive?'已啟用':'尚未啟用')+'</b></div></div>'+
   '<div class="boss-main"><div class="boss-card"><div class="boss-name">'+escapeHtml(b.name||'等待魔王登場')+'</div><div class="boss-hpbar"><div class="boss-hpfill" style="width:'+pct+'%"></div></div><div class="boss-hptxt">HP　'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div class="boss-pool">目前獎池 <b>$'+Number(p.pool||0).toLocaleString()+'</b> / $'+Number(p.cap||0).toLocaleString()+'</div></div><div class="boss-log"><h2>⚔ 攻擊紀錄</h2>'+logHtml+'</div></div><div class="as-foot">EPC ・ MORE THAN POKER</div></div>';return;
  }
  if(rows.length||Array.isArray(p.rows)){
