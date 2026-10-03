@@ -1784,13 +1784,24 @@ window.epcFirebasePublishFieldChanges=async function(changes){
   const ref=doc(fs,'epcFieldVersions',epcFieldKey_(String(ch.path||'')));
   const snap=await getDoc(ref);
   const old=snap.exists()?snap.data():{};
-  const version=Number(old.version||0)+1;
+  const remoteVersion=Number(old.version||0);
+  const expectedVersion=Number(ch.baseVersion||ch.publishedVersion||0);
+  const sameBase=JSON.stringify(clean(old.value))===JSON.stringify(clean(ch.before));
+  if(remoteVersion>0 && !sameBase && String(old.clientId||'')!==String(ch.clientId||'')){
+   ch.conflict=true;ch.remoteVersion=remoteVersion;ch.remoteValue=clean(old.value);
+   ch.remoteClientId=String(old.clientId||'');
+   window.epcFirebaseFieldConflict={path:String(ch.path||''),local:clean(ch.after),remote:clean(old.value),before:clean(ch.before),remoteVersion};
+   const el=document.getElementById('firebaseMirrorState');
+   if(el){el.textContent='Firebase：⚠ 欄位版本衝突｜已阻止覆蓋｜'+String(ch.path||'');el.style.color='#ffb74d';}
+   continue;
+  }
+  const version=remoteVersion+1;
   await setDoc(ref,{
    path:String(ch.path||''),value:clean(ch.after),previousValue:clean(ch.before),
    clientId:String(ch.clientId||''),clientChangedAt:Number(ch.changedAt||Date.now()),
-   previousVersion:version-1,version:version,updatedAt:serverTimestamp()
+   previousVersion:remoteVersion,version:version,updatedAt:serverTimestamp()
   });
-  ch.publishedAt=Date.now();ch.publishedVersion=version;
+  ch.publishedAt=Date.now();ch.publishedVersion=version;ch.baseVersion=version;ch.conflict=false;
  }
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(changes||[]));
  return true;
@@ -1989,7 +2000,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.48 Web · Field Versions</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.49 Web · Version Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
