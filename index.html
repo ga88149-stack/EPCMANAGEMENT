@@ -1770,7 +1770,7 @@ import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot} fr
 const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDomain:"epcmenagement.firebaseapp.com",projectId:"epcmenagement",storageBucket:"epcmenagement.firebasestorage.app",messagingSenderId:"257676873693",appId:"1:257676873693:web:f4edfe9199cc60e8d93034"});
 const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
-let timer=null,busy=false,pending=false,lastFingerprint="";
+let timer=null,busy=false,pending=false,lastFingerprint="",suppressMirrorUntil=0;
 let verifiedSnapshot=null,verifiedMeta=null;
 function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
 function clean(v){return JSON.parse(JSON.stringify(v??null));}
@@ -1836,8 +1836,16 @@ async function mirror(){
  if(fp===lastFingerprint){state("Firebase：鏡像已同步");return;}
  busy=true;pending=false;
  try{
-  state("Firebase：建立完整快照…");
   const stable=stableJson_(snap),fullHash=await hashText_(stable),fullBytes=new TextEncoder().encode(stable).length;
+  // If Firestore already contains this exact database, do not create another
+  // generation. This breaks A<->B mirror echo loops.
+  try{
+    const cur=await getDoc(doc(fs,"epcMirrorMeta","current"));
+    if(cur.exists()&&String((cur.data()||{}).fullDataHash||"")===fullHash){
+      lastFingerprint=fp;state("Firebase：即時連線 ✓｜資料已一致");return;
+    }
+  }catch(_){}
+  state("Firebase：建立完整快照…");
   const generation=makeGeneration_(),snapshotChunks=chunkText_(stable);
   const snapshotOps=snapshotChunks.map((value,i)=>({
    ref:doc(fs,"epcMirrorSnapshots",generation,"chunks","chunk_"+String(i).padStart(3,"0")),
@@ -1877,7 +1885,7 @@ async function mirror(){
  }catch(e){console.error("Firebase mirror failed",e);state("Firebase：鏡像失敗（正式資料不受影響）",true);}
  finally{busy=false;if(pending)setTimeout(mirror,300);}
 }
-window.epcFirebaseMirrorSchedule=()=>{clearTimeout(timer);timer=setTimeout(mirror,1200);};
+window.epcFirebaseMirrorSchedule=()=>{if(Date.now()<suppressMirrorUntil)return;clearTimeout(timer);timer=setTimeout(mirror,1200);};
 window.epcFirebaseMirrorNow=()=>mirror();
 window.epcFirebaseReadVerified=async()=>{
  const u=auth.currentUser;
@@ -1967,7 +1975,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.39 Web · Conflict Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.40 Web · Echo Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3396,6 +3404,10 @@ window.epcFirebaseCanAutoApply=function(){
 window.epcFirebaseApplyRemote=function(remote,meta){
  if(!remote||typeof remote!=='object'||!window.epcFirebaseCanAutoApply())return false;
  try{
+   // A remote apply is consumption, not a new local edit. Suppress echo-mirroring
+   // long enough for render/persist side effects to settle.
+   suppressMirrorUntil=Date.now()+5000;
+   clearTimeout(timer);
    backupLocal('before-firebase-safe-apply-v1');
    db=cloneCloud_(remote);
    const rev=Number(meta&&meta.legacyRevision||0);
