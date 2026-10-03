@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.29 Web · Hunt Double Count Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.30 Web · Hunt Per-Event Bonus</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5059,7 +5059,7 @@ function bossStats_(){
        hunt=true;crossedThisEvent=true;
        /* Threshold was reached before this event's group bonus:
           this event's group bonus belongs to hunt mode. */
-       const huntGroupBonus=bossBonus_(groups,B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
+       const huntGroupBonus=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
        if(huntGroupBonus>0){hgb+=huntGroupBonus;huntQualifyingEvents++;pool+=huntGroupBonus}
      }else if(pool+normalGroupBonus>=threshold){
        /* The group bonus itself crosses the threshold.
@@ -5069,7 +5069,7 @@ function bossStats_(){
        const normalPart=Math.min(normalGroupBonus,toThreshold);
        ngb+=normalPart;pool+=normalPart;
        hunt=true;crossedThisEvent=true;
-       const huntPart=Math.max(0,normalGroupBonus-normalPart);
+       const huntPart=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
        if(huntPart>0){hgb+=huntPart;huntQualifyingEvents++;pool+=huntPart}
      }else{
        ngb+=normalGroupBonus;pool+=normalGroupBonus;
@@ -5090,9 +5090,7 @@ function bossStats_(){
        const next=bossBonus_(huntPeople,B.huntPersonStep,B.huntPersonAmount,B.huntPersonIgnore);
        const delta=Math.max(0,next-hpb);hpb+=delta;pool+=delta;
      }
-     const prevHuntGroupBonus=bossBonus_(Math.max(0,hg-groups),B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
-     const nextHuntGroupBonus=bossBonus_(hg,B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
-     const gb=Math.max(0,nextHuntGroupBonus-prevHuntGroupBonus);
+     const gb=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
      if(gb>0){hgb+=gb;huntQualifyingEvents++;pool+=gb}
    }
  }
