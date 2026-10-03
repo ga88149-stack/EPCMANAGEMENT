@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EPC Poker Management System V1.50.32</title>
+<title>EPC Poker Management System V1.50.33</title>
 <style>
 :root{--bg:#0b0f14;--card:#121922;--card2:#17212c;--text:#eef3f8;--muted:#91a0b2;--line:#263443;--accent:#d6b35a;--good:#49c27d;--bad:#ff6b6b}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
@@ -1782,8 +1782,8 @@ async function mirror(){
  if(busy){pending=true;return;}
  const u=auth.currentUser;
  if(!u||String(u.email||"").toLowerCase()!=="ga88149@gmail.com"){state("Firebase：等待登入");return;}
- if(!window.db||typeof window.db!=="object")return;
- const snap=clean(window.db),fp=fingerprint(snap);
+ if(!window.epcDb||typeof window.epcDb!=="object")return;
+ const snap=clean(window.epcDb),fp=fingerprint(snap);
  if(fp===lastFingerprint){state("Firebase：鏡像已同步");return;}
  busy=true;pending=false;
  try{
@@ -1805,7 +1805,7 @@ async function mirror(){
   await commitOps(ops);
   await setDoc(doc(fs,"epcMirrorMeta","current"),{
    schema:"mirror-v2",source:"EPCMANAGEMENT",memberCount:members.length,eventCount:events.length,
-   coreChunks:chunks.length,legacyRevision:Number(window.cloudRevision||0),dbUpdatedAt:String(snap.updatedAt||""),
+   coreChunks:chunks.length,legacyRevision:Number(window.epcCloudRevision||0),dbUpdatedAt:String(snap.updatedAt||""),
    mirroredAt:serverTimestamp(),clientTime:new Date().toISOString()
   },{merge:true});
   lastFingerprint=fp;
@@ -1826,7 +1826,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.32 Web · Firebase Mirror V2</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.33 Web · Firebase Bridge Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2481,6 +2481,10 @@ let cloudReady=false,cloudSaving=false,cloudSaveTimer=null,cloudPending=false;
 let localDirty=localStorage.getItem('epcLocalDirty')==='1';
 let cloudBase=JSON.parse(localStorage.getItem('epcCloudBase')||'null');
 let liveSyncTimer=null;
+Object.defineProperty(window,'epcDb',{configurable:true,get:()=>db});
+Object.defineProperty(window,'epcCloudRevision',{configurable:true,get:()=>cloudRevision});
+if(typeof window.epcFirebaseMirrorSchedule==='function')setTimeout(()=>window.epcFirebaseMirrorSchedule(),300);
+
 
 function setCloudState(text,isError=false){
  const el=$('saveState'); if(!el)return;
