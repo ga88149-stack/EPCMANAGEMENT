@@ -1835,7 +1835,11 @@ window.epcFirebasePublishFieldChanges=async function(changes){
   delete ch.forceFromVersion;
   if(ch.needsMirrorAfterPublish){
    delete ch.needsMirrorAfterPublish;
-   if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();
+   // Conflict resolution may change a field that the old lightweight fingerprint
+   // does not include. Force a SHA-256 mirror rebuild so the chosen value becomes
+   // the published realtime snapshot.
+   if(typeof window.epcFirebaseMirrorForce==='function')await window.epcFirebaseMirrorForce();
+   else if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();
   }
  }
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(changes||[]));
@@ -1952,6 +1956,7 @@ async function mirror(){
  finally{busy=false;if(pending)setTimeout(mirror,300);}
 }
 window.epcFirebaseMirrorSchedule=()=>{if(Date.now()<suppressMirrorUntil)return;clearTimeout(timer);timer=setTimeout(mirror,1200);};
+window.epcFirebaseMirrorForce=()=>{lastFingerprint="";suppressMirrorUntil=0;clearTimeout(timer);return mirror();};
 window.epcFirebaseMirrorNow=()=>mirror();
 window.epcFirebaseReadVerified=async()=>{
  const u=auth.currentUser;
@@ -2044,7 +2049,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.58 Web · Conflict Resolution Publish</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.59 Web · Forced Conflict Snapshot</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
