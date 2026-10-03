@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.26 Web · Threshold Split Accounting</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.27 Web · Hunt Pool Accounting</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5039,46 +5039,61 @@ function bossStats_(){
  });
  const threshold=Math.max(0,+B.attackThreshold||10000),cap=+B.cap||0,start=+B.startPrize||0;
  let np=0,ng=0,hp=0,hg=0,npb=0,ngb=0,hpb=0,hgb=0,pool=start;
- let normalQualifyingEvents=0,huntQualifyingEvents=0,attackReached=!!B.attackEnabled;
- let normalPeople=0;
- const add=(amount,normalSetter,huntSetter)=>{
-   amount=Math.max(0,+amount||0);
-   if(!amount)return;
-   if(attackReached||pool>=threshold){attackReached=true;huntSetter(amount);pool+=amount;return}
-   const room=Math.max(0,threshold-pool);
-   const before=Math.min(amount,room);
-   if(before){normalSetter(before);pool+=before}
-   const after=amount-before;
-   if(pool>=threshold)attackReached=true;
-   if(after){huntSetter(after);pool+=after}
- };
- ev.forEach(e=>{
+ let normalPeople=0,huntPeople=0,normalQualifyingEvents=0,huntQualifyingEvents=0;
+ let hunt=false,crossedThisEvent=false;
+
+ for(const e of ev){
    const people=(e.players||[]).length;
    let groups=0;(e.players||[]).forEach(p=>groups+=actGroups_(p,e));
-   if(!attackReached&&pool<threshold){
+
+   if(!hunt){
      np+=people;ng+=groups;normalPeople+=people;
-     const newPeopleBonus=bossBonus_(normalPeople,B.normalPersonStep,B.normalPersonAmount,B.normalPersonIgnore);
-     const personDelta=Math.max(0,newPeopleBonus-npb);
-     add(personDelta,x=>npb+=x,x=>hpb+=x);
-     const eventGroupBonus=bossBonus_(groups,B.normalGroupStep,B.normalGroupAmount,B.normalGroupIgnore);
-     if(eventGroupBonus>0)normalQualifyingEvents++;
-     add(eventGroupBonus,x=>ngb+=x,x=>{hgb+=x;huntQualifyingEvents++;});
-   }else{
-     attackReached=true;hp+=people;hg+=groups;
-     if(B.huntPersonEnabled){
-       const newHuntPeopleBonus=bossBonus_(hp,B.huntPersonStep,B.huntPersonAmount,B.huntPersonIgnore);
-       const delta=Math.max(0,newHuntPeopleBonus-hpb);
-       hpb+=delta;pool+=delta;
+     const nextPeopleBonus=bossBonus_(normalPeople,B.normalPersonStep,B.normalPersonAmount,B.normalPersonIgnore);
+     const personDelta=Math.max(0,nextPeopleBonus-npb);
+     npb+=personDelta;pool+=personDelta;
+
+     const normalGroupBonus=bossBonus_(groups,B.normalGroupStep,B.normalGroupAmount,B.normalGroupIgnore);
+     if(normalGroupBonus>0)normalQualifyingEvents++;
+
+     if(pool>=threshold){
+       hunt=true;crossedThisEvent=true;
+       /* Threshold was reached before this event's group bonus:
+          this event's group bonus belongs to hunt mode. */
+       const huntGroupBonus=bossBonus_(groups,B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
+       if(huntGroupBonus>0){hgb+=huntGroupBonus;huntQualifyingEvents++;pool+=huntGroupBonus}
+     }else if(pool+normalGroupBonus>=threshold){
+       /* The group bonus itself crosses the threshold.
+          Count only enough in normal mode to reach threshold;
+          any remaining increment belongs to hunt mode. */
+       const toThreshold=Math.max(0,threshold-pool);
+       const normalPart=Math.min(normalGroupBonus,toThreshold);
+       ngb+=normalPart;pool+=normalPart;
+       hunt=true;crossedThisEvent=true;
+       const huntPart=Math.max(0,normalGroupBonus-normalPart);
+       if(huntPart>0){hgb+=huntPart;huntQualifyingEvents++;pool+=huntPart}
+     }else{
+       ngb+=normalGroupBonus;pool+=normalGroupBonus;
      }
-     const eventGroupBonus=bossBonus_(groups,B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
-     if(eventGroupBonus>0){hgb+=eventGroupBonus;huntQualifyingEvents++;pool+=eventGroupBonus}
+
+     if(crossedThisEvent){
+       /* People/groups shown in the hunt column start with the triggering event,
+          but hunt people do not add money unless explicitly enabled. */
+       hp+=people;hg+=groups;huntPeople+=people;
+       np-=people;ng-=groups;
+       crossedThisEvent=false;
+     }
+   }else{
+     hp+=people;hg+=groups;huntPeople+=people;
+     if(B.huntPersonEnabled){
+       const next=bossBonus_(huntPeople,B.huntPersonStep,B.huntPersonAmount,B.huntPersonIgnore);
+       const delta=Math.max(0,next-hpb);hpb+=delta;pool+=delta;
+     }
+     const gb=bossBonus_(groups,B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
+     if(gb>0){hgb+=gb;huntQualifyingEvents++;pool+=gb}
    }
- });
- const active=attackReached||pool>=threshold||!!B.huntStartedAt;
- if(active&&!B.huntStartedAt){
-   const cross=ev.find(e=>{return false});
-   B.huntStartedAt='AUTO_THRESHOLD';
  }
+ const active=hunt||!!B.attackEnabled||pool>=threshold||!!B.huntStartedAt;
+ if(active&&!B.huntStartedAt)B.huntStartedAt='AUTO_THRESHOLD';
  if(cap>0)pool=Math.min(pool,cap);
  return {np,ng,hp,hg,npb,ngb,hpb,hgb,pool,active,normalQualifyingEvents,huntQualifyingEvents}
 }
