@@ -2784,12 +2784,14 @@ function startLiveSync_(){
      }
 
      // Unsaved work exists locally: three-way merge, never overwrite it.
-     backupLocal('before-live-merge-v2');
-     db=mergeCloud3_(cloudBase||remote,db,remote);
-     db=preserveManualDiscountEdits_(db,remote);
-     db=preserveActivityEdits_(db,remote);
-     db=preserveEventEdits_(db,remote);
-     db=preserveMembers_(db,db,res.members);
+     backupLocal('before-live-merge-v3');
+     const localBeforeMerge=cloneCloud_(db);
+     let merged=mergeCloud3_(cloudBase||remote,localBeforeMerge,remote);
+     merged=preserveManualDiscountEdits_(localBeforeMerge,merged);
+     merged=preserveActivityEdits_(localBeforeMerge,merged);
+     merged=preserveEventEdits_(localBeforeMerge,merged);
+     merged=preserveMembers_(localBeforeMerge,merged,res.members);
+     db=merged;
      cloudRevision=loadedRev;
      setCloudBase_(remote);
      localStorage.setItem('epcV1',JSON.stringify(db));
@@ -2817,9 +2819,9 @@ async function initializeCloud(){
      if(localDirty){
        backupLocal('startup-three-way-merge-v2');
        db=mergeCloud3_(cloudBase||remote,db,remote);
-       db=preserveManualDiscountEdits_(db,remote);
-     db=preserveActivityEdits_(db,remote);
-     db=preserveEventEdits_(db,remote);
+       db=preserveManualDiscountEdits_(db,db);
+     db=preserveActivityEdits_(db,db);
+     db=preserveEventEdits_(db,db);
        db=preserveMembers_(db,db,res.members);
        cloudRevision=serverRevision;
        setCloudBase_(remote);
@@ -2944,6 +2946,7 @@ async function saveCloudNow(force=false){
      db=preserveManualDiscountEdits_(db,server);
      db=preserveActivityEdits_(db,server);
      db=preserveEventEdits_(db,server);
+     db=preserveMembers_(db,db,latest.members);
      localDirty=true;
      localStorage.setItem('epcLocalDirty','1');
      cloudPending=true;
@@ -2953,6 +2956,7 @@ async function saveCloudNow(force=false){
      db=preserveManualDiscountEdits_(candidate,server);
      db=preserveActivityEdits_(candidate,db);
      db=preserveEventEdits_(candidate,db);
+     db=preserveMembers_(candidate,db,latest.members);
      localDirty=false;
      localStorage.removeItem('epcLocalDirty');
    }
@@ -2961,7 +2965,7 @@ async function saveCloudNow(force=false){
    setCloudBase_(server);
    localStorage.setItem('epcCloudRevision',String(cloudRevision));
    localStorage.setItem('epcV1',JSON.stringify(db));
-   render();
+   if(!epcEditLocked_())render();
    const t=res.updatedAt?new Date(res.updatedAt).toLocaleTimeString():new Date().toLocaleTimeString();
    setCloudState(changedDuringSave?'● 雲端已儲存｜剛才的新修改繼續同步中…':'☁ 雲端同步完成｜Revision '+cloudRevision+'｜'+t);
    return true;
