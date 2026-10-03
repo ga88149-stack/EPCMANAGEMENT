@@ -1965,7 +1965,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.45 Web · Diagnostic Safe Mode</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.46 Web · Field Ledger</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3447,6 +3447,33 @@ function epcDetectConflicts_(base,local,remote,path='',out=[]){
  out.push({path:path||'(root)',base:cloneCloud_(base),local:cloneCloud_(local),remote:cloneCloud_(remote)});
  return out;
 }
+const EPC_CLIENT_ID_KEY='epcFirebaseClientIdV1';
+const epcClientId_=(()=>{
+ let v=localStorage.getItem(EPC_CLIENT_ID_KEY);
+ if(!v){v='c_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);localStorage.setItem(EPC_CLIENT_ID_KEY,v);}
+ return v;
+})();
+let epcLastPersistSnapshot_=cloneCloud_(db);
+window.epcFieldChanges=[];
+function epcCollectFieldChanges_(before,after,path='',out=[]){
+ if(out.length>5000)return out;
+ const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
+ if(eq(before,after))return out;
+ const obj=x=>x&&typeof x==='object'&&!Array.isArray(x);
+ if(Array.isArray(before)&&Array.isArray(after)){
+   const key=(x,i)=>x&&typeof x==='object'?String(x.id??x.memberId??x.eventId??('idx:'+i)):('idx:'+i);
+   const bm=new Map(before.map((x,i)=>[key(x,i),x])),am=new Map(after.map((x,i)=>[key(x,i),x]));
+   for(const k of new Set([...bm.keys(),...am.keys()]))epcCollectFieldChanges_(bm.get(k),am.get(k),path+'['+k+']',out);
+   return out;
+ }
+ if(obj(before)&&obj(after)){
+   for(const k of new Set([...Object.keys(before),...Object.keys(after)]))epcCollectFieldChanges_(before[k],after[k],path?path+'.'+k:k,out);
+   return out;
+ }
+ out.push({path:path||'(root)',before:cloneCloud_(before),after:cloneCloud_(after),clientId:epcClientId_,changedAt:Date.now()});
+ return out;
+}
+window.epcGetFieldChanges=()=>cloneCloud_(window.epcFieldChanges||[]);
 window.epcFirebaseConflicts=[];
 window.epcFirebaseResolveConflicts=function(choice='local'){
  const cs=window.epcFirebaseConflicts||[];
@@ -3526,6 +3553,11 @@ window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
 });
 
 function persist(){
+ const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
+ if(changes.length)window.epcFieldChanges.push(...changes);
+ if(window.epcFieldChanges.length>10000)window.epcFieldChanges=window.epcFieldChanges.slice(-10000);
+ epcLastPersistSnapshot_=cloneCloud_(db);
+ localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges));
  localStorage.setItem('epcV1',JSON.stringify(db));
  localDirty=true;
  localStorage.setItem('epcLocalDirty','1');
