@@ -1760,12 +1760,12 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
 </style>
 <div id="epcFieldConflictModal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);align-items:center;justify-content:center">
  <div style="width:min(600px,92vw);background:#0f1720;border:2px solid #d6b35a;border-radius:14px;padding:20px;color:#fff;box-shadow:0 20px 70px #000">
-  <h3 style="margin:0 0 8px;color:#ffd76a;font-size:22px">同步欄位衝突</h3>
-  <div style="color:#d7e0e8;font-size:13px;margin-bottom:6px">兩台電腦同時修改了這個欄位，請選擇要保留哪一筆。</div>
-  <div id="epcFieldConflictPath" style="font-size:12px;color:#aebdca;margin-bottom:14px"></div>
+  <h3 style="margin:0 0 8px;color:#ffd76a!important;font-size:24px!important;font-weight:900!important">同步欄位衝突</h3>
+  <div style="color:#ffffff!important;font-size:14px!important;font-weight:700!important;margin-bottom:7px">兩台電腦同時修改了這個欄位，請選擇要保留哪一筆。</div>
+  <div id="epcFieldConflictPath" style="font-size:13px!important;color:#ffffff!important;font-weight:700!important;margin-bottom:15px"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-   <div style="color:#fff"><b style="display:block;margin-bottom:6px;color:#fff">本機修改</b><pre id="epcFieldConflictLocal" style="white-space:pre-wrap;background:#05090d;color:#fff;border:1px solid #44515e;padding:12px;border-radius:8px;font-size:16px;font-weight:800;min-height:48px"></pre></div>
-   <div style="color:#fff"><b style="display:block;margin-bottom:6px;color:#fff">另一台最新資料</b><pre id="epcFieldConflictRemote" style="white-space:pre-wrap;background:#05090d;color:#fff;border:1px solid #44515e;padding:12px;border-radius:8px;font-size:16px;font-weight:800;min-height:48px"></pre></div>
+   <div><div style="display:block;margin-bottom:7px;color:#63e6ff!important;font-size:16px!important;font-weight:900!important">本機修改</div><pre id="epcFieldConflictLocal" style="white-space:pre-wrap;background:#000!important;color:#fff!important;border:2px solid #63e6ff!important;padding:12px;border-radius:8px;font-size:18px!important;font-weight:900!important;min-height:48px"></pre></div>
+   <div><div style="display:block;margin-bottom:7px;color:#ffd76a!important;font-size:16px!important;font-weight:900!important">另一台最新資料</div><pre id="epcFieldConflictRemote" style="white-space:pre-wrap;background:#000!important;color:#fff!important;border:2px solid #ffd76a!important;padding:12px;border-radius:8px;font-size:18px!important;font-weight:900!important;min-height:48px"></pre></div>
   </div>
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
    <button id="epcConflictUseRemote" style="background:#fff;color:#111;border-color:#fff;font-weight:900">採用另一台資料</button>
@@ -2016,7 +2016,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.51 Web · Conflict UI</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.52 Web · High Contrast Conflict</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
