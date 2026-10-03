@@ -1971,7 +1971,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.43 Web · Conflict Detect</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.44 Web · Field Conflict Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3108,6 +3108,11 @@ function scheduleCloudSave(){
  cloudSaveTimer=setTimeout(saveCloudNow,900);
 }
 async function saveCloudNow(force=false){
+ if((window.epcFirebaseConflicts||[]).length){
+   cloudPending=true;
+   setCloudState('⚠ 偵測到同步衝突｜已停止上傳，避免覆蓋另一台資料',true);
+   return false;
+ }
  if(cloudSaving){cloudPending=true;return false;}
  if(!cloudReady){
    localDirty=true; localStorage.setItem('epcLocalDirty','1');
@@ -3429,15 +3434,22 @@ function epcDetectConflicts_(base,local,remote,path='',out=[]){
  if(out.length>=50)return out;
  const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
  if(eq(local,remote)||eq(base,local)||eq(base,remote))return out;
- const plain=x=>x&&typeof x==='object'&&!Array.isArray(x);
- if(plain(base)&&plain(local)&&plain(remote)){
+ const obj=x=>x&&typeof x==='object'&&!Array.isArray(x);
+ if(Array.isArray(base)&&Array.isArray(local)&&Array.isArray(remote)){
+   // EPC arrays contain members/events/players. Match records by stable IDs so
+   // changing one field inside an array is detected as a field conflict.
+   const keyOf=(x,i)=>x&&typeof x==='object'?String(x.id??x.memberId??x.eventId??('idx:'+i)):('idx:'+i);
+   const map=(a)=>{const m=new Map();a.forEach((x,i)=>m.set(keyOf(x,i),x));return m};
+   const bm=map(base),lm=map(local),rm=map(remote);
+   const keys=new Set([...bm.keys(),...lm.keys(),...rm.keys()]);
+   for(const k of keys)epcDetectConflicts_(bm.get(k),lm.get(k),rm.get(k),path+'['+k+']',out);
+   return out;
+ }
+ if(obj(base)&&obj(local)&&obj(remote)){
    const keys=new Set([...Object.keys(base),...Object.keys(local),...Object.keys(remote)]);
    for(const k of keys)epcDetectConflicts_(base[k],local[k],remote[k],path?path+'.'+k:k,out);
    return out;
  }
- // Arrays are treated atomically here. Existing domain-specific merge helpers
- // still merge non-conflicting event/member edits; this only blocks ambiguous
- // same-value changes from being silently overwritten.
  out.push({path:path||'(root)',base:cloneCloud_(base),local:cloneCloud_(local),remote:cloneCloud_(remote)});
  return out;
 }
