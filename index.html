@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EPC Poker Management System V1.50.24</title>
+<title>EPC Poker Management System V1.50.31</title>
 <style>
 :root{--bg:#0b0f14;--card:#121922;--card2:#17212c;--text:#eef3f8;--muted:#91a0b2;--line:#263443;--accent:#d6b35a;--good:#49c27d;--bad:#ff6b6b}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
@@ -1758,6 +1758,32 @@ html[data-epc-theme="light"] #deleteConfirmText,
 html[data-epc-theme="light"] #deleteConfirmText *{color:#172531!important}
 html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
 </style>
+<script type="module">
+/* Firebase Mirror V1 — write-only. It NEVER reads Firestore into EPC db. */
+import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import {getFirestore,doc,setDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDomain:"epcmenagement.firebaseapp.com",projectId:"epcmenagement",storageBucket:"epcmenagement.firebasestorage.app",messagingSenderId:"257676873693",appId:"1:257676873693:web:f4edfe9199cc60e8d93034"});
+const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
+provider.setCustomParameters({prompt:"select_account"});
+let timer=null,busy=false,pending=false;
+function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
+async function mirror(){
+ if(busy){pending=true;return;}
+ const u=auth.currentUser;
+ if(!u||String(u.email||"").toLowerCase()!=="ga88149@gmail.com"){state("Firebase：等待登入");return;}
+ if(!window.db||typeof window.db!=="object")return;
+ busy=true;pending=false;
+ try{
+  await setDoc(doc(fs,"epcMirror","current"),{data:JSON.parse(JSON.stringify(window.db)),mirroredAt:serverTimestamp(),clientTime:new Date().toISOString(),source:"EPCMANAGEMENT",schema:"mirror-v1"});
+  state("Firebase：鏡像完成 "+new Date().toLocaleTimeString());
+ }catch(e){console.error("Firebase mirror failed",e);state("Firebase：鏡像失敗（正式資料不受影響）",true);}
+ finally{busy=false;if(pending)setTimeout(mirror,300);}
+}
+window.epcFirebaseMirrorSchedule=()=>{clearTimeout(timer);timer=setTimeout(mirror,900);};
+window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入");window.epcFirebaseMirrorSchedule();}else if(u)state("Firebase：帳號未授權",true);else state("Firebase：尚未登入");});
+</script>
 </head>
 <script>
 (function(){
@@ -1767,7 +1793,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.30 Web · Hunt Per-Event Bonus</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.31 Web · Firebase Mirror</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3190,7 +3216,7 @@ function persist(){
  localStorage.setItem('epcV1',JSON.stringify(db));
  localDirty=true;
  localStorage.setItem('epcLocalDirty','1');
- scheduleCloudSave();
+ scheduleCloudSave(); if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();
 }
 document.querySelectorAll('#nav button[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const target=$(b.dataset.page);if(target)target.classList.add('active');render()});
 async function addMember(){
