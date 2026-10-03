@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.24 Web · Sync Core Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.25 Web · Boss Attack Stage Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4715,7 +4715,7 @@ function ensureActDb_(){
  if(B.huntPersonStep==null)B.huntPersonStep=1;if(B.huntPersonAmount==null)B.huntPersonAmount=100;if(B.huntPersonIgnore==null)B.huntPersonIgnore=0;
  if(B.huntGroupStep==null)B.huntGroupStep=8;if(B.huntGroupAmount==null)B.huntGroupAmount=200;if(B.huntGroupIgnore==null)B.huntGroupIgnore=0;
  if(B.huntPersonEnabled==null)B.huntPersonEnabled=false;if(B.activityFrom==null)B.activityFrom='';if(B.activityTo==null)B.activityTo='';B.excludedEventIds=Array.isArray(B.excludedEventIds)?B.excludedEventIds:[];
- if(B.attackEnabled==null)B.attackEnabled=false;if(B.attackThreshold==null)B.attackThreshold=14000;
+ if(B.attackEnabled==null)B.attackEnabled=false;if(B.attackThreshold==null||+B.attackThreshold===14000)B.attackThreshold=10000;
  B.bosses=Array.isArray(B.bosses)?B.bosses:[];if(!B.bosses.length)B.bosses.push({id:'BOSS1',name:'魔王 1',initialHp:+B.initialHp||250,attacks:Array.isArray(B.attacks)?B.attacks:[],killed:false});if(!B.activeBossId)B.activeBossId=B.bosses[0].id;
  if(B.initialHp==null)B.initialHp=250;if(+B.initialHp===200)B.initialHp=250;const _ab=(B.bosses||[]).find(x=>x.id===B.activeBossId);if(_ab&&+_ab.initialHp===200&&(_ab.attacks||[]).length<=1){const dealt=(_ab.attacks||[]).reduce((n,x)=>n+(+x.damage||0),0);_ab.initialHp=250;}
  B.attacks=Array.isArray(B.attacks)?B.attacks:[];
@@ -5048,9 +5048,9 @@ function bossStats_(){
  const npb=bossBonus_(np,B.normalPersonStep,B.normalPersonAmount,B.normalPersonIgnore);
  let base=(+B.startPrize||0)+npb+ngb;
  const autoActive=(+B.attackThreshold||0)>0&&base>=+B.attackThreshold;
- const manualActive=!!B.attackEnabled,active=manualActive||autoActive;
- if(active&&!B.huntStartedAt)B.huntStartedAt=new Date().toISOString().slice(0,16);
- if(!active&&B.huntStartedAt)B.huntStartedAt='';
+ const manualActive=!!B.attackEnabled,active=manualActive||autoActive||!!B.huntStartedAt;
+ if((manualActive||autoActive)&&!B.huntStartedAt)B.huntStartedAt=new Date().toISOString().slice(0,16);
+ /* Once attack mode has started, keep huntStartedAt stable. Do not erase it during sync/recalculation. */
  const hpb=B.huntPersonEnabled?bossBonus_(hp,B.huntPersonStep,B.huntPersonAmount,B.huntPersonIgnore):0;
  let pool=base+hpb+hgb;if(+B.cap>0)pool=Math.min(pool,+B.cap);
  const normalQualifyingEvents=ev.filter(e=>{
