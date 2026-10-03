@@ -1803,13 +1803,20 @@ window.epcFirebasePublishFieldChanges=async function(changes){
    const remoteVersion=Number(old.version||0);
    const sameBase=JSON.stringify(clean(old.value))===JSON.stringify(clean(ch.before));
    const sameClient=String(old.clientId||'')===String(ch.clientId||'');
+   const remoteChangedAt=Number(old.clientChangedAt||0);
+   const localChangedAt=Number(ch.changedAt||0);
+   // Race guard: if another client wrote this exact field after this edit began,
+   // it is a true same-field concurrency conflict even when legacy transport has
+   // already refreshed/rebased the local whole-db snapshot.
+   const overlappingOtherClient=!sameClient && remoteVersion>0 && remoteChangedAt>0 &&
+     localChangedAt>0 && remoteChangedAt>=localChangedAt;
    // A deliberate "keep local" resolution is valid only if the remote field
    // has not advanced again since the operator made that choice.
    const forcedVersion=Number(ch.forceFromVersion||0);
    if(forcedVersion>0 && remoteVersion!==forcedVersion){
     return {conflict:true,old,remoteVersion};
    }
-   if(!forcedVersion && remoteVersion>0 && !sameBase && !sameClient){
+   if(!forcedVersion && remoteVersion>0 && !sameClient && (!sameBase || overlappingOtherClient)){
     return {conflict:true,old,remoteVersion};
    }
    const version=remoteVersion+1;
@@ -2041,7 +2048,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.64 Web · Stable Hybrid Restore</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.65 Web · Same Field Race Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
