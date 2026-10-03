@@ -2041,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.60 Web · Safe Hybrid Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.61 Web · Field Baseline Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3053,6 +3053,7 @@ function startLiveSync_(){
      if(!localDirty){
        backupLocal('before-live-remote-apply-v2');
        db=remote;
+       epcLastPersistSnapshot_=cloneCloud_(db);
        cloudRevision=loadedRev;
        setCloudBase_(remote);
        localStorage.setItem('epcV1',JSON.stringify(db));
@@ -3072,6 +3073,7 @@ function startLiveSync_(){
      merged=preserveEventEdits_(localBeforeMerge,merged);
      merged=preserveMembers_(localBeforeMerge,merged,res.members);
      db=merged;
+     epcLastPersistSnapshot_=cloneCloud_(db);
      cloudRevision=loadedRev;
      setCloudBase_(remote);
      localStorage.setItem('epcV1',JSON.stringify(db));
@@ -3136,6 +3138,7 @@ async function initializeCloud(){
    if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
    if(!Array.isArray(db.dailySettlementReports))db.dailySettlementReports=[];
    cloudReady=true;
+   epcLastPersistSnapshot_=cloneCloud_(db);
    localStorage.setItem('epcV1',JSON.stringify(db));
    render();
 
@@ -3161,6 +3164,7 @@ async function refreshFormMembers(saveAfter=true){
    localStorage.setItem('epcV1',JSON.stringify(db));
    const after=JSON.stringify((db.members||[]).map(m=>[m.id,m.name,m.group,m.note,m.createdDate]));
    if(before!==after){
+     epcLastPersistSnapshot_=cloneCloud_(db);
      if(typeof renderMemberRows==='function')renderMemberRows();
    }
    if(saveAfter && before!==after && cloudReady){
@@ -3484,6 +3488,7 @@ window.epcFirebaseApplyRemote=function(remote,meta){
    clearTimeout(timer);
    backupLocal('before-firebase-safe-apply-v1');
    db=cloneCloud_(remote);
+   epcLastPersistSnapshot_=cloneCloud_(db);
    const rev=Number(meta&&meta.legacyRevision||0);
    if(rev>cloudRevision)cloudRevision=rev;
    setCloudBase_(db);
