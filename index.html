@@ -1758,6 +1758,20 @@ html[data-epc-theme="light"] #deleteConfirmText,
 html[data-epc-theme="light"] #deleteConfirmText *{color:#172531!important}
 html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
 </style>
+<div id="epcFieldConflictModal" style="display:none;position:fixed;inset:0;z-index:99999;background:#0009;align-items:center;justify-content:center">
+ <div style="width:min(560px,92vw);background:#121922;border:1px solid #d6b35a;border-radius:14px;padding:18px;color:#eef3f8">
+  <h3 style="margin:0 0 12px">同步欄位衝突</h3>
+  <div id="epcFieldConflictPath" style="font-size:12px;color:#91a0b2;margin-bottom:12px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+   <div><b>本機修改</b><pre id="epcFieldConflictLocal" style="white-space:pre-wrap;background:#0d141c;padding:10px;border-radius:8px"></pre></div>
+   <div><b>另一台最新資料</b><pre id="epcFieldConflictRemote" style="white-space:pre-wrap;background:#0d141c;padding:10px;border-radius:8px"></pre></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+   <button id="epcConflictUseRemote">採用另一台資料</button>
+   <button id="epcConflictKeepLocal" class="primary">保留本機修改</button>
+  </div>
+ </div>
+</div>
 <script type="module">
 /* Firebase Mirror V4 — verified snapshot bridge.
    Safety rule: Firestore still does NOT overwrite EPC db automatically.
@@ -1791,6 +1805,7 @@ window.epcFirebasePublishFieldChanges=async function(changes){
    ch.conflict=true;ch.remoteVersion=remoteVersion;ch.remoteValue=clean(old.value);
    ch.remoteClientId=String(old.clientId||'');
    window.epcFirebaseFieldConflict={path:String(ch.path||''),local:clean(ch.after),remote:clean(old.value),before:clean(ch.before),remoteVersion};
+   if(typeof window.epcShowFieldConflict==='function')window.epcShowFieldConflict(window.epcFirebaseFieldConflict);
    const el=document.getElementById('firebaseMirrorState');
    if(el){el.textContent='Firebase：⚠ 欄位版本衝突｜已阻止覆蓋｜'+String(ch.path||'');el.style.color='#ffb74d';}
    continue;
@@ -2000,7 +2015,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.49 Web · Version Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.50 Web · Conflict Resolver</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3509,6 +3524,52 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
  return out;
 }
 window.epcGetFieldChanges=()=>cloneCloud_(window.epcFieldChanges||[]);
+function epcSetPathValue_(root,path,value){
+ const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
+ let cur=root;
+ for(let i=0;i<parts.length-1;i++){
+  const k=parts[i],next=parts[i+1];
+  if(Array.isArray(cur)){
+   let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===k);
+   if(idx<0)return false;cur=cur[idx];
+  }else{if(cur[k]==null)return false;cur=cur[k];}
+ }
+ if(!parts.length)return false;
+ const last=parts[parts.length-1];
+ if(Array.isArray(cur)){
+  const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
+  if(idx<0)return false;cur[idx]=cloneCloud_(value);
+ }else cur[last]=cloneCloud_(value);
+ return true;
+}
+window.epcShowFieldConflict=function(x){
+ const m=document.getElementById('epcFieldConflictModal');if(!m)return;
+ document.getElementById('epcFieldConflictPath').textContent=x.path;
+ document.getElementById('epcFieldConflictLocal').textContent=JSON.stringify(x.local,null,2);
+ document.getElementById('epcFieldConflictRemote').textContent=JSON.stringify(x.remote,null,2);
+ m.style.display='flex';
+};
+window.epcResolveFieldConflict=function(choice){
+ const x=window.epcFirebaseFieldConflict;if(!x)return;
+ if(choice==='remote'){
+  if(epcSetPathValue_(db,x.path,x.remote)){
+   epcLastPersistSnapshot_=cloneCloud_(db);localStorage.setItem('epcV1',JSON.stringify(db));
+   window.epcFieldChanges=(window.epcFieldChanges||[]).filter(ch=>ch.path!==x.path||!ch.conflict);
+   localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges));render();
+  }
+ }else{
+  const ch=(window.epcFieldChanges||[]).find(ch=>ch.path===x.path&&ch.conflict);
+  if(ch){ch.before=cloneCloud_(x.remote);ch.baseVersion=x.remoteVersion;ch.conflict=false;delete ch.publishedAt;epcScheduleFieldPublish_();}
+ }
+ window.epcFirebaseFieldConflict=null;
+ const m=document.getElementById('epcFieldConflictModal');if(m)m.style.display='none';
+};
+setTimeout(()=>{
+ const r=document.getElementById('epcConflictUseRemote'),l=document.getElementById('epcConflictKeepLocal');
+ if(r)r.onclick=()=>window.epcResolveFieldConflict('remote');
+ if(l)l.onclick=()=>window.epcResolveFieldConflict('local');
+},0);
+
 let epcFieldPublishTimer_=0;
 function epcScheduleFieldPublish_(){
  clearTimeout(epcFieldPublishTimer_);
