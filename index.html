@@ -1923,7 +1923,7 @@ function startRealtimeObserver_(){
       }else state("Firebase：收到另一台更新｜已驗證｜等待安全套用");
     }else{
       window.epcFirebasePending={data:clean(remote.data),meta:clean(m)};
-      state("Firebase：收到另一台更新｜已驗證｜等待安全套用");
+      state("Firebase：⚠ 同步暫停｜本機正在修改｜另一台更新已安全保留");
     }
    }
   }catch(e){
@@ -1967,7 +1967,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.38 Web · Safe Realtime</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.39 Web · Conflict Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3416,6 +3416,45 @@ window.epcFirebaseApplyPending=function(){
  if(ok){window.epcFirebasePending=null;return true;}
  return false;
 };
+
+/* Phase 3 conflict guard.
+   If a verified Firebase update arrived while this client was dirty/editing,
+   never apply it blindly later. First let the existing three-way cloud merge
+   commit the local work; only a clean client may consume a pending snapshot. */
+let epcFirebaseConflictTimer_=null;
+function scheduleFirebaseConflictDrain_(){
+ clearTimeout(epcFirebaseConflictTimer_);
+ epcFirebaseConflictTimer_=setTimeout(async()=>{
+   const p=window.epcFirebasePending;
+   if(!p)return;
+   if(epcEditLocked_()||epcEditingField_()||cloudSaving)return scheduleFirebaseConflictDrain_();
+   if(localDirty||cloudPending){
+     if(cloudReady&&!cloudSaving)await saveCloudNow(false);
+     return scheduleFirebaseConflictDrain_();
+   }
+   // Local work is confirmed clean. Re-read current Firestore instead of applying
+   // an older queued payload; observer will verify and apply the newest generation.
+   window.epcFirebasePending=null;
+   if(typeof window.epcFirebaseReadVerified==='function'){
+     try{
+       const latest=await window.epcFirebaseReadVerified();
+       const meta=window.epcFirebaseVerifiedMeta&&window.epcFirebaseVerifiedMeta();
+       if(latest&&meta){
+         const localHash=await (async v=>{
+           const txt=JSON.stringify(v);
+           const bytes=new TextEncoder().encode(txt);
+           return bytes.length;
+         })(db);
+         // Apply only through the normal clean-client guard.
+         if(window.epcFirebaseCanAutoApply())window.epcFirebaseApplyRemote(latest,meta);
+       }
+     }catch(e){console.warn('Firebase conflict drain deferred',e);}
+   }
+ },1200);
+}
+window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
+ if(e&&e.detail&&!e.detail.sameAsLocal&&!window.epcFirebaseCanAutoApply())scheduleFirebaseConflictDrain_();
+});
 
 function persist(){
  localStorage.setItem('epcV1',JSON.stringify(db));
