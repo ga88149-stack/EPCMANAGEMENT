@@ -1911,7 +1911,20 @@ function startRealtimeObserver_(){
     verifiedSnapshot=remote.data;verifiedMeta=m;
     state("Firebase：即時連線 ✓｜本機與最新快照一致");
    }else{
-    state("Firebase：收到另一台更新｜已驗證｜等待安全套用");
+    // Phase 2: only auto-apply when this client has no unsaved local work and
+    // the legacy cloud is not in the middle of a save/edit. Otherwise keep the
+    // verified snapshot pending so nothing can overwrite an operator mid-entry.
+    const safeToApply=window.epcFirebaseCanAutoApply?window.epcFirebaseCanAutoApply():false;
+    if(safeToApply && typeof window.epcFirebaseApplyRemote==="function"){
+      const applied=window.epcFirebaseApplyRemote(clean(remote.data),clean(m));
+      if(applied){
+        verifiedSnapshot=remote.data;verifiedMeta=m;
+        state("Firebase：✓ 已安全套用另一台更新");
+      }else state("Firebase：收到另一台更新｜已驗證｜等待安全套用");
+    }else{
+      window.epcFirebasePending={data:clean(remote.data),meta:clean(m)};
+      state("Firebase：收到另一台更新｜已驗證｜等待安全套用");
+    }
    }
   }catch(e){
    console.error("Firebase realtime snapshot verify failed",e);
@@ -1954,7 +1967,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.37 Web · Realtime Observe</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.38 Web · Safe Realtime</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3376,6 +3389,33 @@ function currentEvent(){
  return e||null;
 }
 function requireEvent(){let e=currentEvent();if(!e){alert('請先到「賽事管理」建立一場賽事。');return null}return e}
+
+window.epcFirebaseCanAutoApply=function(){
+ return !localDirty && !cloudSaving && !cloudPending && !epcEditLocked_() && !epcEditingField_();
+};
+window.epcFirebaseApplyRemote=function(remote,meta){
+ if(!remote||typeof remote!=='object'||!window.epcFirebaseCanAutoApply())return false;
+ try{
+   backupLocal('before-firebase-safe-apply-v1');
+   db=cloneCloud_(remote);
+   const rev=Number(meta&&meta.legacyRevision||0);
+   if(rev>cloudRevision)cloudRevision=rev;
+   setCloudBase_(db);
+   localDirty=false;cloudPending=false;
+   localStorage.setItem('epcV1',JSON.stringify(db));
+   localStorage.setItem('epcCloudRevision',String(cloudRevision));
+   localStorage.removeItem('epcLocalDirty');
+   if(!epcEditLocked_())render();
+   return true;
+ }catch(e){console.error('Firebase safe apply failed',e);return false;}
+};
+window.epcFirebaseApplyPending=function(){
+ const p=window.epcFirebasePending;
+ if(!p)return false;
+ const ok=window.epcFirebaseApplyRemote(p.data,p.meta);
+ if(ok){window.epcFirebasePending=null;return true;}
+ return false;
+};
 
 function persist(){
  localStorage.setItem('epcV1',JSON.stringify(db));
