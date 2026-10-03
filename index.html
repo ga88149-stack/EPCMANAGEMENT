@@ -1971,7 +1971,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.41 Web · Snapshot First</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.42 Web · Merge Before Save</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3437,25 +3437,34 @@ function scheduleFirebaseConflictDrain_(){
    if(!p)return;
    if(epcEditLocked_()||epcEditingField_()||cloudSaving)return scheduleFirebaseConflictDrain_();
    if(localDirty||cloudPending){
-     if(cloudReady&&!cloudSaving)await saveCloudNow(false);
+     // CRITICAL: merge the verified Firebase snapshot into the local working copy
+     // BEFORE saving. Otherwise a stale A database can overwrite B's just-saved
+     // field when A finishes its edit.
+     try{
+       const remote=cloneCloud_(p.data);
+       const base=(cloudBase&&typeof cloudBase==='object')?cloneCloud_(cloudBase):cloneCloud_(remote);
+       const localNow=cloneCloud_(db);
+       db=mergeCloud3_(base,localNow,remote);
+       db=preserveManualDiscountEdits_(localNow,db);
+       db=preserveActivityEdits_(localNow,db);
+       db=preserveEventEdits_(localNow,db);
+       db=preserveMembers_(localNow,db);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localDirty=true;cloudPending=true;
+       localStorage.setItem('epcLocalDirty','1');
+       // This pending generation has now been consumed into the three-way merge.
+       window.epcFirebasePending=null;
+       if(cloudReady&&!cloudSaving)await saveCloudNow(false);
+     }catch(e){console.warn('Firebase pre-save merge deferred',e);}
      return scheduleFirebaseConflictDrain_();
    }
-   // Local work is confirmed clean. Re-read current Firestore instead of applying
-   // an older queued payload; observer will verify and apply the newest generation.
+   // No local edits remain: the pending verified snapshot can be applied normally.
    window.epcFirebasePending=null;
    if(typeof window.epcFirebaseReadVerified==='function'){
      try{
        const latest=await window.epcFirebaseReadVerified();
        const meta=window.epcFirebaseVerifiedMeta&&window.epcFirebaseVerifiedMeta();
-       if(latest&&meta){
-         const localHash=await (async v=>{
-           const txt=JSON.stringify(v);
-           const bytes=new TextEncoder().encode(txt);
-           return bytes.length;
-         })(db);
-         // Apply only through the normal clean-client guard.
-         if(window.epcFirebaseCanAutoApply())window.epcFirebaseApplyRemote(latest,meta);
-       }
+       if(latest&&meta&&window.epcFirebaseCanAutoApply())window.epcFirebaseApplyRemote(latest,meta);
      }catch(e){console.warn('Firebase conflict drain deferred',e);}
    }
  },1200);
