@@ -1969,11 +1969,20 @@ function startRealtimeObserver_(){
     // Phase 2: only auto-apply when this client has no unsaved local work and
     // the legacy cloud is not in the middle of a save/edit. Otherwise keep the
     // verified snapshot pending so nothing can overwrite an operator mid-entry.
-    // Diagnostic safety mode: never mutate EPC db from Firebase.
-    // Keep the verified remote snapshot pending until the legacy whole-database
-    // overwrite path is isolated. This prevents our new bridge from causing loss.
-    window.epcFirebasePending={data:clean(remote.data),meta:clean(m)};
-    state("Firebase：收到另一台更新｜已驗證｜診斷模式未自動套用");
+    const safeToApply=window.epcFirebaseCanAutoApply?window.epcFirebaseCanAutoApply():false;
+    if(safeToApply && typeof window.epcFirebaseApplyRemote==="function"){
+      const applied=window.epcFirebaseApplyRemote(clean(remote.data),clean(m));
+      if(applied){
+        verifiedSnapshot=remote.data;verifiedMeta=m;
+        state("Firebase：✓ 即時同步｜已安全套用另一台更新");
+      }else{
+        window.epcFirebasePending={data:clean(remote.data),meta:clean(m)};
+        state("Firebase：收到另一台更新｜已驗證｜等待安全套用");
+      }
+    }else{
+      window.epcFirebasePending={data:clean(remote.data),meta:clean(m)};
+      state("Firebase：⚠ 本機編輯中｜另一台更新已保留");
+    }
    }
   }catch(e){
    console.error("Firebase realtime snapshot verify failed",e);
@@ -2016,7 +2025,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.52 Web · High Contrast Conflict</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.53 Web · Firebase Clean Apply</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
