@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EPC Poker Management System V1.50.34</title>
+<title>EPC Poker Management System V1.50.35</title>
 <style>
 :root{--bg:#0b0f14;--card:#121922;--card2:#17212c;--text:#eef3f8;--muted:#91a0b2;--line:#263443;--accent:#d6b35a;--good:#49c27d;--bad:#ff6b6b}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
@@ -1770,6 +1770,25 @@ let timer=null,busy=false,pending=false,lastFingerprint="";
 function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
 function clean(v){return JSON.parse(JSON.stringify(v??null));}
 function safeId(v,fallback){const s=String(v??fallback??"").trim().replaceAll("/","_");return s||String(fallback||Date.now());}
+function stableJson_(v){
+ const seen=new WeakSet();
+ return JSON.stringify(v,function(k,val){
+  if(val&&typeof val==="object"){
+   if(seen.has(val))return "[Circular]";
+   seen.add(val);
+   if(!Array.isArray(val)){
+    const o={};Object.keys(val).sort().forEach(key=>{o[key]=val[key]});return o;
+   }
+  }
+  return val;
+ });
+}
+async function fullHash_(v){
+ const txt=stableJson_(clean(v));
+ const bytes=new TextEncoder().encode(txt);
+ const hash=await crypto.subtle.digest("SHA-256",bytes);
+ return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
 function fingerprint(d){try{return JSON.stringify([d.updatedAt,(d.members||[]).length,(d.events||[]).length,d.currentEventId,d.activityManagement,d.dailySettlementReports,d.settings]).length+":"+String(d.updatedAt||"");}catch(_){return String(Date.now());}}
 async function commitOps(ops){
  for(let i=0;i<ops.length;i+=350){
@@ -1783,7 +1802,7 @@ async function mirror(){
  const u=auth.currentUser;
  if(!u||String(u.email||"").toLowerCase()!=="ga88149@gmail.com"){state("Firebase：等待登入");return;}
  if(!window.epcDb||typeof window.epcDb!=="object")return;
- const snap=clean(window.epcDb),fp=fingerprint(snap);
+ const snap=clean(window.epcDb),fp=fingerprint(snap),fullHash=await fullHash_(snap);
  if(fp===lastFingerprint){state("Firebase：鏡像已同步");return;}
  busy=true;pending=false;
  try{
@@ -1804,7 +1823,7 @@ async function mirror(){
   chunks.forEach((value,i)=>ops.push({ref:doc(fs,"epcMirrorCore","chunk_"+String(i).padStart(3,"0")),data:{index:i,value,_mirrorSource:"EPCMANAGEMENT"}}));
   await commitOps(ops);
   await setDoc(doc(fs,"epcMirrorMeta","current"),{
-   schema:"mirror-v2",source:"EPCMANAGEMENT",memberCount:members.length,eventCount:events.length,
+   schema:"mirror-v3-full-hash",source:"EPCMANAGEMENT",memberCount:members.length,eventCount:events.length,fullDataHash:fullHash,fullDataBytes:new TextEncoder().encode(stableJson_(snap)).length,
    coreChunks:chunks.length,legacyRevision:Number(window.epcCloudRevision||0),dbUpdatedAt:String(snap.updatedAt||""),
    mirroredAt:serverTimestamp(),clientTime:new Date().toISOString()
   },{merge:true});
@@ -1822,11 +1841,14 @@ window.epcFirebaseVerify=async()=>{
   state("Firebase：檢查一致性…");
   const s=await getDoc(doc(fs,"epcMirrorMeta","current"));
   if(!s.exists())throw new Error("找不到鏡像狀態");
-  const m=s.data()||{},d=window.epcDb||{};
+  const m=s.data()||{},d=clean(window.epcDb||{});
   const localMembers=(d.members||[]).length,localEvents=(d.events||[]).length;
-  const ok=Number(m.memberCount)===localMembers&&Number(m.eventCount)===localEvents;
+  const localHash=await fullHash_(d);
+  const countsOk=Number(m.memberCount)===localMembers&&Number(m.eventCount)===localEvents;
+  const hashOk=!!m.fullDataHash&&m.fullDataHash===localHash;
+  const ok=countsOk&&hashOk;
   const t=m.mirroredAt&&m.mirroredAt.toDate?m.mirroredAt.toDate().toLocaleTimeString():"—";
-  state(ok?`Firebase：✓ 一致｜會員 ${localMembers}｜賽事 ${localEvents}｜${t}`:`Firebase：⚠ 數量不一致｜EPC ${localMembers}/${localEvents}｜FB ${m.memberCount??"?"}/${m.eventCount??"?"}`,!ok);
+  state(ok?`Firebase：✓ 完整一致｜全部資料 SHA-256 通過｜會員 ${localMembers}｜賽事 ${localEvents}｜${t}`:`Firebase：⚠ 完整資料不一致｜數量 ${countsOk?"✓":"✗"}｜內容 ${hashOk?"✓":"✗"}｜請先重新鏡像`,!ok);
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：一致性檢查失敗",true);}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
@@ -1840,7 +1862,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.34 Web · Firebase Verify</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.35 Web · Full Data Verify</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
