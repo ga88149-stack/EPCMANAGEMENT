@@ -1857,20 +1857,16 @@ async function mirror(){
   const preMeta={generation,snapshotChunks:snapshotChunks.length,fullDataHash:fullHash,fullDataBytes:fullBytes};
   await readSnapshot_(preMeta);
 
-  state("Firebase：快照驗證完成｜同步索引…");
-  const ops=[];
+  // The verified full snapshot is the authoritative realtime payload.
+  // Do NOT rewrite all 1,600+ member/event index documents on every small edit;
+  // that made clients appear stuck at "同步索引" and created unnecessary writes.
+  // Index rebuilding will be handled separately/incrementally when search indexes
+  // actually change.
+  state("Firebase：快照驗證完成｜發布版本…");
   const members=Array.isArray(snap.members)?snap.members:[];
-  members.forEach((m,i)=>ops.push({ref:doc(fs,"members",safeId(m.id,"member_"+i)),data:{...clean(m),_mirrorSource:"EPCMANAGEMENT",_generation:generation}}));
   const events=Array.isArray(snap.events)?snap.events:[];
-  events.forEach((e,i)=>{
-   const eid=safeId(e.id,"event_"+i),base={...clean(e)};delete base.players;
-   ops.push({ref:doc(fs,"events",eid),data:{...base,_mirrorSource:"EPCMANAGEMENT",_generation:generation}});
-   (Array.isArray(e.players)?e.players:[]).forEach((p,j)=>ops.push({ref:doc(fs,"events",eid,"players",safeId(p.memberId||p.id,"player_"+j)),data:{...clean(p),_mirrorSource:"EPCMANAGEMENT",_generation:generation}}));
-  });
   const core={...snap};delete core.members;delete core.events;
   const coreJson=JSON.stringify(core),coreChunks=chunkText_(coreJson);
-  coreChunks.forEach((value,i)=>ops.push({ref:doc(fs,"epcMirrorCore","chunk_"+String(i).padStart(3,"0")),data:{index:i,value,_mirrorSource:"EPCMANAGEMENT",_generation:generation}}));
-  await commitOps(ops);
 
   await setDoc(doc(fs,"epcMirrorMeta","current"),{
    schema:"mirror-v4-verified-snapshot",source:"EPCMANAGEMENT",generation,
@@ -1975,7 +1971,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.40 Web · Echo Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.41 Web · Snapshot First</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
