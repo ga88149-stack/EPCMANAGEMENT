@@ -2438,6 +2438,13 @@ function mergeFormMembers(baseMembers,formMembers){
  });
  return [...map.values()];
 }
+function preserveMembers_(local,merged,formMembers){
+ if(!merged||typeof merged!=='object')merged={};
+ let members=mergeFormMembers((merged&&merged.members)||[],formMembers||[]);
+ members=mergeFormMembers(members,(local&&local.members)||[]);
+ merged.members=members;
+ return merged;
+}
 function makeWriteId(){
  return 'EPC-'+Date.now()+'-'+Math.random().toString(36).slice(2,10);
 }
@@ -2761,7 +2768,7 @@ function startLiveSync_(){
      if(!(loadedRev>cloudRevision)||!res.data||typeof res.data!=='object')return;
 
      let remote=cloneCloud_(res.data);
-     remote.members=mergeFormMembers(remote.members,res.members);
+     remote=preserveMembers_(db,remote,res.members);
 
      if(!localDirty){
        backupLocal('before-live-remote-apply-v2');
@@ -2782,7 +2789,7 @@ function startLiveSync_(){
      db=preserveManualDiscountEdits_(db,remote);
      db=preserveActivityEdits_(db,remote);
      db=preserveEventEdits_(db,remote);
-     db.members=mergeFormMembers(db.members,res.members);
+     db=preserveMembers_(db,db,res.members);
      cloudRevision=loadedRev;
      setCloudBase_(remote);
      localStorage.setItem('epcV1',JSON.stringify(db));
@@ -2804,7 +2811,7 @@ async function initializeCloud(){
    const serverRevision=Number(res.revision||0);
    const hasRemote=!!(res.data&&typeof res.data==='object');
    let remote=hasRemote?cloneCloud_(res.data):null;
-   if(remote)remote.members=mergeFormMembers(remote.members,res.members);
+   if(remote)remote=preserveMembers_(db,remote,res.members);
 
    if(remote){
      if(localDirty){
@@ -2813,7 +2820,7 @@ async function initializeCloud(){
        db=preserveManualDiscountEdits_(db,remote);
      db=preserveActivityEdits_(db,remote);
      db=preserveEventEdits_(db,remote);
-       db.members=mergeFormMembers(db.members,res.members);
+       db=preserveMembers_(db,db,res.members);
        cloudRevision=serverRevision;
        setCloudBase_(remote);
        localStorage.setItem('epcV1',JSON.stringify(db));
@@ -2835,7 +2842,7 @@ async function initializeCloud(){
        localDirty=false;
      }
    }else{
-     db.members=mergeFormMembers(db.members,res.members);
+     db=preserveMembers_(db,db,res.members);
      cloudRevision=serverRevision;
      setCloudBase_(db);
      localDirty=true;
@@ -2868,10 +2875,12 @@ async function refreshFormMembers(saveAfter=true){
  try{
    const res=await cloudGet('members');
    const before=JSON.stringify((db.members||[]).map(m=>[m.id,m.name,m.group,m.note,m.createdDate]));
-   db.members=mergeFormMembers(db.members,res.members);
+   db=preserveMembers_(db,db,res.members);
    localStorage.setItem('epcV1',JSON.stringify(db));
-   render();
    const after=JSON.stringify((db.members||[]).map(m=>[m.id,m.name,m.group,m.note,m.createdDate]));
+   if(before!==after){
+     if(typeof renderMemberRows==='function')renderMemberRows();
+   }
    if(saveAfter && before!==after && cloudReady){
      localDirty=true; localStorage.setItem('epcLocalDirty','1'); scheduleCloudSave();
    }
@@ -2912,7 +2921,7 @@ async function saveCloudNow(force=false){
 
    let candidate=mergeCloud3_(base,localAtStart,remote);
    candidate=preserveManualDiscountEdits_(localAtStart,candidate);
-   candidate.members=mergeFormMembers(candidate.members,latest.members);
+   candidate=preserveMembers_(localAtStart,candidate,latest.members);
 
    setCloudState('☁ 正在儲存合併後資料…');
    const res=await cloudPost({
@@ -3053,7 +3062,7 @@ async function manualCloudLoad(){
    const res=await cloudGet('load');
    if(!res.data || typeof res.data!=='object')throw new Error('CLOUD_EMPTY');
    db=res.data;
-   db.members=mergeFormMembers(db.members,res.members);
+   db=preserveMembers_(db,db,res.members);
    cloudRevision=Number(res.revision||0);
    setCloudBase_(db);
    localStorage.setItem('epcV1',JSON.stringify(db));
@@ -5728,7 +5737,7 @@ startLiveSync_();
 // This only refreshes the member list from MAIN API; it never calls full cloud load.
 let __memberAutoRefreshBusy=false;
 async function autoRefreshMembers(){
- if(!cloudReady || __memberAutoRefreshBusy)return;
+ if(!cloudReady || __memberAutoRefreshBusy || epcEditLocked_())return;
  __memberAutoRefreshBusy=true;
  try{await refreshFormMembers(false);}
  finally{__memberAutoRefreshBusy=false;}
