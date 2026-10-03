@@ -1766,7 +1766,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
    being mistaken for proof that the actual Firestore payload is complete. */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDomain:"epcmenagement.firebaseapp.com",projectId:"epcmenagement",storageBucket:"epcmenagement.firebasestorage.app",messagingSenderId:"257676873693",appId:"1:257676873693:web:f4edfe9199cc60e8d93034"});
 const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
@@ -1890,6 +1890,36 @@ window.epcFirebaseReadVerified=async()=>{
  return clean(result.data);
 };
 window.epcFirebaseVerifiedMeta=()=>clean(verifiedMeta);
+
+/* Phase 1 realtime observer — detection only.
+   It NEVER mutates EPC db. This lets us prove A/B delivery before enabling remote apply. */
+let realtimeUnsub=null,lastSeenGeneration="";
+function startRealtimeObserver_(){
+ if(realtimeUnsub)realtimeUnsub();
+ realtimeUnsub=onSnapshot(doc(fs,"epcMirrorMeta","current"),async s=>{
+  if(!s.exists())return;
+  const m=s.data()||{},generation=String(m.generation||"");
+  if(!generation||generation===lastSeenGeneration)return;
+  lastSeenGeneration=generation;
+  try{
+   const remote=await readSnapshot_(m);
+   const local=clean(window.epcDb||{});
+   const localHash=await fullHash_(local);
+   const same=remote.hash===localHash;
+   window.dispatchEvent(new CustomEvent("epcFirebaseRemoteSnapshot",{detail:{generation,meta:clean(m),sameAsLocal:same,data:clean(remote.data)}}));
+   if(same){
+    verifiedSnapshot=remote.data;verifiedMeta=m;
+    state("Firebase：即時連線 ✓｜本機與最新快照一致");
+   }else{
+    state("Firebase：收到另一台更新｜已驗證｜等待安全套用");
+   }
+  }catch(e){
+   console.error("Firebase realtime snapshot verify failed",e);
+   state("Firebase：收到更新但驗證失敗｜未套用",true);
+  }
+ },e=>{console.error("Firebase realtime observer failed",e);state("Firebase：即時監聽中斷｜正式資料不受影響",true);});
+}
+window.epcFirebaseStartRealtimeObserver=startRealtimeObserver_;
 window.epcFirebaseVerify=async()=>{
  const u=auth.currentUser;
  if(!u){state("Firebase：請先登入",true);return false;}
@@ -1913,7 +1943,7 @@ window.epcFirebaseVerify=async()=>{
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備鏡像");setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else state("Firebase：尚未登入");});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -1924,7 +1954,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.36 Web · Verified Snapshot</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.37 Web · Realtime Observe</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
