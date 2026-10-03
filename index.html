@@ -1767,7 +1767,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.28 Web · Cumulative Hunt Groups</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.29 Web · Hunt Double Count Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5080,11 +5080,8 @@ function bossStats_(){
           but hunt people do not add money unless explicitly enabled. */
        hp+=people;hg+=groups;huntPeople+=people;
        np-=people;ng-=groups;
-       /* Hunt-mode group bonus is cumulative from the triggering event onward. */
-       const expectedHuntGroupBonus=bossBonus_(hg,B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
-       if(expectedHuntGroupBonus>hgb){
-         const delta=expectedHuntGroupBonus-hgb;hgb+=delta;pool+=delta;huntQualifyingEvents++;
-       }
+       /* The triggering event's hunt bonus was already assigned above.
+          Do not award the same groups a second time here. */
        crossedThisEvent=false;
      }
    }else{
