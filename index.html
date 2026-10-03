@@ -1759,7 +1759,11 @@ html[data-epc-theme="light"] #deleteConfirmText *{color:#172531!important}
 html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
 </style>
 <script type="module">
-/* Firebase Mirror V2 — write-only, chunked. It NEVER reads Firestore into EPC db. */
+/* Firebase Mirror V4 — verified snapshot bridge.
+   Safety rule: Firestore still does NOT overwrite EPC db automatically.
+   Every mirror writes an immutable chunked full snapshot first, verifies it,
+   then publishes the metadata pointer. This prevents a metadata-only hash from
+   being mistaken for proof that the actual Firestore payload is complete. */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
@@ -1767,6 +1771,7 @@ const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDo
 const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
 let timer=null,busy=false,pending=false,lastFingerprint="";
+let verifiedSnapshot=null,verifiedMeta=null;
 function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
 function clean(v){return JSON.parse(JSON.stringify(v??null));}
 function safeId(v,fallback){const s=String(v??fallback??"").trim().replaceAll("/","_");return s||String(fallback||Date.now());}
@@ -1783,12 +1788,12 @@ function stableJson_(v){
   return val;
  });
 }
-async function fullHash_(v){
- const txt=stableJson_(clean(v));
+async function hashText_(txt){
  const bytes=new TextEncoder().encode(txt);
  const hash=await crypto.subtle.digest("SHA-256",bytes);
  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
+async function fullHash_(v){return hashText_(stableJson_(clean(v)));}
 function fingerprint(d){try{return JSON.stringify([d.updatedAt,(d.members||[]).length,(d.events||[]).length,d.currentEventId,d.activityManagement,d.dailySettlementReports,d.settings]).length+":"+String(d.updatedAt||"");}catch(_){return String(Date.now());}}
 async function commitOps(ops){
  for(let i=0;i<ops.length;i+=350){
@@ -1797,62 +1802,119 @@ async function commitOps(ops){
   await batch.commit();
  }
 }
+function makeGeneration_(){return Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,10);}
+function chunkText_(txt,size=450000){
+ const out=[];for(let i=0;i<txt.length;i+=size)out.push(txt.slice(i,i+size));return out.length?out:[""];
+}
+async function readSnapshot_(meta){
+ const generation=String(meta&&meta.generation||"");
+ const count=Number(meta&&meta.snapshotChunks||0);
+ if(!generation||!Number.isInteger(count)||count<1||count>100)throw new Error("SNAPSHOT_META_INVALID");
+ const reads=[];
+ for(let i=0;i<count;i++)reads.push(getDoc(doc(fs,"epcMirrorSnapshots",generation,"chunks","chunk_"+String(i).padStart(3,"0"))));
+ const snaps=await Promise.all(reads);
+ let txt="";
+ for(let i=0;i<snaps.length;i++){
+  if(!snaps[i].exists())throw new Error("SNAPSHOT_CHUNK_MISSING_"+i);
+  const x=snaps[i].data()||{};
+  if(Number(x.index)!==i||typeof x.value!=="string")throw new Error("SNAPSHOT_CHUNK_INVALID_"+i);
+  txt+=x.value;
+ }
+ const byteCount=new TextEncoder().encode(txt).length;
+ if(Number(meta.fullDataBytes)!==byteCount)throw new Error("SNAPSHOT_BYTES_MISMATCH");
+ const hash=await hashText_(txt);
+ if(!meta.fullDataHash||hash!==meta.fullDataHash)throw new Error("SNAPSHOT_HASH_MISMATCH");
+ const data=JSON.parse(txt);
+ return {data,hash,bytes:byteCount,generation};
+}
 async function mirror(){
  if(busy){pending=true;return;}
  const u=auth.currentUser;
  if(!u||String(u.email||"").toLowerCase()!=="ga88149@gmail.com"){state("Firebase：等待登入");return;}
  if(!window.epcDb||typeof window.epcDb!=="object")return;
- const snap=clean(window.epcDb),fp=fingerprint(snap),fullHash=await fullHash_(snap);
+ const snap=clean(window.epcDb),fp=fingerprint(snap);
  if(fp===lastFingerprint){state("Firebase：鏡像已同步");return;}
  busy=true;pending=false;
  try{
-  state("Firebase：鏡像同步中…");
+  state("Firebase：建立完整快照…");
+  const stable=stableJson_(snap),fullHash=await hashText_(stable),fullBytes=new TextEncoder().encode(stable).length;
+  const generation=makeGeneration_(),snapshotChunks=chunkText_(stable);
+  const snapshotOps=snapshotChunks.map((value,i)=>({
+   ref:doc(fs,"epcMirrorSnapshots",generation,"chunks","chunk_"+String(i).padStart(3,"0")),
+   data:{index:i,value,generation,_mirrorSource:"EPCMANAGEMENT"}
+  }));
+  await commitOps(snapshotOps);
+
+  // Verify the immutable snapshot payload before publishing it as current.
+  const preMeta={generation,snapshotChunks:snapshotChunks.length,fullDataHash:fullHash,fullDataBytes:fullBytes};
+  await readSnapshot_(preMeta);
+
+  state("Firebase：快照驗證完成｜同步索引…");
   const ops=[];
   const members=Array.isArray(snap.members)?snap.members:[];
-  members.forEach((m,i)=>ops.push({ref:doc(fs,"members",safeId(m.id,"member_"+i)),data:{...clean(m),_mirrorSource:"EPCMANAGEMENT"}}));
+  members.forEach((m,i)=>ops.push({ref:doc(fs,"members",safeId(m.id,"member_"+i)),data:{...clean(m),_mirrorSource:"EPCMANAGEMENT",_generation:generation}}));
   const events=Array.isArray(snap.events)?snap.events:[];
   events.forEach((e,i)=>{
    const eid=safeId(e.id,"event_"+i),base={...clean(e)};delete base.players;
-   ops.push({ref:doc(fs,"events",eid),data:{...base,_mirrorSource:"EPCMANAGEMENT"}});
-   (Array.isArray(e.players)?e.players:[]).forEach((p,j)=>ops.push({ref:doc(fs,"events",eid,"players",safeId(p.memberId||p.id,"player_"+j)),data:{...clean(p),_mirrorSource:"EPCMANAGEMENT"}}));
+   ops.push({ref:doc(fs,"events",eid),data:{...base,_mirrorSource:"EPCMANAGEMENT",_generation:generation}});
+   (Array.isArray(e.players)?e.players:[]).forEach((p,j)=>ops.push({ref:doc(fs,"events",eid,"players",safeId(p.memberId||p.id,"player_"+j)),data:{...clean(p),_mirrorSource:"EPCMANAGEMENT",_generation:generation}}));
   });
   const core={...snap};delete core.members;delete core.events;
-  const coreJson=JSON.stringify(core);
-  const chunkSize=450000,chunks=[];
-  for(let i=0;i<coreJson.length;i+=chunkSize)chunks.push(coreJson.slice(i,i+chunkSize));
-  chunks.forEach((value,i)=>ops.push({ref:doc(fs,"epcMirrorCore","chunk_"+String(i).padStart(3,"0")),data:{index:i,value,_mirrorSource:"EPCMANAGEMENT"}}));
+  const coreJson=JSON.stringify(core),coreChunks=chunkText_(coreJson);
+  coreChunks.forEach((value,i)=>ops.push({ref:doc(fs,"epcMirrorCore","chunk_"+String(i).padStart(3,"0")),data:{index:i,value,_mirrorSource:"EPCMANAGEMENT",_generation:generation}}));
   await commitOps(ops);
+
   await setDoc(doc(fs,"epcMirrorMeta","current"),{
-   schema:"mirror-v3-full-hash",source:"EPCMANAGEMENT",memberCount:members.length,eventCount:events.length,fullDataHash:fullHash,fullDataBytes:new TextEncoder().encode(stableJson_(snap)).length,
-   coreChunks:chunks.length,legacyRevision:Number(window.epcCloudRevision||0),dbUpdatedAt:String(snap.updatedAt||""),
+   schema:"mirror-v4-verified-snapshot",source:"EPCMANAGEMENT",generation,
+   memberCount:members.length,eventCount:events.length,fullDataHash:fullHash,fullDataBytes:fullBytes,
+   snapshotChunks:snapshotChunks.length,coreChunks:coreChunks.length,
+   legacyRevision:Number(window.epcCloudRevision||0),dbUpdatedAt:String(snap.updatedAt||""),
    mirroredAt:serverTimestamp(),clientTime:new Date().toISOString()
-  },{merge:true});
+  },{merge:false});
   lastFingerprint=fp;
-  state("Firebase：鏡像完成 "+new Date().toLocaleTimeString());
+  verifiedSnapshot=snap;verifiedMeta={generation,fullDataHash:fullHash};
+  state("Firebase：✓ 完整快照已驗證 "+new Date().toLocaleTimeString());
  }catch(e){console.error("Firebase mirror failed",e);state("Firebase：鏡像失敗（正式資料不受影響）",true);}
  finally{busy=false;if(pending)setTimeout(mirror,300);}
 }
 window.epcFirebaseMirrorSchedule=()=>{clearTimeout(timer);timer=setTimeout(mirror,1200);};
 window.epcFirebaseMirrorNow=()=>mirror();
+window.epcFirebaseReadVerified=async()=>{
+ const u=auth.currentUser;
+ if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
+ const s=await getDoc(doc(fs,"epcMirrorMeta","current"));
+ if(!s.exists())throw new Error("MIRROR_META_NOT_FOUND");
+ const meta=s.data()||{};
+ const result=await readSnapshot_(meta);
+ verifiedSnapshot=result.data;verifiedMeta=meta;
+ return clean(result.data);
+};
+window.epcFirebaseVerifiedMeta=()=>clean(verifiedMeta);
 window.epcFirebaseVerify=async()=>{
  const u=auth.currentUser;
- if(!u){state("Firebase：請先登入",true);return;}
+ if(!u){state("Firebase：請先登入",true);return false;}
  try{
-  state("Firebase：檢查一致性…");
+  state("Firebase：讀回完整快照並驗證…");
   const s=await getDoc(doc(fs,"epcMirrorMeta","current"));
   if(!s.exists())throw new Error("找不到鏡像狀態");
-  const m=s.data()||{},d=clean(window.epcDb||{});
-  const localMembers=(d.members||[]).length,localEvents=(d.events||[]).length;
-  const localHash=await fullHash_(d);
-  const countsOk=Number(m.memberCount)===localMembers&&Number(m.eventCount)===localEvents;
-  const hashOk=!!m.fullDataHash&&m.fullDataHash===localHash;
+  const m=s.data()||{},local=clean(window.epcDb||{});
+  if(m.schema!=="mirror-v4-verified-snapshot")throw new Error("請先重新鏡像成 V4 完整快照");
+  const remote=await readSnapshot_(m);
+  const localHash=await fullHash_(local);
+  const localMembers=(local.members||[]).length,localEvents=(local.events||[]).length;
+  const remoteMembers=(remote.data.members||[]).length,remoteEvents=(remote.data.events||[]).length;
+  const countsOk=Number(m.memberCount)===localMembers&&Number(m.eventCount)===localEvents&&remoteMembers===localMembers&&remoteEvents===localEvents;
+  const hashOk=remote.hash===localHash&&m.fullDataHash===localHash;
   const ok=countsOk&&hashOk;
+  verifiedSnapshot=ok?remote.data:null;verifiedMeta=ok?m:null;
   const t=m.mirroredAt&&m.mirroredAt.toDate?m.mirroredAt.toDate().toLocaleTimeString():"—";
-  state(ok?`Firebase：✓ 完整一致｜全部資料 SHA-256 通過｜會員 ${localMembers}｜賽事 ${localEvents}｜${t}`:`Firebase：⚠ 完整資料不一致｜數量 ${countsOk?"✓":"✗"}｜內容 ${hashOk?"✓":"✗"}｜請先重新鏡像`,!ok);
- }catch(e){console.error("Firebase verify failed",e);state("Firebase：一致性檢查失敗",true);}
+  state(ok?`Firebase：✓ 完整一致｜Firestore 實體快照 SHA-256 通過｜會員 ${localMembers}｜賽事 ${localEvents}｜${t}`:`Firebase：⚠ 完整資料不一致｜數量 ${countsOk?"✓":"✗"}｜內容 ${hashOk?"✓":"✗"}｜禁止進入雙向同步`,!ok);
+  return ok;
+ }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備鏡像");setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else state("Firebase：尚未登入");});</script>
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備鏡像");setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else state("Firebase：尚未登入");});
+</script>
 </head>
 <script>
 (function(){
@@ -1862,7 +1924,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.35 Web · Full Data Verify</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.36 Web · Verified Snapshot</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
