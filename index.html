@@ -2041,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.62 Web · Explicit Conflict Commit</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.63 Web · Firebase First Hybrid</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3646,9 +3646,15 @@ function epcScheduleFieldPublish_(){
    const ok=await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]);
    const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt||ch.conflict);
    if(ok&&!unresolved&&!window.epcFirebaseFieldConflict){
-     localDirty=false;cloudPending=false;
-     localStorage.removeItem('epcLocalDirty');
-     // Pending whole-db snapshots are intentionally not auto-applied.
+     // Firebase accepted the field versions first. Google/Apps Script now acts as
+     // compatibility transport + backup for the already-validated database.
+     if(cloudReady){
+       scheduleCloudSave();
+     }else{
+       cloudPending=true;
+       scheduleCloudReconnect_();
+     }
+     // Pending whole-db Firebase snapshots are intentionally not auto-applied.
    }
   }catch(e){console.warn('Field publish deferred',e);}
  },700);
@@ -3741,7 +3747,8 @@ function persist(){
  localStorage.setItem('epcV1',JSON.stringify(db));
  localDirty=true;
  localStorage.setItem('epcLocalDirty','1');
- scheduleCloudSave();
+ // Firebase-first: do not start a legacy whole-db write until every field change
+ // has passed the atomic Firestore version guard.
  if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();
 }
 document.querySelectorAll('#nav button[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const target=$(b.dataset.page);if(target)target.classList.add('active');render()});
