@@ -2046,7 +2046,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.21 DEV · Remote Conflict Isolation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.22 DEV · Conflict Queue</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3581,6 +3581,19 @@ function epcSetPathValue_(root,path,value){
  }else cur[last]=cloneCloud_(value);
  return true;
 }
+window.epcNextFieldConflict_=function(){
+ if(window.epcFirebaseFieldConflict)return window.epcFirebaseFieldConflict;
+ const ch=(window.epcFieldChanges||[]).find(x=>x&&x.conflict);
+ if(!ch)return null;
+ const x={path:String(ch.path||''),local:cloneCloud_(ch.after),remote:cloneCloud_(ch.remoteValue),before:cloneCloud_(ch.before),remoteVersion:Number(ch.remoteVersion||0)};
+ window.epcFirebaseFieldConflict=x;
+ return x;
+};
+window.epcShowNextFieldConflict_=function(){
+ const x=window.epcNextFieldConflict_();
+ if(x&&typeof window.epcShowFieldConflict==='function')window.epcShowFieldConflict(x);
+ return x;
+};
 window.epcShowFieldConflict=function(x){
  const m=document.getElementById('epcFieldConflictModal');if(!m)return;
  document.getElementById('epcFieldConflictPath').textContent=x.path;
@@ -3635,6 +3648,9 @@ window.epcResolveFieldConflict=async function(choice){
  }
  if(!window.epcFirebaseFieldConflict || window.epcFirebaseFieldConflict===x)window.epcFirebaseFieldConflict=null;
  const m=document.getElementById('epcFieldConflictModal');if(m)m.style.display='none';
+ // V1.51.22: resolving one field must immediately surface the next quarantined
+ // conflict instead of leaving it hidden in the local ledger.
+ setTimeout(()=>window.epcShowNextFieldConflict_&&window.epcShowNextFieldConflict_(),0);
 };
 setTimeout(()=>{
  const r=document.getElementById('epcConflictUseRemote'),l=document.getElementById('epcConflictKeepLocal');
