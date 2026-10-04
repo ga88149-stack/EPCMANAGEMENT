@@ -2039,19 +2039,43 @@ function drainPendingFields_(){
   if(applied){render();state('Firebase：✓ 已套用等待中的即時欄位 '+applied+' 筆');}
  },500);
 }
+function epcFlattenSeedFields_(value,path='',out=[]){
+ if(out.length>20000)return out;
+ if(Array.isArray(value)){
+  value.forEach((x,i)=>{
+   const k=x&&typeof x==='object'?String(x.id??x.memberId??x.eventId??('idx:'+i)):('idx:'+i);
+   const p=path+'['+k+']';
+   // Keyed records are seeded as records, matching normal add semantics.
+   if(x&&typeof x==='object')out.push({path:p,value:cloneCloud_(x)});
+   else out.push({path:p,value:cloneCloud_(x)});
+  });
+  return out;
+ }
+ if(value&&typeof value==='object'){
+  for(const k of Object.keys(value)){
+   const p=path?path+'.'+k:k,v=value[k];
+   if(Array.isArray(v))epcFlattenSeedFields_(v,p,out);
+   else if(v&&typeof v==='object')epcFlattenSeedFields_(v,p,out);
+   else out.push({path:p,value:cloneCloud_(v)});
+  }
+  return out;
+ }
+ if(path)out.push({path,value:cloneCloud_(value)});
+ return out;
+}
 async function epcEnsureFieldV3Seeded_(){
  const metaRef=doc(fs,'epcFieldMetaV3','current');
  const existing=await getDoc(metaRef);
  if(existing.exists()&&existing.data()&&existing.data().seeded===true)return true;
  const verified=await window.epcFirebaseReadVerified();
  if(!verified||typeof verified!=='object')throw new Error('V3_SEED_SOURCE_MISSING');
- const fields=epcCollectFieldChanges_({},verified).filter(x=>x.path&&x.path!=='(root)');
+ const fields=epcFlattenSeedFields_(verified).filter(x=>x.path&&x.path!=='(root)');
  for(let i=0;i<fields.length;i+=250){
   const batch=writeBatch(fs);
   for(const ch of fields.slice(i,i+250)){
    const key=await epcFieldKey_(String(ch.path||''));
    batch.set(doc(fs,'epcFieldVersionsV3',key),{
-    path:String(ch.path||''),op:'set',value:clean(ch.after),previousValue:null,
+    path:String(ch.path||''),op:'set',value:clean(ch.value),previousValue:null,
     clientId:'seed_verified_snapshot',clientChangedAt:Date.now(),
     previousVersion:0,version:1,seeded:true,updatedAt:serverTimestamp()
    },{merge:false});
@@ -2164,7 +2188,7 @@ onAuthStateChanged(auth,async u=>{if(u&&String(u.email||"").toLowerCase()==="ga8
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.15 DEV · Firebase V3 Bootstrap</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.16 DEV · Firebase Granular Bootstrap</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
