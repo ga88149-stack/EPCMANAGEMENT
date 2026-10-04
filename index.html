@@ -1926,7 +1926,7 @@ window.epcTwoDeviceValidation=async function(action,sessionId){
  const client=String(epcClientId_||''),now=Date.now();
  try{
   if(action==='init'){
-   await setDoc(ref,{kind:'EPC_TWO_DEVICE_VALIDATION_ONLY',session,a:null,b:null,same:null,sameVersion:0,createdBy:client,updatedAt:serverTimestamp()});
+   await setDoc(ref,{kind:'EPC_TWO_DEVICE_VALIDATION_ONLY',session,a:null,b:null,same:null,sameVersion:0,conflictValue:null,conflictVersion:0,createdBy:client,updatedAt:serverTimestamp()});
    return {ok:true,action,session,message:'測試代碼已建立'};
   }
   if(action==='writeA'||action==='writeB'){
@@ -1949,10 +1949,32 @@ window.epcTwoDeviceValidation=async function(action,sessionId){
    const snap=await getDoc(ref),d=snap.data()||{};
    return {ok:!!d.same&&Number(d.sameVersion)===result.version,action,session,token,result,remote:d.same||null};
   }
+  if(action==='captureBase'){
+   const snap=await getDoc(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
+   const d=snap.data()||{},baseVersion=Number(d.conflictVersion||0);
+   sessionStorage.setItem('epcConflictBase_'+session,String(baseVersion));
+   return {ok:true,action,session,baseVersion,message:'本機已鎖定基準版本 '+baseVersion};
+  }
+  if(action==='commitConflict'){
+   const raw=sessionStorage.getItem('epcConflictBase_'+session);
+   if(raw===null)return {ok:false,action,session,message:'本機尚未取得基準版本'};
+   const baseVersion=Number(raw),token='C_'+now.toString(36)+'_'+Math.random().toString(36).slice(2,5);
+   const result=await runTransaction(fs,async tx=>{
+    const snap=await tx.get(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
+    const d=snap.data()||{},remoteVersion=Number(d.conflictVersion||0);
+    if(remoteVersion!==baseVersion)return {conflict:true,baseVersion,remoteVersion,remote:d.conflictValue||null};
+    const version=remoteVersion+1;
+    tx.update(ref,{conflictValue:{token,client,at:now,baseVersion,version},conflictVersion:version,updatedAt:serverTimestamp()});
+    return {conflict:false,baseVersion,remoteVersion,version};
+   });
+   const snap=await getDoc(ref),d=snap.data()||{};
+   return {ok:true,action,session,outcome:result.conflict?'CONFLICT':'PUBLISHED',result,remote:{value:d.conflictValue||null,version:Number(d.conflictVersion||0)}};
+  }
   if(action==='read'){
+
    const snap=await getDoc(ref);if(!snap.exists())return {ok:false,session,message:'測試代碼不存在'};
    const d=snap.data()||{};
-   return {ok:true,action,session,state:{a:d.a||null,b:d.b||null,same:d.same||null,sameVersion:Number(d.sameVersion||0)}};
+   return {ok:true,action,session,state:{a:d.a||null,b:d.b||null,same:d.same||null,sameVersion:Number(d.sameVersion||0),conflictValue:d.conflictValue||null,conflictVersion:Number(d.conflictVersion||0)}};
   }
   return {ok:false,message:'未知測試動作'};
  }catch(e){return {ok:false,action,session,error:String(e&&e.message||e)};}
@@ -2152,7 +2174,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.32 DEV · Two-Device Validation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.33 DEV · Real Conflict Simulation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2778,7 +2800,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3 style="margin:0;color:#f2d67d!important;font-size:22px;font-weight:900">雙機同步測試</h3><button style="background:#f4f7fa;color:#17212c;border-color:#f4f7fa;font-weight:800" onclick="document.getElementById('epcTwoDeviceModal').style.display='none'">關閉</button></div>
   <div style="margin:10px 0 14px;color:#d8e0e8;font-size:14px;line-height:1.6">只使用 epcValidationTwoDeviceV1，不會修改正式 EPC 資料。兩台電腦請輸入相同測試代碼。</div>
   <input id="epcTwoDeviceSession" placeholder="例如 EPC1005" style="margin-bottom:12px;background:#fff!important;color:#111!important;border:2px solid #d6b35a!important;font-size:17px;font-weight:800">
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="runTwoDeviceAction_('init')">建立測試</button><button onclick="runTwoDeviceAction_('writeA')">本機當 A 寫入</button><button onclick="runTwoDeviceAction_('writeB')">本機當 B 寫入</button><button onclick="runTwoDeviceAction_('same')">同欄位寫入</button><button onclick="runTwoDeviceAction_('read')">讀取結果</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="runTwoDeviceAction_('init')">建立測試</button><button onclick="runTwoDeviceAction_('writeA')">本機當 A 寫入</button><button onclick="runTwoDeviceAction_('writeB')">本機當 B 寫入</button><button onclick="runTwoDeviceAction_('same')">同欄位寫入</button><button onclick="runTwoDeviceAction_('captureBase')">① 鎖定衝突基準</button><button onclick="runTwoDeviceAction_('commitConflict')">② 提交衝突測試</button><button onclick="runTwoDeviceAction_('read')">讀取結果</button></div>
   <pre id="epcTwoDeviceResult" style="margin-top:14px;white-space:pre-wrap;word-break:break-word;background:#090e14!important;color:#f4f7fa!important;border:1px solid #536476;border-radius:10px;padding:14px;min-height:110px;font-size:14px;line-height:1.55;font-weight:600"></pre>
  </div>
 </div>
@@ -3821,7 +3843,7 @@ function epcSyncDiagnostics_(){
  const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
  const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
  return {
-  version:'V1.51.32',
+  version:'V1.51.33',
   capturedAt:new Date().toISOString(),
   readOnly:true,
   local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
