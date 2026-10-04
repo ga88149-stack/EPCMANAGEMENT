@@ -2083,7 +2083,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.28 DEV · Recovery Self-Test</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.29 DEV · Recovery Diagnostics</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2703,6 +2703,14 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
 
 </main>
 
+
+<div id="epcSyncDiagnosticsModal" style="display:none;position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
+ <div style="width:min(760px,100%);max-height:82vh;overflow:auto;background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:18px">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><h3 style="margin:0">同步診斷</h3><button onclick="document.getElementById('epcSyncDiagnosticsModal').style.display='none'">關閉</button></div>
+  <div class="small" style="margin:8px 0 12px">只讀資訊，不會寫入 Firebase、Google Sheet 或正式資料。</div>
+  <pre id="epcSyncDiagnosticsText" style="white-space:pre-wrap;word-break:break-word;background:#0d141c;border:1px solid #263443;border-radius:10px;padding:14px;line-height:1.55"></pre>
+ </div>
+</div>
 
 <div id="deleteConfirmModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
  <div style="width:min(440px,100%);background:#17212c;border:1px solid #e05d5d;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
@@ -3685,6 +3693,35 @@ function epcRecoverySelfTest_(){
 }
 window.epcRecoverySelfTest_=epcRecoverySelfTest_;
 window.epcRecoverySelfTestResult=epcRecoverySelfTest_();
+function epcSyncDiagnostics_(){
+ const ledger=Array.isArray(window.epcFieldChanges)?window.epcFieldChanges:[];
+ const outstanding=typeof epcSyncOutstanding_==='function'?epcSyncOutstanding_():{};
+ const self=window.epcRecoverySelfTestResult||null;
+ const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
+ const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
+ return {
+  version:'V1.51.29',
+  capturedAt:new Date().toISOString(),
+  readOnly:true,
+  local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
+  firebase:{
+   fieldConflictActive:!!window.epcFirebaseFieldConflict,
+   remotePending:!!window.epcFirebasePending,
+   verifiedMeta:window.epcFirebaseVerifiedMeta&&typeof window.epcFirebaseVerifiedMeta==='function'?cloneCloud_(window.epcFirebaseVerifiedMeta()):null
+  },
+  ledger:{
+   total:ledger.length,
+   unpublished:Number(outstanding.unpublished||0),
+   conflicts:Number(outstanding.conflicts||0),
+   pendingPaths:pendingPaths.slice(0,50),
+   conflictPaths:conflictPaths.slice(0,50)
+  },
+  completion:{safe:typeof epcCanMarkSyncComplete_==='function'?epcCanMarkSyncComplete_():false},
+  selfTest:self?{ok:!!self.ok,passed:Number(self.passed||0),total:Number(self.total||0),mode:self.mode||''}:null
+ };
+}
+window.epcSyncDiagnostics_=epcSyncDiagnostics_;
+window.epcGetSyncDiagnostics=()=>cloneCloud_(epcSyncDiagnostics_());
 function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(out.length>5000)return out;
  const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
@@ -3912,6 +3949,15 @@ function scheduleFirebaseConflictDrain_(){
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
  // Diagnostic mode intentionally observes only; no automatic merge/write.
 });
+
+function showSyncDiagnostics_(){
+ const m=document.getElementById('epcSyncDiagnosticsModal'),t=document.getElementById('epcSyncDiagnosticsText');
+ if(!m||!t)return;
+ try{t.textContent=JSON.stringify(window.epcGetSyncDiagnostics?window.epcGetSyncDiagnostics():{error:'diagnostics unavailable'},null,2);}
+ catch(e){t.textContent='診斷讀取失敗：'+String(e&&e.message||e);}
+ m.style.display='flex';
+}
+window.showSyncDiagnostics_=showSyncDiagnostics_;
 
 function persist(){
  const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
