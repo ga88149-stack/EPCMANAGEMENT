@@ -2136,7 +2136,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.10 DEV · Firebase Operational Writes</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.11 DEV · Firebase Snapshot Isolation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3176,8 +3176,8 @@ function startLiveSync_(){
      localStorage.setItem('epcLocalDirty','1');
      localDirty=true;
      render();
-     setCloudState('● 已合併另一台電腦｜正在同步本機修改…');
-     scheduleCloudSave();
+     setCloudState('● 已合併另一台電腦｜Firebase 修改等待送出');
+     epcScheduleFieldPublish_();
    }catch(e){
      console.warn('live sync v2 failed',e);
    }
@@ -3207,8 +3207,8 @@ async function initializeCloud(){
        localStorage.setItem('epcLocalDirty','1');
        cloudReady=true;
        render();
-       setCloudState('● 已合併雲端｜正在補同步本機修改…');
-       await saveCloudNow(false);
+       setCloudState('● 已合併 Google 備援｜Firebase 修改等待送出');
+       epcScheduleFieldPublish_();
        return;
      }else{
        backupLocal('startup-cloud-load-v2');
@@ -3237,7 +3237,7 @@ async function initializeCloud(){
    localStorage.setItem('epcV1',JSON.stringify(db));
    render();
 
-   if(!hasRemote)await saveCloudNow(false);
+   if(!hasRemote){if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();}
    else{
      const t=res.updatedAt?new Date(res.updatedAt).toLocaleTimeString():new Date().toLocaleTimeString();
      setCloudState('☁ 雲端已載入｜Revision '+cloudRevision+'｜'+t);
@@ -3262,8 +3262,9 @@ async function refreshFormMembers(saveAfter=true){
      epcLastPersistSnapshot_=cloneCloud_(db);
      if(typeof renderMemberRows==='function')renderMemberRows();
    }
-   if(saveAfter && before!==after && cloudReady){
-     localDirty=true; localStorage.setItem('epcLocalDirty','1'); scheduleCloudSave();
+   if(saveAfter && before!==after){
+     epcLastPersistSnapshot_=cloneCloud_(db);
+     localStorage.setItem('epcV1',JSON.stringify(db));
    }
    return true;
  }catch(err){console.error('member refresh failed',err);return false;}
@@ -3423,9 +3424,7 @@ async function syncPhoneStacksOnly(){
   // 會把剛讀到的 stack 當成本機暫存而覆蓋掉。
   if(updated>0){
     touchEvent_(localEvent);
-    localDirty=true;
-    localStorage.setItem('epcLocalDirty','1');
-    localStorage.setItem('epcV1',JSON.stringify(db));
+    persist();
   }
   render();
   if(updated>0 && cloudReady)await saveCloudNow(false);
@@ -3783,8 +3782,8 @@ window.epcFirebaseResolveConflicts=function(choice='local'){
  }
  if(choice==='local'){
    window.epcFirebaseConflicts=[];
-   localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
-   scheduleCloudSave();return true;
+   localDirty=true;cloudPending=false;localStorage.setItem('epcLocalDirty','1');
+   epcScheduleFieldPublish_();return true;
  }
  return false;
 };
@@ -3796,51 +3795,14 @@ window.epcFirebaseResolveConflicts=function(choice='local'){
 let epcFirebaseConflictTimer_=null;
 function scheduleFirebaseConflictDrain_(){
  clearTimeout(epcFirebaseConflictTimer_);
- epcFirebaseConflictTimer_=setTimeout(async()=>{
+ epcFirebaseConflictTimer_=setTimeout(()=>{
    const p=window.epcFirebasePending;
    if(!p)return;
-   if(epcEditLocked_()||epcEditingField_()||cloudSaving)return scheduleFirebaseConflictDrain_();
-   if(localDirty||cloudPending){
-     // CRITICAL: merge the verified Firebase snapshot into the local working copy
-     // BEFORE saving. Otherwise a stale A database can overwrite B's just-saved
-     // field when A finishes its edit.
-     try{
-       const remote=cloneCloud_(p.data);
-       const base=(cloudBase&&typeof cloudBase==='object')?cloneCloud_(cloudBase):cloneCloud_(remote);
-       const localNow=cloneCloud_(db);
-       const conflicts=epcDetectConflicts_(base,localNow,remote);
-       if(conflicts.length){
-         window.epcFirebaseConflicts=conflicts;
-         window.epcFirebasePending=p;
-         const first=conflicts[0].path;
-         const el=document.getElementById('firebaseMirrorState');
-         if(el){el.textContent='Firebase：⚠ 同欄位衝突 '+conflicts.length+' 處｜未覆蓋｜'+first;el.style.color='#ffb74d';}
-         console.warn('Firebase same-field conflicts',conflicts);
-         return; // Never silently choose a winner.
-       }
-       db=mergeCloud3_(base,localNow,remote);
-       db=preserveManualDiscountEdits_(localNow,db);
-       db=preserveActivityEdits_(localNow,db);
-       db=preserveEventEdits_(localNow,db);
-       db=preserveMembers_(localNow,db);
-       localStorage.setItem('epcV1',JSON.stringify(db));
-       localDirty=true;cloudPending=true;
-       localStorage.setItem('epcLocalDirty','1');
-       // This pending generation has now been consumed into the three-way merge.
-       window.epcFirebasePending=null;
-       if(cloudReady&&!cloudSaving)await saveCloudNow(false);
-     }catch(e){console.warn('Firebase pre-save merge deferred',e);}
-     return scheduleFirebaseConflictDrain_();
-   }
-   // No local edits remain: the pending verified snapshot can be applied normally.
-   window.epcFirebasePending=null;
-   if(typeof window.epcFirebaseReadVerified==='function'){
-     try{
-       const latest=await window.epcFirebaseReadVerified();
-       const meta=window.epcFirebaseVerifiedMeta&&window.epcFirebaseVerifiedMeta();
-       if(latest&&meta&&window.epcFirebaseCanAutoApply())window.epcFirebaseApplyRemote(latest,meta);
-     }catch(e){console.warn('Firebase conflict drain deferred',e);}
-   }
+   if(epcEditLocked_()||epcEditingField_())return scheduleFirebaseConflictDrain_();
+   // Migration V2: verified whole snapshots are integrity/backup evidence only.
+   // Field documents are the realtime authority, so never merge a snapshot back
+   // into db here; doing so could resurrect stale values from unrelated fields.
+   if(!localDirty&&!cloudPending)window.epcFirebasePending=null;
  },1200);
 }
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
