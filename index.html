@@ -4606,7 +4606,7 @@ function removePlayerSafe(memberId){
  if(idx<0)return alert('找不到這位玩家');
  const m=db.members.find(x=>x.id===memberId);
  if(!window.confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
- e.players.splice(idx,1);persist();render();alert('玩家已移除');
+ e.players.splice(idx,1);touchEvent_(e);persist();render();alert('玩家已移除');
 }
 
 function delP(i){
@@ -4615,7 +4615,7 @@ function delP(i){
  let p=e.players[i],m=db.members.find(x=>x.id===p?.memberId);
  if(!p)return;
  if(!confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
- e.players.splice(i,1);persist();render();
+ e.players.splice(i,1);touchEvent_(e);persist();render();
 }
 function calcPlayer(p){
  let e=currentEvent(); if(!e)return {groups:0,auto:0,paid:0,pool:0};
@@ -4856,7 +4856,7 @@ function removePlayerByIndex(index){
  const p=e.players[index];if(!p){actionMsg('找不到這位玩家',true);return;}
  const m=db.members.find(x=>String(x.id)===String(p.memberId));
  const name=m?.name||'此玩家';
- e.players.splice(index,1);persist();render();actionMsg(`已從本場移除：${name}`);
+ e.players.splice(index,1);touchEvent_(e);persist();render();actionMsg(`已從本場移除：${name}`);
 }
 
 function deleteEventSafe(id){
