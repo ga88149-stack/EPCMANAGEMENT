@@ -2083,7 +2083,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.29 DEV · Recovery Diagnostics</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.30 DEV · Single-Device Validation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3693,6 +3693,48 @@ function epcRecoverySelfTest_(){
 }
 window.epcRecoverySelfTest_=epcRecoverySelfTest_;
 window.epcRecoverySelfTestResult=epcRecoverySelfTest_();
+function epcSingleDeviceValidation_(){
+ const tests=[],check=(name,ok,state)=>tests.push({name,ok:!!ok,state:state||null});
+ const ledger=[];
+ const add=(id,path,before,after)=>{const ch={changeId:id,path,before,after,changedAt:ledger.length+1};ledger.push(ch);return ch;};
+ const pending=()=>ledger.filter(x=>!x.publishedAt&&!x.conflict);
+ const select=()=>{
+  const blocked=new Set(ledger.filter(x=>x.conflict).map(x=>x.path)),seen=new Set(),out=[];
+  for(const x of pending()){if(blocked.has(x.path)||seen.has(x.path))continue;seen.add(x.path);out.push(x);}return out;
+ };
+ const ack=(ch,version)=>{
+  ch.publishedAt=1000+version;ch.publishedVersion=version;ch.baseVersion=version;
+  const i=ledger.indexOf(ch),next=ledger.slice(i+1).find(x=>!x.publishedAt&&!x.conflict&&x.path===ch.path);
+  if(next){next.before=ch.after;next.baseVersion=version;}
+ };
+ const x3=add('x3','X','x2','x3'),y1=add('y1','Y','y0','y1');
+ check('edit creates pending queue',pending().length===2,{pending:pending().map(x=>x.changeId)});
+ let batch=select();
+ check('first publish includes independent fields',batch.includes(x3)&&batch.includes(y1),{batch:batch.map(x=>x.changeId)});
+ const x4=add('x4','X','x3','x4');
+ ack(x3,3);
+ check('ACK keeps newer same-path edit pending',!x4.publishedAt&&pending().includes(x4),{x4});
+ check('ACK rebases next same-path version',x4.before==='x3'&&x4.baseVersion===3,{before:x4.before,baseVersion:x4.baseVersion});
+ ack(y1,1);
+ check('system remains dirty while x4 pending',pending().length===1&&pending()[0]===x4,{pending:pending().map(x=>x.changeId)});
+ batch=select();
+ check('next batch advances to x4',batch.length===1&&batch[0]===x4,{batch:batch.map(x=>x.changeId)});
+ ack(x4,4);
+ check('all ACKed becomes clean candidate',pending().length===0&&!ledger.some(x=>x.conflict),{pending:pending().length});
+ const x5=add('x5','X','x4','x5'),z1=add('z1','Z','z0','z1');
+ x5.conflict=true;
+ batch=select();
+ check('conflict isolates path while other path flows',!batch.includes(x5)&&batch.includes(z1),{batch:batch.map(x=>x.changeId)});
+ const sent={changeId:'s1',path:'S',after:'v1',changedAt:10},live={...sent};
+ const token={id:sent.changeId,changedAt:sent.changedAt,after:JSON.stringify(sent.after)};
+ live.after='v2';live.changedAt=11;
+ const stale=live.changeId!==token.id||live.changedAt!==token.changedAt||JSON.stringify(live.after)!==token.after;
+ check('stale ACK identity mismatch detected',stale,{sent:token,live:{id:live.changeId,changedAt:live.changedAt,after:live.after}});
+ const passed=tests.filter(x=>x.ok).length;
+ return {ok:passed===tests.length,passed,total:tests.length,tests,mode:'isolated-memory-lifecycle',ranAt:new Date().toISOString()};
+}
+window.epcSingleDeviceValidation_=epcSingleDeviceValidation_;
+window.epcSingleDeviceValidationResult=epcSingleDeviceValidation_();
 function epcSyncDiagnostics_(){
  const ledger=Array.isArray(window.epcFieldChanges)?window.epcFieldChanges:[];
  const outstanding=typeof epcSyncOutstanding_==='function'?epcSyncOutstanding_():{};
@@ -3700,7 +3742,7 @@ function epcSyncDiagnostics_(){
  const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
  const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
  return {
-  version:'V1.51.29',
+  version:'V1.51.30',
   capturedAt:new Date().toISOString(),
   readOnly:true,
   local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
@@ -3717,7 +3759,8 @@ function epcSyncDiagnostics_(){
    conflictPaths:conflictPaths.slice(0,50)
   },
   completion:{safe:typeof epcCanMarkSyncComplete_==='function'?epcCanMarkSyncComplete_():false},
-  selfTest:self?{ok:!!self.ok,passed:Number(self.passed||0),total:Number(self.total||0),mode:self.mode||''}:null
+  selfTest:self?{ok:!!self.ok,passed:Number(self.passed||0),total:Number(self.total||0),mode:self.mode||''}:null,
+  singleDeviceValidation:window.epcSingleDeviceValidationResult?cloneCloud_(window.epcSingleDeviceValidationResult):null
  };
 }
 window.epcSyncDiagnostics_=epcSyncDiagnostics_;
