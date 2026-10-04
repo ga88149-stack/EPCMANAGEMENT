@@ -2188,7 +2188,7 @@ onAuthStateChanged(auth,async u=>{if(u&&String(u.email||"").toLowerCase()==="ga8
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.18 DEV · Firebase Publish Generation Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.19 DEV · Firebase Offline Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3148,6 +3148,7 @@ function epcRestoreEdit_(){
 }
 function epcMarkLocalEdit_(el){
  epcCaptureEdit_(el);
+ epcBumpLocalEditGeneration_();
  localDirty=true;
  try{localStorage.setItem('epcLocalDirty','1');}catch(_){}
  // Keep a local snapshot immediately. Existing field handlers then commit their model
@@ -6457,9 +6458,18 @@ function printEventReport(){
 })();
 
 render();
-window.addEventListener('online',()=>{cloudReady=true;setCloudState('● 網路已恢復｜檢查雲端同步…');scheduleCloudReconnect_();});
+window.addEventListener('online',()=>{
+ cloudReady=true;
+ setCloudState('● 網路已恢復｜補送 Firebase 修改…');
+ if(localDirty||((window.epcFieldChanges||[]).some(ch=>!ch.publishedAt&&!ch.conflict)))epcScheduleFieldPublish_();
+ if(typeof window.epcFirebaseDrainPendingFields==='function'&&!localDirty)window.epcFirebaseDrainPendingFields();
+ scheduleCloudReconnect_();
+});
 window.addEventListener('offline',()=>{cloudReady=false;setCloudState('⚠ 網路已離線｜本機資料安全保存',true);});
-setInterval(()=>{if(!cloudSaving && (!cloudReady||localDirty))scheduleCloudReconnect_();},30000);
+setInterval(()=>{
+ if(localDirty||((window.epcFieldChanges||[]).some(ch=>!ch.publishedAt&&!ch.conflict)))epcScheduleFieldPublish_();
+ if(!cloudSaving&&!cloudReady)scheduleCloudReconnect_();
+},30000);
 initializeCloud();
 // Migration V2: legacy whole-database polling is disabled. Firebase field documents
 // are the realtime authority; Apps Script remains available for explicit backup/member exchange.
