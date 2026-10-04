@@ -1794,7 +1794,16 @@ function epcFieldKey_(path){
 }
 window.epcFirebasePublishFieldChanges=async function(changes){
  if(!auth.currentUser)return false;
- const queue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict).slice(0,100);
+ const pendingQueue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict);
+ // V1.51.26: preserve ledger order, but never process a later change for the
+ // same path before its earlier local predecessor. Different paths still flow.
+ const seenPaths=new Set(),queue=[];
+ for(const x of pendingQueue){
+  const p=String(x.path||'');
+  if(seenPaths.has(p))continue;
+  seenPaths.add(p);queue.push(x);
+  if(queue.length>=100)break;
+ }
  for(const ch of queue){
   // Capture immutable identity/value for this exact send. A later local edit may
   // append a newer change for the same path while this transaction is in flight.
@@ -1851,6 +1860,15 @@ window.epcFirebasePublishFieldChanges=async function(changes){
   }
   ch.publishedAt=Date.now();ch.publishedVersion=result.version;ch.baseVersion=result.version;ch.conflict=false;
   delete ch.forceFromVersion;
+  // Chain the next unsent local edit for this same path to the version/value
+  // just acknowledged. This prevents our own v3 -> v4 -> v5 sequence from
+  // looking like a cross-device conflict.
+  const chIndex=(changes||[]).indexOf(ch);
+  const nextSame=(changes||[]).slice(chIndex+1).find(x=>x&&!x.publishedAt&&!x.conflict&&String(x.path||'')===String(ch.path||''));
+  if(nextSame){
+   nextSame.before=clean(ch.after);
+   nextSame.baseVersion=result.version;
+  }
   if(ch.needsMirrorAfterPublish){
    delete ch.needsMirrorAfterPublish;
    // Conflict resolution may change a field that the old lightweight fingerprint
@@ -1861,6 +1879,9 @@ window.epcFirebasePublishFieldChanges=async function(changes){
   }
  }
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(changes||[]));
+ // If this batch intentionally deferred later same-path edits, immediately
+ // schedule the next ordered batch instead of waiting for the 30s recovery tick.
+ if((changes||[]).some(x=>x&&!x.publishedAt&&!x.conflict)&&typeof epcScheduleFieldPublish_==='function')epcScheduleFieldPublish_();
  return true;
 };
 
@@ -2059,7 +2080,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.25 DEV · Queue ACK Integrity</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.26 DEV · Same-Path Queue Ordering</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
