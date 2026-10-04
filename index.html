@@ -2188,7 +2188,7 @@ onAuthStateChanged(auth,async u=>{if(u&&String(u.email||"").toLowerCase()==="ga8
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.17 DEV · Firebase Startup Authority</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.18 DEV · Firebase Publish Generation Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3805,19 +3805,31 @@ setTimeout(()=>{
 },0);
 
 let epcFieldPublishTimer_=0;
+let epcLocalEditGeneration_=Number(localStorage.getItem('epcLocalEditGenerationV1')||0);
+function epcBumpLocalEditGeneration_(){
+ epcLocalEditGeneration_++;
+ localStorage.setItem('epcLocalEditGenerationV1',String(epcLocalEditGeneration_));
+ return epcLocalEditGeneration_;
+}
 function epcScheduleFieldPublish_(){
  clearTimeout(epcFieldPublishTimer_);
  epcFieldPublishTimer_=setTimeout(async function(){
   if(typeof window.epcFirebasePublishFieldChanges!=='function')return;
+  const publishGeneration=epcLocalEditGeneration_;
   try{
    const result=await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]);
    const ok=!!(result&&result.ok!==false);
-   const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt||ch.conflict);
-   if(result&&result.more){epcScheduleFieldPublish_();return;}
-   if(ok&&!unresolved&&!window.epcFirebaseFieldConflict){
+   const unpublished=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt&&!ch.conflict);
+   const conflicts=(window.epcFieldChanges||[]).some(ch=>!!ch.conflict)||!!window.epcFirebaseFieldConflict;
+   if((result&&result.more)||unpublished){epcScheduleFieldPublish_();return;}
+   // Only the exact generation that started this publish may mark the client clean.
+   // A newer persist while Firestore was in flight keeps localDirty=true.
+   if(ok&&!conflicts&&publishGeneration===epcLocalEditGeneration_){
      localDirty=false;cloudPending=false;
      localStorage.removeItem('epcLocalDirty');
-     // Pending whole-db snapshots are intentionally not auto-applied.
+     if(typeof drainPendingFields_==='function')drainPendingFields_();
+   }else if(publishGeneration!==epcLocalEditGeneration_){
+     epcScheduleFieldPublish_();
    }
   }catch(e){console.warn('Field publish deferred',e);}
  },700);
@@ -3865,7 +3877,7 @@ window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
 
 function persist(){
  const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
- if(changes.length)window.epcFieldChanges.push(...changes);
+ if(changes.length){epcBumpLocalEditGeneration_();window.epcFieldChanges.push(...changes);}
  if(window.epcFieldChanges.length>10000)window.epcFieldChanges=window.epcFieldChanges.slice(-10000);
  epcLastPersistSnapshot_=cloneCloud_(db);
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges));
