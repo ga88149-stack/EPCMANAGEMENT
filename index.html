@@ -2083,7 +2083,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.27 DEV · Ledger Safety</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.28 DEV · Recovery Self-Test</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3642,6 +3642,49 @@ function epcMarkSyncCompleteIfSafe_(){
 window.epcSyncOutstanding_=epcSyncOutstanding_;
 window.epcCanMarkSyncComplete_=epcCanMarkSyncComplete_;
 window.epcMarkSyncCompleteIfSafe_=epcMarkSyncCompleteIfSafe_;
+function epcRecoverySelfTest_(){
+ const tests=[];
+ const check=(name,ok,detail='')=>tests.push({name,ok:!!ok,detail});
+ // Pure-memory replicas of the queue/ledger invariants. Never touch db,
+ // localStorage, Firebase or Apps Script.
+ const outstanding=ledger=>({
+  unpublished:ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).length,
+  conflicts:ledger.filter(ch=>ch&&ch.conflict).length
+ });
+ const canComplete=ledger=>{const s=outstanding(ledger);return !s.unpublished&&!s.conflicts;};
+ const compact=ledger=>{
+  const protectedPaths=new Set(ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict)).map(ch=>String(ch.path||'')));
+  const publishedProtected=ledger.filter(ch=>ch&&ch.publishedAt&&!ch.conflict&&protectedPaths.has(String(ch.path||'')));
+  const publishedSafe=ledger.filter(ch=>ch&&ch.publishedAt&&!ch.conflict&&!protectedPaths.has(String(ch.path||'')));
+  const unfinished=ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict));
+  const keep=new Set([...unfinished,...publishedProtected,...publishedSafe.slice(-300)]);
+  return ledger.filter(ch=>keep.has(ch));
+ };
+ const selectBatch=ledger=>{
+  const pending=ledger.filter(x=>!x.publishedAt&&!x.conflict);
+  const blocked=new Set(ledger.filter(x=>x&&x.conflict).map(x=>String(x.path||'')));
+  const seen=new Set(),out=[];
+  for(const x of pending){const p=String(x.path||'');if(blocked.has(p)||seen.has(p))continue;seen.add(p);out.push(x);}
+  return out;
+ };
+ const a={path:'X',publishedAt:1},b={path:'X'},d={path:'Y',conflict:true},e={path:'Z'};
+ check('pending prevents completion',!canComplete([b]));
+ check('conflict prevents completion',!canComplete([d]));
+ check('settled ledger can complete',canComplete([a]));
+ const compacted=compact([a,b,d,e]);
+ check('compaction keeps pending',compacted.includes(b)&&compacted.includes(e));
+ check('compaction keeps conflict',compacted.includes(d));
+ check('compaction keeps published predecessor on active path',compacted.includes(a));
+ const batch=selectBatch([{path:'X',id:'v3'},{path:'X',id:'v4'},{path:'Y',id:'y1'}]);
+ check('same path sends oldest only',batch.some(x=>x.id==='v3')&&!batch.some(x=>x.id==='v4'));
+ check('different path continues',batch.some(x=>x.id==='y1'));
+ const blocked=selectBatch([{path:'X',conflict:true,id:'cx'},{path:'X',id:'v4'},{path:'Y',id:'y1'}]);
+ check('conflict blocks later same path',!blocked.some(x=>x.path==='X')&&blocked.some(x=>x.path==='Y'));
+ const passed=tests.filter(x=>x.ok).length;
+ return {ok:passed===tests.length,passed,total:tests.length,tests,ranAt:new Date().toISOString(),mode:'memory-only'};
+}
+window.epcRecoverySelfTest_=epcRecoverySelfTest_;
+window.epcRecoverySelfTestResult=epcRecoverySelfTest_();
 function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(out.length>5000)return out;
  const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
