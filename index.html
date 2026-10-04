@@ -2029,7 +2029,7 @@ function applyRemoteField_(x){
 function drainPendingFields_(){
  clearTimeout(fieldDrainTimer);
  fieldDrainTimer=setTimeout(()=>{
-  if((typeof epcEditLocked_==='function'&&epcEditLocked_())||(typeof epcEditingField_==='function'&&epcEditingField_()))return drainPendingFields_();
+  if((typeof epcEditLocked_==='function'&&epcEditLocked_())||(typeof epcEditingField_==='function'&&epcEditingField_())||localDirty)return drainPendingFields_();
   const q=window.epcFirebasePendingFields||[];
   if(!q.length)return;
   const latest=new Map();
@@ -2044,18 +2044,23 @@ function startFieldRealtimeObserver_(){
  if(fieldRealtimeUnsub)fieldRealtimeUnsub();
  fieldRealtimePrimed=false;
  fieldRealtimeUnsub=onSnapshot(query(collection(fs,'epcFieldVersionsV2')),snap=>{
-  if(!fieldRealtimePrimed){fieldRealtimePrimed=true;return;}
-  let applied=0;
+  const initial=!fieldRealtimePrimed;
+  fieldRealtimePrimed=true;
+  let applied=0,queued=0;
   for(const change of snap.docChanges()){
    if(change.type==='removed')continue;
    const x=change.doc.data()||{},remoteClient=String(x.clientId||'');
    if(remoteClient===epcClientId_)continue;
-   if((typeof epcEditLocked_==='function'&&epcEditLocked_())||(typeof epcEditingField_==='function'&&epcEditingField_())){
-    window.epcFirebasePendingFields.push(clean(x));drainPendingFields_();continue;
+   // The first Firestore snapshot is authoritative field state too. Never discard it:
+   // queue it while local work/editing exists, otherwise patch each field safely.
+   if((typeof epcEditLocked_==='function'&&epcEditLocked_())||(typeof epcEditingField_==='function'&&epcEditingField_())||localDirty){
+    window.epcFirebasePendingFields.push(clean(x));queued++;continue;
    }
    if(applyRemoteField_(x))applied++;
   }
-  if(applied){render();state('Firebase：✓ 即時欄位已同步 '+applied+' 筆');}
+  if(queued)drainPendingFields_();
+  if(applied){render();state('Firebase：✓ '+(initial?'啟動欄位':'即時欄位')+'已同步 '+applied+' 筆');}
+  else if(initial&&!queued)state('Firebase：✓ 啟動欄位狀態已確認');
  },e=>{console.error('Firebase field observer failed',e);state('Firebase：欄位即時監聽中斷',true);});
 }
 window.epcFirebaseStartFieldRealtimeObserver=startFieldRealtimeObserver_;
@@ -2131,7 +2136,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.6 DEV · Firebase Path Rebase</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.7 DEV · Firebase Startup Fields</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
