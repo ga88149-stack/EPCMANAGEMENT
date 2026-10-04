@@ -2039,6 +2039,30 @@ function drainPendingFields_(){
   if(applied){render();state('Firebase：✓ 已套用等待中的即時欄位 '+applied+' 筆');}
  },500);
 }
+async function epcEnsureFieldV3Seeded_(){
+ const metaRef=doc(fs,'epcFieldMetaV3','current');
+ const existing=await getDoc(metaRef);
+ if(existing.exists()&&existing.data()&&existing.data().seeded===true)return true;
+ const verified=await window.epcFirebaseReadVerified();
+ if(!verified||typeof verified!=='object')throw new Error('V3_SEED_SOURCE_MISSING');
+ const fields=epcCollectFieldChanges_({},verified).filter(x=>x.path&&x.path!=='(root)');
+ for(let i=0;i<fields.length;i+=250){
+  const batch=writeBatch(fs);
+  for(const ch of fields.slice(i,i+250)){
+   const key=await epcFieldKey_(String(ch.path||''));
+   batch.set(doc(fs,'epcFieldVersionsV3',key),{
+    path:String(ch.path||''),op:'set',value:clean(ch.after),previousValue:null,
+    clientId:'seed_verified_snapshot',clientChangedAt:Date.now(),
+    previousVersion:0,version:1,seeded:true,updatedAt:serverTimestamp()
+   },{merge:false});
+  }
+  await batch.commit();
+ }
+ await setDoc(metaRef,{seeded:true,fieldCount:fields.length,sourceGeneration:String((window.epcFirebaseVerifiedMeta&&window.epcFirebaseVerifiedMeta()||{}).generation||''),seededAt:serverTimestamp()},{merge:false});
+ return true;
+}
+window.epcFirebaseEnsureFieldV3Seeded=epcEnsureFieldV3Seeded_;
+
 function startFieldRealtimeObserver_(){
  if(fieldRealtimeUnsub)fieldRealtimeUnsub();
  fieldRealtimePrimed=false;
@@ -2129,7 +2153,7 @@ window.epcFirebaseVerify=async()=>{
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startFieldRealtimeObserver_();startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,async u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){try{state("Firebase：已登入｜初始化欄位資料…");await epcEnsureFieldV3Seeded_();state("Firebase：欄位資料就緒｜啟動即時監聽");startFieldRealtimeObserver_();startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}catch(e){console.error("Firebase V3 bootstrap failed",e);state("Firebase：V3 初始化失敗｜未啟動即時同步",true);}}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}if(fieldRealtimeUnsub){fieldRealtimeUnsub();fieldRealtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -2140,7 +2164,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.14 DEV · Firebase Regression Harness</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.15 DEV · Firebase V3 Bootstrap</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
