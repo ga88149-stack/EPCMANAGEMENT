@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.45 DEV · Auto Phone Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.46 DEV · Stack Rollback Barrier</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3453,9 +3453,30 @@ function scheduleCloudSave(){
    scheduleCloudReconnect_();
    return;
  }
- cloudSaveTimer=setTimeout(saveCloudNow,900);
+ // V1.51.46: the legacy whole-db writer must never race ahead of pending
+ // Firebase field transactions. That race could return an older EPC_DATA
+ // snapshot and roll back a just-imported phone stack (or newly added player).
+ const fieldBusy=()=>{
+   const s=typeof epcSyncOutstanding_==='function'?epcSyncOutstanding_():null;
+   return !!(s&&(s.unpublished||s.conflicts||s.activeConflict||s.pendingRemote));
+ };
+ const waitForFields=()=>{
+   clearTimeout(cloudSaveTimer);
+   if(fieldBusy()){
+     cloudSaveTimer=setTimeout(waitForFields,350);
+     return;
+   }
+   cloudSaveTimer=setTimeout(()=>saveCloudNow(false),120);
+ };
+ waitForFields();
 }
 async function saveCloudNow(force=false){
+ const outstanding=typeof epcSyncOutstanding_==='function'?epcSyncOutstanding_():null;
+ if(!force&&outstanding&&(outstanding.unpublished||outstanding.conflicts||outstanding.activeConflict||outstanding.pendingRemote)){
+   cloudPending=true;
+   scheduleCloudSave();
+   return false;
+ }
  const fieldConflict=!!window.epcFirebaseFieldConflict||(window.epcFieldChanges||[]).some(ch=>ch.conflict);
  if((window.epcFirebaseConflicts||[]).length||fieldConflict){
    cloudPending=true;
