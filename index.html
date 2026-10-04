@@ -3681,7 +3681,7 @@ window.epcResolveFieldConflict=async function(choice){
      window.epcFirebaseFieldConflict=null;
      if(cloudReady)await saveCloudNow(true);
      if(typeof window.epcFirebaseMirrorForce==='function')await window.epcFirebaseMirrorForce();
-     localDirty=false;cloudPending=false;localStorage.removeItem('epcLocalDirty');
+     epcMarkSyncCompleteIfSafe_();
    }
   }
  }
@@ -3722,7 +3722,7 @@ window.epcFirebaseResolveConflicts=function(choice='local'){
  // Resolution is intentionally explicit; automatic overwrite is forbidden.
  // For now keep the operator's local value or reload the verified remote snapshot.
  if(choice==='remote'&&window.epcFirebasePending){
-   localDirty=false;cloudPending=false;localStorage.removeItem('epcLocalDirty');
+   epcMarkSyncCompleteIfSafe_();
    const ok=window.epcFirebaseApplyRemote(window.epcFirebasePending.data,window.epcFirebasePending.meta);
    if(ok){window.epcFirebaseConflicts=[];window.epcFirebasePending=null;}
    return ok;
