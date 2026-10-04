@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.43 DEV · Player & Stack Rollback Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.44 DEV · Instant Settlement & Fast Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3605,6 +3605,14 @@ async function syncPhoneStacksOnly(){
   if(updated>0){
     touchEvent_(localEvent);
     persist();
+    // Phone settlement is latency-sensitive. The normal persist() timer is safe but
+    // unnecessarily waits before publishing. Kick the existing field publisher now;
+    // it still uses the same versioned transaction/conflict guard.
+    if(typeof window.epcFirebasePublishFieldChanges==='function'){
+      Promise.resolve(window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]))
+        .then(()=>{if(typeof epcMarkSyncCompleteIfSafe_==='function')epcMarkSyncCompleteIfSafe_()})
+        .catch(err=>console.warn('phone stack fast publish deferred',err));
+    }
   }
   render();
 
@@ -4549,7 +4557,11 @@ function setReportColumn(k,v){ensureReportColumns();db.reportColumns[k]=!!v;pers
 function visibleReportCols(){ensureReportColumns();return REPORT_COLUMNS.filter(([k])=>db.reportColumns[k]);}
 function saveEndTime(v){let e=currentEvent();if(!e)return;e.endTime=v||'';persist();}
 function goICM(){
- if(!requireEvent())return;
+ const e=requireEvent();if(!e)return;
+ // Settlement must always open from the live local event object. Never wait for,
+ // or reload from, cloud here: a just-added player is already authoritative locally.
+ setCurrentEventDevice_(e.id);
+ localStorage.setItem('epcV1',JSON.stringify(db));
  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
  $('settle').classList.add('active');
  document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
