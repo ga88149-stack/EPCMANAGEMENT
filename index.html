@@ -2136,7 +2136,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.9 DEV · Firebase Write Authority</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.10 DEV · Firebase Operational Writes</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2886,10 +2886,10 @@ function scheduleCloudReconnect_(){
      const ping=await cloudGet('ping');
      cloudReady=true;
      if(localDirty){
-       setCloudState('● 雲端已恢復｜正在補同步…');
-       await saveCloudNow(false);
+       setCloudState('● Google 備援已恢復｜Firebase 修改等待送出');
+       epcScheduleFieldPublish_();
      }else{
-       setCloudState('☁ 雲端連線已恢復');
+       setCloudState('☁ Google 備援連線已恢復');
      }
    }catch(err){
      setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
@@ -3885,8 +3885,7 @@ async function addMember(){
    render();
    actionMsg(`會員「${member.name}」已新增並同步至會員資料`);
    if(cloudReady){
-     await saveCloudNow();
-     // 再向會員主資料來源核對一次，確保前端與 Form Responses 1 一致
+     // 會員表單仍由 Apps Script 維護；營運 db 由 Firebase 欄位同步。
      await refreshFormMembers(false);
      renderMemberRows();
    }
@@ -3919,7 +3918,6 @@ async function performDelMember(id){
    persist();
    renderMemberRows();
    actionMsg('會員已刪除');
-   if(cloudReady)await saveCloudNow();
  }catch(err){
    console.error('delete member failed',err);
    alert('會員刪除失敗：'+String(err.message||err));
@@ -3946,17 +3944,15 @@ async function saveMemberEdit(){
  m.name=name;
  m.group=$('mGroup').value.trim();
  m.note=$('mNote').value.trim();
- // 先把 EPC 專屬欄位（結帳群組/備註）寫入本機，再立即寫入 EPC_DATA。
- localStorage.setItem('epcV1',JSON.stringify(db));
+ // EPC 專屬欄位（結帳群組/備註）由 Firebase 欄位同步；會員主表仍可獨立刷新。
+ persist();
  cancelMemberEdit();
  renderMemberRows();
  render();
  actionMsg(`會員「${m.name}」資料已修改`);
  if(cloudReady){
    try{
-     await saveCloudNow();
-     // 雲端快照完成後才重新抓 Form Responses 1。
-     // mergeFormMembers 會保留 EPC_DATA 的 group / note / history。
+     // mergeFormMembers 會保留 EPC 專屬的 group / note / history。
      await refreshFormMembers(false);
      renderMemberRows();
    }catch(err){
@@ -4307,7 +4303,7 @@ async function performDeleteEventByIndex(index){
  render();
  actionMsg(`已刪除：${label}；分帳報表已同步更新`);
  // 不等待 900ms 排程，避免刪除後立刻關閉頁面造成雲端仍保留舊賽事。
- if(cloudReady) await saveCloudNow();
+ epcScheduleFieldPublish_();
 }
 function removePlayerByIndex(index){
  const e=currentEvent();if(!e){actionMsg('尚未選擇賽事',true);return;}
@@ -4959,7 +4955,7 @@ async function executeFormalSettlement(){
  persist();
  closeSettlementConfirm();
  render();
- if(cloudReady)await saveCloudNow(false);
+ epcScheduleFieldPublish_();
  showPage('events');
  actionMsg('正式結算完成，可在該場操作欄直接列印報表。');
 }
@@ -4979,7 +4975,7 @@ async function unlockSettledEvent(id){
  touchEvent_(e);
  persist();
  render();
- if(cloudReady)await saveCloudNow(false);
+ epcScheduleFieldPublish_();
  actionMsg(`已解鎖：${label}；修改完成後請重新正式結算`);
 }
 
@@ -5662,11 +5658,11 @@ async function addHunter_(){
  const rec=stampActivityRecord_({id:'H'+Date.now(),date:(db.events||[]).find(e=>e.id===eventId)?.date||'',eventId,killer,points:+$('hunterPoints').value||1,note:$('hunterNote').value||''});
  db.activityManagement.hunter.unshift(rec);
  persist();renderActivities();
- if(cloudReady)await saveCloudNow(false);
+ epcScheduleFieldPublish_();
 }
 async function hunterEdit_(id,v){
  const x=db.activityManagement.hunter.find(z=>z.id===id);
- if(x){x.points=+v||0;stampActivityRecord_(x);persist();renderActivities();if(cloudReady)await saveCloudNow(false);}
+ if(x){x.points=+v||0;stampActivityRecord_(x);persist();renderActivities();epcScheduleFieldPublish_();}
 }
 async function hunterDel_(id){
  const x=db.activityManagement.hunter.find(z=>z.id===id);
@@ -5675,7 +5671,7 @@ async function hunterDel_(id){
  db.activityManagement.hunterDeleted=db.activityManagement.hunterDeleted||{};
  db.activityManagement.hunterDeleted[String(id)]=Date.now();
  persist();renderActivities();
- if(cloudReady)await saveCloudNow(false);
+ epcScheduleFieldPublish_();
 }
 function actHunter_(){
  const {from,to}=actActivityRange_('hunter'),rows=db.activityManagement.hunter.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
