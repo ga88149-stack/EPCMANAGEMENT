@@ -202,6 +202,16 @@ function paired(){
   $("pairScreen").style.display="none";
   $("displayScreen").classList.add("active");
 }
+function unpaired_(code){
+  if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null}
+  displayLastPayload_=null;
+  $("displayScreen").classList.remove("active");
+  $("pairScreen").style.display="";
+  $("payload").innerHTML='<div class="empty"><h2>顯示器已解除配對</h2><p>請使用新的 6 位數配對碼重新連線</p></div>';
+  if(code)showCode(code);
+  status("此顯示器尚未配對，請到管理後台輸入上方 6 位數","ok");
+  $("debug").style.display="none";
+}
 function startHeartbeat(id){
   if(heartbeatTimer) return;
   const beat=async()=>{try{await post({action:"register",deviceId:id})}catch(e){}};
@@ -224,7 +234,7 @@ async function poll(id){
         renderPayload(displayLastPayload_);
       }
     }else if(s.ok){
-      if(s.code) showCode(s.code);
+      unpaired_(s.code||"");
     }
   }catch(e){
     // Temporary network/API failures must not blank or reset the TV.
