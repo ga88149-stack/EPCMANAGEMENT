@@ -2016,8 +2016,13 @@ window.epcFirebasePendingFields=window.epcFirebasePendingFields||[];
 function applyRemoteField_(x){
  const path=String(x&&x.path||''),remoteClient=String(x&&x.clientId||'');
  if(!path||path==='(root)'||remoteClient===epcClientId_)return false;
- if(!epcSetPathValue_(db,path,clean(x.value),String(x.op||'set')))return false;
- epcLastPersistSnapshot_=cloneCloud_(db);
+ const beforeBase=cloneCloud_(epcLastPersistSnapshot_);
+ const op=String(x.op||'set'),value=clean(x.value);
+ if(!epcSetPathValue_(db,path,value,op))return false;
+ // Rebase only the remote path. Unpublished local edits on other paths must remain
+ // visible as local changes instead of disappearing when a remote field arrives.
+ if(!epcSetPathValue_(beforeBase,path,value,op))return false;
+ epcLastPersistSnapshot_=beforeBase;
  localStorage.setItem('epcV1',JSON.stringify(db));
  return true;
 }
@@ -2059,7 +2064,7 @@ window.epcFirebaseFieldSelfTest=function(){
  const original=cloneCloud_(db),baseline=cloneCloud_(epcLastPersistSnapshot_);
  const originalStored=localStorage.getItem('epcV1');
  const originalQueue=cloneCloud_(window.epcFirebasePendingFields||[]);
- const report={scalarPatch:false,baseline:false,localStorage:false,arrayAdd:false,arrayUpdate:false,arrayDelete:false,objectDelete:false,diffAdd:false,diffDelete:false,queue:false};
+ const report={scalarPatch:false,baseline:false,localStorage:false,localEditSurvivesRemote:false,arrayAdd:false,arrayUpdate:false,arrayDelete:false,objectDelete:false,diffAdd:false,diffDelete:false,queue:false};
  try{
   db={settings:{keep:'yes',removeMe:'x'},members:[{id:'A1',name:'Alpha'}],events:[{id:'E1',title:'One'}]};
   epcLastPersistSnapshot_=cloneCloud_(db);
@@ -2067,6 +2072,9 @@ window.epcFirebaseFieldSelfTest=function(){
   report.baseline=epcLastPersistSnapshot_.settings.keep==='changed';
   const stored=JSON.parse(localStorage.getItem('epcV1')||'{}');
   report.localStorage=stored.settings&&stored.settings.keep==='changed';
+  db.settings.localOnly='unsaved';
+  applyRemoteField_({path:'settings.keep',op:'set',value:'remote2',clientId:'selftest_remote'});
+  report.localEditSurvivesRemote=epcCollectFieldChanges_(epcLastPersistSnapshot_,db).some(x=>x.path==='settings.localOnly'&&x.after==='unsaved');
   report.arrayAdd=epcSetPathValue_(db,'members[B2]',{id:'B2',name:'Beta'},'set')===true&&db.members.some(x=>x.id==='B2'&&x.name==='Beta');
   report.arrayUpdate=epcSetPathValue_(db,'members[B2].name','Beta 2','set')===true&&db.members.find(x=>x.id==='B2').name==='Beta 2';
   report.arrayDelete=epcSetPathValue_(db,'members[B2]',null,'delete')===true&&!db.members.some(x=>x.id==='B2');
@@ -2123,7 +2131,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.5 DEV · Firebase CRUD Self Test</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.6 DEV · Firebase Path Rebase</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
