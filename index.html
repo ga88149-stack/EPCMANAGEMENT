@@ -2055,6 +2055,29 @@ function startFieldRealtimeObserver_(){
 }
 window.epcFirebaseStartFieldRealtimeObserver=startFieldRealtimeObserver_;
 window.epcFirebaseDrainPendingFields=drainPendingFields_;
+window.epcFirebaseFieldSelfTest=function(){
+ const original=cloneCloud_(db),baseline=cloneCloud_(epcLastPersistSnapshot_);
+ const report={patch:false,baseline:false,localStorage:false,queue:false};
+ try{
+  if(!db.settings)db.settings={};
+  const path='settings.__firebaseSelfTest';
+  const token='selftest_'+Date.now();
+  const fake={path,value:token,clientId:'selftest_remote'};
+  report.patch=applyRemoteField_(fake)===true&&db.settings.__firebaseSelfTest===token;
+  report.baseline=!!(epcLastPersistSnapshot_&&epcLastPersistSnapshot_.settings&&epcLastPersistSnapshot_.settings.__firebaseSelfTest===token);
+  const stored=JSON.parse(localStorage.getItem('epcV1')||'{}');
+  report.localStorage=!!(stored.settings&&stored.settings.__firebaseSelfTest===token);
+  window.epcFirebasePendingFields=[{path,value:'a',clientId:'x'},{path,value:'b',clientId:'x'}];
+  const latest=new Map();window.epcFirebasePendingFields.forEach(x=>latest.set(String(x.path||''),x));
+  report.queue=latest.size===1&&latest.get(path).value==='b';
+ }finally{
+  db=original;epcLastPersistSnapshot_=baseline;
+  localStorage.setItem('epcV1',JSON.stringify(db));
+  window.epcFirebasePendingFields=[];
+ }
+ report.ok=Object.values(report).every(Boolean);
+ return report;
+};
 
 window.epcFirebaseVerify=async()=>{
  const u=auth.currentUser;
@@ -2090,7 +2113,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.2 DEV · Firebase Batch Drain</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.3 DEV · Firebase Self Test</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
