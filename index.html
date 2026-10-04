@@ -2136,7 +2136,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.11 DEV · Firebase Snapshot Isolation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.12 DEV · Firebase Only Operations</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3103,7 +3103,7 @@ function epcMarkLocalEdit_(el){
  clearTimeout(epcEditCommitTimer_);
  epcEditCommitTimer_=setTimeout(()=>{
    try{localStorage.setItem('epcV1',JSON.stringify(db));}catch(_){}
-   if(cloudReady&&!epcEditingField_())scheduleCloudSave();
+   if(!epcEditingField_())epcScheduleFieldPublish_();
  },1800);
 }
 document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
@@ -3366,7 +3366,6 @@ async function saveCloudNow(force=false){
    return false;
  }finally{
    cloudSaving=false;
-   if(cloudPending)scheduleCloudSave();
  }
 }
 async function manualCloudSync(){
@@ -3427,7 +3426,7 @@ async function syncPhoneStacksOnly(){
     persist();
   }
   render();
-  if(updated>0 && cloudReady)await saveCloudNow(false);
+  if(updated>0)epcScheduleFieldPublish_();
   actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
   setCloudState(updated>0?'☁ 手機籌碼已同步至電腦與雲端':'☁ 手機籌碼已同步｜資料相同');
  }catch(err){
@@ -3705,9 +3704,7 @@ window.epcResolveFieldConflict=async function(choice){
    localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges));
    localDirty=true;localStorage.setItem('epcLocalDirty','1');
    render();
-   // Publish the chosen remote value through the existing safe hybrid writer so
-   // both clients and the legacy backup converge on the explicit operator choice.
-   if(cloudReady)await saveCloudNow(true);
+   // Remote choice is already applied locally; rebuild only the verified Firebase backup.
    if(typeof window.epcFirebaseMirrorForce==='function')await window.epcFirebaseMirrorForce();
   }
  }else{
@@ -3735,7 +3732,6 @@ window.epcResolveFieldConflict=async function(choice){
      ? await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]):false;
    if(ok&&!ch.conflict){
      window.epcFirebaseFieldConflict=null;
-     if(cloudReady)await saveCloudNow(true);
      if(typeof window.epcFirebaseMirrorForce==='function')await window.epcFirebaseMirrorForce();
      localDirty=false;cloudPending=false;localStorage.removeItem('epcLocalDirty');
    }
