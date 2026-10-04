@@ -3656,6 +3656,8 @@ setTimeout(()=>{
  const r=document.getElementById('epcConflictUseRemote'),l=document.getElementById('epcConflictKeepLocal');
  if(r)r.onclick=()=>window.epcResolveFieldConflict('remote');
  if(l)l.onclick=()=>window.epcResolveFieldConflict('local');
+ // Recover unresolved conflicts persisted before refresh/crash/offline restart.
+ if((window.epcFieldChanges||[]).some(ch=>ch&&ch.conflict))window.epcShowNextFieldConflict_();
 },0);
 
 let epcFieldPublishTimer_=0;
