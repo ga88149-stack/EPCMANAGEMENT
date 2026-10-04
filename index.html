@@ -1781,7 +1781,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
    being mistaken for proof that the actual Firestore payload is complete. */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot,runTransaction} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot,runTransaction,collection,query,orderBy,limit} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDomain:"epcmenagement.firebaseapp.com",projectId:"epcmenagement",storageBucket:"epcmenagement.firebasestorage.app",messagingSenderId:"257676873693",appId:"1:257676873693:web:f4edfe9199cc60e8d93034"});
 const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
@@ -2173,6 +2173,73 @@ function startRealtimeObserver_(){
  },e=>{console.error("Firebase realtime observer failed",e);state("Firebase：即時監聽中斷｜正式資料不受影響",true);});
 }
 window.epcFirebaseStartRealtimeObserver=startRealtimeObserver_;
+
+/* V1.51.35 field-level realtime apply.
+   This is deliberately separate from the whole-db mirror observer. Firestore
+   field versions may update one safe path; a mirror snapshot still never
+   blindly replaces the live EPC database. */
+let fieldRealtimeUnsub=null,fieldRealtimeReady=false;
+const epcRemoteFieldQueue_=new Map();
+function epcHasLocalPathWork_(path){
+ return (window.epcFieldChanges||[]).some(ch=>ch&&String(ch.path||'')===String(path||'')&&(!ch.publishedAt||ch.conflict));
+}
+function epcQueueRemoteField_(d){
+ const path=String(d&&d.path||'');if(!path)return;
+ const prev=epcRemoteFieldQueue_.get(path);
+ if(!prev||Number(d.version||0)>=Number(prev.version||0))epcRemoteFieldQueue_.set(path,clean(d));
+}
+function epcApplyRemoteField_(d){
+ const path=String(d&&d.path||'');
+ if(!path||path.startsWith('__syncCanary.'))return {ok:false,ignored:'canary'};
+ if(String(d.clientId||'')===String(epcClientId_||''))return {ok:false,ignored:'own-client'};
+ if(epcHasLocalPathWork_(path))return {ok:false,deferred:'local-path-work'};
+ if(epcEditLocked_())return {ok:false,deferred:'editing'};
+ const before=cloneCloud_(db);
+ if(!epcSetPathValue_(db,path,clean(d.value)))return {ok:false,deferred:'path-missing'};
+ try{
+  // Remote field consumption is not a local edit: advance both the live db and
+  // persist baseline together so persist() cannot rediscover it as a new change.
+  epcSetPathValue_(epcLastPersistSnapshot_,path,clean(d.value));
+  if(cloudBase&&typeof cloudBase==='object')epcSetPathValue_(cloudBase,path,clean(d.value));
+  suppressMirrorUntil=Date.now()+2500;
+  localStorage.setItem('epcV1',JSON.stringify(db));
+  if(cloudBase)try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(_){}
+  if(!epcEditLocked_())render();
+  window.epcLastRemoteFieldApply={path,version:Number(d.version||0),clientId:String(d.clientId||''),appliedAt:Date.now()};
+  return {ok:true,path,version:Number(d.version||0)};
+ }catch(e){
+  db=before;return {ok:false,error:String(e&&e.message||e)};
+ }
+}
+function epcDrainRemoteFieldQueue_(){
+ if(epcEditLocked_())return;
+ for(const [path,d] of [...epcRemoteFieldQueue_.entries()]){
+  const r=epcApplyRemoteField_(d);
+  if(r.ok||r.ignored)epcRemoteFieldQueue_.delete(path);
+ }
+}
+function startFieldRealtimeObserver_(){
+ if(fieldRealtimeUnsub)fieldRealtimeUnsub();
+ fieldRealtimeReady=false;
+ const q=query(collection(fs,'epcFieldVersionsV2'),orderBy('updatedAt','desc'),limit(250));
+ fieldRealtimeUnsub=onSnapshot(q,snap=>{
+  // Firestore's first snapshot is historical state, not a remote event for this
+  // browser. Skip it; subsequent document changes are live field deliveries.
+  if(!fieldRealtimeReady){fieldRealtimeReady=true;return;}
+  for(const chg of snap.docChanges()){
+   if(chg.type!=='added'&&chg.type!=='modified')continue;
+   const d=chg.doc.data()||{},path=String(d.path||'');
+   if(!path||path.startsWith('__syncCanary.'))continue;
+   const r=epcApplyRemoteField_(d);
+   if(r.deferred)epcQueueRemoteField_(d);
+  }
+  epcDrainRemoteFieldQueue_();
+ },e=>console.warn('Field realtime observer deferred',e));
+}
+window.epcFirebaseStartFieldRealtimeObserver=startFieldRealtimeObserver_;
+window.epcFirebaseDrainRemoteFields=epcDrainRemoteFieldQueue_;
+window.epcFirebaseRemoteFieldQueue=()=>[...epcRemoteFieldQueue_.values()].map(clean);
+setInterval(epcDrainRemoteFieldQueue_,1000);
 window.epcFirebaseVerify=async()=>{
  const u=auth.currentUser;
  if(!u){state("Firebase：請先登入",true);return false;}
@@ -2196,7 +2263,7 @@ window.epcFirebaseVerify=async()=>{
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>{if(typeof window.epcRecoverSyncState_==='function')window.epcRecoverSyncState_();if(typeof window.epcFirebasePublishFieldChanges==='function'&&(window.epcFieldChanges||[]).some(ch=>ch&&!ch.publishedAt&&!ch.conflict))window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]).catch(e=>console.warn('startup field recovery deferred',e));window.epcFirebaseMirrorSchedule();},500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();startFieldRealtimeObserver_();setTimeout(()=>{if(typeof window.epcRecoverSyncState_==='function')window.epcRecoverSyncState_();if(typeof window.epcFirebasePublishFieldChanges==='function'&&(window.epcFieldChanges||[]).some(ch=>ch&&!ch.publishedAt&&!ch.conflict))window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]).catch(e=>console.warn('startup field recovery deferred',e));window.epcFirebaseMirrorSchedule();},500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -2207,7 +2274,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.34 DEV · Production Sync Canary</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.35 DEV · Field Realtime Apply</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3886,7 +3953,7 @@ function epcSyncDiagnostics_(){
  const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
  const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
  return {
-  version:'V1.51.34',
+  version:'V1.51.35',
   capturedAt:new Date().toISOString(),
   readOnly:true,
   local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
