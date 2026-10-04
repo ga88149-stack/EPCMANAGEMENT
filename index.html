@@ -3234,7 +3234,11 @@ const EPC_EVENT_DRAFT_IDS=new Set(['eDate','eName','eStartTime','eRegCloseTime',
 let epcUnsavedEventDraft_=false;
 function epcHasUnsavedEventDraft_(){return epcUnsavedEventDraft_;}
 function epcEditLocked_(){
- return epcEditingField_()||!!epcActiveEdit_||Date.now()<epcEditLockUntil_||epcHasUnsavedEventDraft_();
+ // V55.2: focus alone is not an unsaved edit. Treating every focused INPUT/SELECT
+ // as a global lock left remote player additions permanently queued while an
+ // operator merely had a search/select control focused. epcActiveEdit_ and the
+ // short commit lock already protect actual in-progress edits.
+ return !!epcActiveEdit_||Date.now()<epcEditLockUntil_||epcHasUnsavedEventDraft_();
 }
 function epcEditKey_(el){
  if(!el)return '';
