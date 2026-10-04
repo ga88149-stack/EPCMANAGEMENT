@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.42 DEV · Phone Stack Firebase Bridge</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.43 DEV · Player & Stack Rollback Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3608,11 +3608,12 @@ async function syncPhoneStacksOnly(){
   }
   render();
 
-  // Legacy EPC_DATA remains a compatibility backup, but Firebase field sync is
-  // scheduled by persist() and is now the authoritative multi-device propagation path.
-  if(updated>0 && cloudReady)await saveCloudNow(false);
+  // Do not immediately invoke the legacy whole-db writer here. persist() has already
+  // queued exact per-player stack fields for Firebase. Calling saveCloudNow() before
+  // those field transactions settle can merge an older EPC_DATA snapshot back over
+  // the just-imported phone stacks.
   actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
-  setCloudState(updated>0?'☁ 手機籌碼已同步｜Firebase 同步中':'☁ 手機籌碼已同步｜資料相同');
+  setCloudState(updated>0?'☁ 手機籌碼已同步｜正在送往 Firebase':'☁ 手機籌碼已同步｜資料相同');
  }catch(err){
   console.error(err);
   setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
@@ -4469,6 +4470,7 @@ function addPlayer(){
  if(currentEvent().players.some(p=>p.memberId===id))return alert('此會員已加入本場');
  let m=db.members.find(x=>x.id===id);
  currentEvent().players.push({memberId:id,buyin:1,rebuy:0,addon:0,manualDiscount:0,stack:0,nickname:m.nickname||'',group:$('addPlayerGroup').value.trim()||m.group||'',prize:0});
+ touchEvent_(currentEvent());
  $('addPlayerGroup').value='';
  if($('addPlayerSearch'))$('addPlayerSearch').value='';
  persist();render();
