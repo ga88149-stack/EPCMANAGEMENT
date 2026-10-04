@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.46 DEV · Stack Rollback Barrier</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.47 DEV · Settlement Commit Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5414,8 +5414,13 @@ function validateSettlement(){
  if(prizes!==info.avail)return {ok:false,msg:`獎金尚未完成或不平：應發 ${money(info.avail)}，目前 ICM 合計 ${money(prizes)}`};
  return {ok:true};
 }
-function confirmSettlement(){
+async function confirmSettlement(){
  let e=requireEvent();if(!e){actionMsg('尚未選擇賽事',true);return;}
+ // Pull the latest phone stacks once more at the settlement boundary.
+ // The normal 1.5s auto poll remains active, but formal settlement must validate
+ // the newest PHONE_STACKS snapshot rather than whichever poll happened last.
+ if(!__phoneStackSyncBusy)await syncPhoneStacksOnly({auto:true});
+ e=requireEvent();if(!e)return;
  const prizeCheck=manualPrizeValidation(e);
  if(!prizeCheck.ok)return alert('無法正式結算：\n'+prizeCheck.message);
  
@@ -5434,14 +5439,22 @@ function confirmSettlement(){
 function closeSettlementConfirm(){
  $('settlementConfirmModal').style.display='none';
 }
+let __formalSettlementBusy=false;
 async function executeFormalSettlement(){
+ if(__formalSettlementBusy)return;
  let e=requireEvent();if(!e)return;
- 
- let v=validateSettlement();
- if(!v.ok){closeSettlementConfirm();actionMsg(v.msg,true);return;}
- db.members.forEach(m=>m.history=(m.history||[]).filter(h=>h.eventId!==e.id));
+ __formalSettlementBusy=true;
+ try{
+   // Revalidate at the exact commit boundary. Phone auto-sync or another local edit
+   // may have changed stacks/prizes after the confirmation modal was opened.
+   const prizeCheck=manualPrizeValidation(e);
+   if(!prizeCheck.ok){closeSettlementConfirm();actionMsg('正式結算已取消：'+prizeCheck.message,true);return;}
+   let v=validateSettlement();
+   if(!v.ok){closeSettlementConfirm();actionMsg('正式結算已取消：'+v.msg,true);return;}
+   if(!e.endTime){closeSettlementConfirm();actionMsg('正式結算已取消：請先輸入實際結束時間。',true);return;}
+   db.members.forEach(m=>m.history=(m.history||[]).filter(h=>String(h.eventId)!==String(e.id)));
  e.players.forEach(p=>{
-   let m=db.members.find(x=>x.id===p.memberId);if(!m)return;
+   let m=db.members.find(x=>String(x.id)===String(p.memberId));if(!m)return;
    let c=calcPlayerForEvent(p,e);
    m.history=m.history||[];
    m.history.push({eventId:e.id,date:e.date,eventSeq:e.seq,level:e.level,groups:c.groups,paid:c.paid,prize:+p.prize||0,net:(+p.prize||0)-c.paid,group:p.group||m.name});
@@ -5457,6 +5470,9 @@ async function executeFormalSettlement(){
  if(cloudReady)await saveCloudNow(false);
  showPage('events');
  actionMsg('正式結算完成，可在該場操作欄直接列印報表。');
+ }finally{
+   __formalSettlementBusy=false;
+ }
 }
 
 async function unlockSettledEvent(id){
