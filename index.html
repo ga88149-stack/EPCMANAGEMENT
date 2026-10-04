@@ -1814,7 +1814,7 @@ window.epcFirebasePublishFieldChanges=async function(changes){
    }
    const version=remoteVersion+1;
    tx.set(ref,{
-    path:String(ch.path||''),value:clean(ch.after),previousValue:clean(ch.before),
+    path:String(ch.path||''),op:String(ch.op||'set'),value:clean(ch.after),previousValue:clean(ch.before),
     clientId:String(ch.clientId||''),clientChangedAt:Number(ch.changedAt||Date.now()),
     previousVersion:remoteVersion,version,updatedAt:serverTimestamp()
    });
@@ -2016,7 +2016,7 @@ window.epcFirebasePendingFields=window.epcFirebasePendingFields||[];
 function applyRemoteField_(x){
  const path=String(x&&x.path||''),remoteClient=String(x&&x.clientId||'');
  if(!path||path==='(root)'||remoteClient===epcClientId_)return false;
- if(!epcSetPathValue_(db,path,clean(x.value)))return false;
+ if(!epcSetPathValue_(db,path,clean(x.value),String(x.op||'set')))return false;
  epcLastPersistSnapshot_=cloneCloud_(db);
  localStorage.setItem('epcV1',JSON.stringify(db));
  return true;
@@ -2113,7 +2113,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.3 DEV · Firebase Self Test</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.4 DEV · Firebase CRUD Transport</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3611,6 +3611,7 @@ const epcClientId_=(()=>{
 })();
 let epcLastPersistSnapshot_=cloneCloud_(db);
 try{window.epcFieldChanges=JSON.parse(localStorage.getItem('epcFieldChangesV1')||'[]');if(!Array.isArray(window.epcFieldChanges))window.epcFieldChanges=[];}catch(_){window.epcFieldChanges=[];}
+function epcCloneMaybe_(v){return v===undefined?undefined:cloneCloud_(v);}
 function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(out.length>5000)return out;
  const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
@@ -3619,34 +3620,52 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(Array.isArray(before)&&Array.isArray(after)){
    const key=(x,i)=>x&&typeof x==='object'?String(x.id??x.memberId??x.eventId??('idx:'+i)):('idx:'+i);
    const bm=new Map(before.map((x,i)=>[key(x,i),x])),am=new Map(after.map((x,i)=>[key(x,i),x]));
-   for(const k of new Set([...bm.keys(),...am.keys()]))epcCollectFieldChanges_(bm.get(k),am.get(k),path+'['+k+']',out);
+   for(const k of new Set([...bm.keys(),...am.keys()])){
+     if(!bm.has(k)){out.push({path:path+'['+k+']',op:'set',before:null,after:epcCloneMaybe_(am.get(k)),clientId:epcClientId_,changedAt:Date.now()});continue;}
+     if(!am.has(k)){out.push({path:path+'['+k+']',op:'delete',before:epcCloneMaybe_(bm.get(k)),after:null,clientId:epcClientId_,changedAt:Date.now()});continue;}
+     epcCollectFieldChanges_(bm.get(k),am.get(k),path+'['+k+']',out);
+   }
    return out;
  }
  if(obj(before)&&obj(after)){
-   for(const k of new Set([...Object.keys(before),...Object.keys(after)]))epcCollectFieldChanges_(before[k],after[k],path?path+'.'+k:k,out);
+   for(const k of new Set([...Object.keys(before),...Object.keys(after)])){
+     const p=path?path+'.'+k:k;
+     if(!Object.prototype.hasOwnProperty.call(before,k)){out.push({path:p,op:'set',before:null,after:epcCloneMaybe_(after[k]),clientId:epcClientId_,changedAt:Date.now()});continue;}
+     if(!Object.prototype.hasOwnProperty.call(after,k)){out.push({path:p,op:'delete',before:epcCloneMaybe_(before[k]),after:null,clientId:epcClientId_,changedAt:Date.now()});continue;}
+     epcCollectFieldChanges_(before[k],after[k],p,out);
+   }
    return out;
  }
- out.push({path:path||'(root)',before:cloneCloud_(before),after:cloneCloud_(after),clientId:epcClientId_,changedAt:Date.now()});
+ out.push({path:path||'(root)',op:after===undefined?'delete':'set',before:epcCloneMaybe_(before)??null,after:epcCloneMaybe_(after)??null,clientId:epcClientId_,changedAt:Date.now()});
  return out;
 }
 window.epcGetFieldChanges=()=>cloneCloud_(window.epcFieldChanges||[]);
-function epcSetPathValue_(root,path,value){
+function epcSetPathValue_(root,path,value,op='set'){
  const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
- let cur=root;
- for(let i=0;i<parts.length-1;i++){
-  const k=parts[i],next=parts[i+1];
-  if(Array.isArray(cur)){
-   let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===k);
-   if(idx<0)return false;cur=cur[idx];
-  }else{if(cur[k]==null)return false;cur=cur[k];}
- }
  if(!parts.length)return false;
+ let cur=root;
+ const itemKey=(x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j));
+ for(let i=0;i<parts.length-1;i++){
+  const k=parts[i];
+  if(Array.isArray(cur)){
+   const idx=cur.findIndex((x,j)=>itemKey(x,j)===k);
+   if(idx<0)return false;cur=cur[idx];
+  }else{
+   if(cur==null||typeof cur!=='object')return false;
+   if(cur[k]==null){if(op==='set')cur[k]={};else return false;}
+   cur=cur[k];
+  }
+ }
  const last=parts[parts.length-1];
  if(Array.isArray(cur)){
-  const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
-  if(idx<0)return false;cur[idx]=cloneCloud_(value);
- }else cur[last]=cloneCloud_(value);
- return true;
+  const idx=cur.findIndex((x,j)=>itemKey(x,j)===last);
+  if(op==='delete'){if(idx<0)return true;cur.splice(idx,1);return true;}
+  if(idx<0){cur.push(cloneCloud_(value));return true;}
+  cur[idx]=cloneCloud_(value);return true;
+ }
+ if(cur==null||typeof cur!=='object')return false;
+ if(op==='delete'){delete cur[last];return true;}
+ cur[last]=cloneCloud_(value);return true;
 }
 window.epcShowFieldConflict=function(x){
  const m=document.getElementById('epcFieldConflictModal');if(!m)return;
