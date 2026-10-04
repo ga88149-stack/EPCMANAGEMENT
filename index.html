@@ -2136,7 +2136,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.7 DEV · Firebase Startup Fields</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.8 DEV · Firebase Realtime Authority</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6436,7 +6436,9 @@ window.addEventListener('online',()=>{cloudReady=true;setCloudState('● 網路�
 window.addEventListener('offline',()=>{cloudReady=false;setCloudState('⚠ 網路已離線｜本機資料安全保存',true);});
 setInterval(()=>{if(!cloudSaving && (!cloudReady||localDirty))scheduleCloudReconnect_();},30000);
 initializeCloud();
-startLiveSync_();
+// Migration V2: legacy whole-database polling is disabled. Firebase field documents
+// are the realtime authority; Apps Script remains available for explicit backup/member exchange.
+// startLiveSync_();
 // V1.38.4: nickname columns + 12-13px adaptive event-report print; auto member sync preserved.
 // This only refreshes the member list from MAIN API; it never calls full cloud load.
 let __memberAutoRefreshBusy=false;
