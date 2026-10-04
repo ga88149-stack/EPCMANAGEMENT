@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.40 DEV · Cloud Display Preferences</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.41 DEV · Display Reconnect Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6890,7 +6890,17 @@ function saveDisplayPrefsAll_(all){
 function saveDisplayPref_(id,pref){const all=Object.assign({},displayPrefsAll_());all[id]=pref;saveDisplayPrefsAll_(all)}
 function removeDisplayPref_(id){const all=Object.assign({},displayPrefsAll_());delete all[id];saveDisplayPrefsAll_(all)}
 
-function displayApi_(){return String(localStorage.getItem(DISPLAY_API_KEY)||'').trim()}
+function displayApi_(){
+ const cloud=String((db&&db.systemSettings&&db.systemSettings.displayApiUrl)||'').trim();
+ return cloud||String(localStorage.getItem(DISPLAY_API_KEY)||'').trim();
+}
+function saveDisplayApiUrl_(v){
+ const url=String(v||'').trim();
+ localStorage.setItem(DISPLAY_API_KEY,url);
+ db.systemSettings=db.systemSettings||{};
+ db.systemSettings.displayApiUrl=url;
+ persist();
+}
 function displayApiSetInput_(){const el=$('displayApiUrl');if(el&&!el.value)el.value=displayApi_()}
 async function displayFetch_(params={},post=false){
  const base=displayApi_();if(!base)throw new Error('請先設定 Display API URL');
@@ -6905,7 +6915,7 @@ async function displayFetch_(params={},post=false){
 }
 async function saveDisplayApi_(){
  const v=String($('displayApiUrl')?.value||'').trim();if(!v)return actionMsg('請貼上 Display API URL',true);
- localStorage.setItem(DISPLAY_API_KEY,v);
+ saveDisplayApiUrl_(v);
  try{const r=await displayFetch_({action:'ping'});$('displayApiStatus').textContent='✓ 已連線｜'+(r.version||'Display API');await loadDisplays_();actionMsg('Display API 已連線')}
  catch(e){$('displayApiStatus').textContent='連線失敗：'+e.message;actionMsg('Display API 連線失敗：'+e.message,true)}
 }
@@ -7030,7 +7040,19 @@ const _renderActivitiesDisplayBase=typeof renderActivities==='function'?renderAc
 if(_renderActivitiesDisplayBase){
  renderActivities=function(){const r=_renderActivitiesDisplayBase.apply(this,arguments);setTimeout(()=>publishAllDisplays_(),250);return r}
 }
-setTimeout(()=>{displayApiSetInput_();if(displayApi_())loadDisplays_()},1200);
+let epcDisplayReconnectBusy_=false;
+async function reconnectDisplays_(republish=false){
+ if(epcDisplayReconnectBusy_||!displayApi_())return;
+ epcDisplayReconnectBusy_=true;
+ try{
+  await loadDisplays_();
+  if(republish&&displayDevicesCache.length)await publishAllDisplays_();
+ }finally{epcDisplayReconnectBusy_=false}
+}
+setTimeout(()=>{displayApiSetInput_();reconnectDisplays_(true)},1200);
+window.addEventListener('online',()=>setTimeout(()=>reconnectDisplays_(true),800));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(()=>reconnectDisplays_(false),300)});
+setInterval(()=>{if(!document.hidden&&displayApi_())reconnectDisplays_(false)},30000);
 
 
 
