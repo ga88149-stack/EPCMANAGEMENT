@@ -1888,6 +1888,36 @@ window.epcFirebasePublishFieldChanges=async function(changes){
  return true;
 };
 
+window.epcFirebaseLiveValidation=async function(){
+ const startedAt=Date.now(),tests=[];
+ const check=(name,ok,detail)=>tests.push({name,ok:!!ok,detail:detail??null});
+ if(!auth.currentUser){
+  const r={ok:false,needsLogin:true,tests:[{name:'firebase authenticated',ok:false,detail:'請先完成 Firebase 登入'}],mode:'isolated-firestore-live',ranAt:new Date().toISOString()};
+  window.epcFirebaseLiveValidationResult=r;return r;
+ }
+ const uid=String(auth.currentUser.uid||'anonymous');
+ const ref=doc(fs,'epcValidationProbesV1','single_'+uid);
+ const token='probe_'+startedAt.toString(36)+'_'+Math.random().toString(36).slice(2,8);
+ try{
+  const txResult=await runTransaction(fs,async tx=>{
+   const snap=await tx.get(ref),old=snap.exists()?snap.data():{};
+   const previousVersion=Number(old.version||0),version=previousVersion+1;
+   tx.set(ref,{kind:'EPC_SYNC_VALIDATION_ONLY',token,clientId:String(epcClientId_||''),previousVersion,version,updatedAt:serverTimestamp()});
+   return {previousVersion,version};
+  });
+  check('transaction ACK received',Number(txResult.version)>Number(txResult.previousVersion),txResult);
+  const read=await getDoc(ref),data=read.exists()?read.data():null;
+  check('probe read-back exists',!!data,{exists:!!data});
+  check('read-back token matches ACK',!!data&&String(data.token||'')===token,{expected:token,actual:data&&data.token});
+  check('read-back version matches ACK',!!data&&Number(data.version||0)===Number(txResult.version),{expected:txResult.version,actual:data&&data.version});
+  check('probe isolated from production fields',String(ref.path||'').startsWith('epcValidationProbesV1/'),{path:ref.path});
+ }catch(e){
+  check('live Firestore operation',false,String(e&&e.message||e));
+ }
+ const passed=tests.filter(x=>x.ok).length;
+ const r={ok:passed===tests.length,passed,total:tests.length,tests,mode:'isolated-firestore-live',durationMs:Date.now()-startedAt,ranAt:new Date().toISOString()};
+ window.epcFirebaseLiveValidationResult=r;return r;
+};
 function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
 function clean(v){return JSON.parse(JSON.stringify(v??null));}
 function safeId(v,fallback){const s=String(v??fallback??"").trim().replaceAll("/","_");return s||String(fallback||Date.now());}
@@ -2083,7 +2113,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.30 DEV · Single-Device Validation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.31 DEV · Live Firebase Validation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3742,7 +3772,7 @@ function epcSyncDiagnostics_(){
  const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
  const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
  return {
-  version:'V1.51.30',
+  version:'V1.51.31',
   capturedAt:new Date().toISOString(),
   readOnly:true,
   local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
@@ -3760,7 +3790,8 @@ function epcSyncDiagnostics_(){
   },
   completion:{safe:typeof epcCanMarkSyncComplete_==='function'?epcCanMarkSyncComplete_():false},
   selfTest:self?{ok:!!self.ok,passed:Number(self.passed||0),total:Number(self.total||0),mode:self.mode||''}:null,
-  singleDeviceValidation:window.epcSingleDeviceValidationResult?cloneCloud_(window.epcSingleDeviceValidationResult):null
+  singleDeviceValidation:window.epcSingleDeviceValidationResult?cloneCloud_(window.epcSingleDeviceValidationResult):null,
+  liveFirebaseValidation:window.epcFirebaseLiveValidationResult?cloneCloud_(window.epcFirebaseLiveValidationResult):null
  };
 }
 window.epcSyncDiagnostics_=epcSyncDiagnostics_;
@@ -3992,6 +4023,18 @@ function scheduleFirebaseConflictDrain_(){
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
  // Diagnostic mode intentionally observes only; no automatic merge/write.
 });
+
+async function runLiveFirebaseValidation_(){
+ const btn=event&&event.currentTarget?event.currentTarget:null,old=btn?btn.textContent:'';
+ if(btn){btn.disabled=true;btn.textContent='Firebase 實測中…';}
+ try{
+  const r=await window.epcFirebaseLiveValidation();
+  if(r.needsLogin)alert('請先按 Firebase 登入，再執行實測。');
+  else alert(r.ok?'Firebase Live Validation：全部通過 ('+r.passed+'/'+r.total+')':'Firebase Live Validation：未通過，請開啟「同步診斷」查看結果。');
+ }catch(e){alert('Firebase 實測失敗：'+String(e&&e.message||e));}
+ finally{if(btn){btn.disabled=false;btn.textContent=old;}}
+}
+window.runLiveFirebaseValidation_=runLiveFirebaseValidation_;
 
 function showSyncDiagnostics_(){
  const m=document.getElementById('epcSyncDiagnosticsModal'),t=document.getElementById('epcSyncDiagnosticsText');
