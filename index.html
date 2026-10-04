@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.47 DEV · Settlement Commit Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.48 DEV · Settled Accounting Only</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4845,7 +4845,10 @@ function isIndependentAccountingEvent(e){
  return !!accountingGroupForEvent(e);
 }
 function accountingEventsForDate(date){
- return accountingAllEventsForDate(date).filter(e=>!isIndependentAccountingEvent(e));
+ // Formal EPC accounting only recognizes settled events.
+ // In-progress events remain visible in the event detail table, but must not
+ // affect official revenue / discount / JP / period totals before settlement.
+ return accountingAllEventsForDate(date).filter(e=>!isIndependentAccountingEvent(e) && e.status==='已結算');
 }
 function setEventAccountingGroup(eventId,value){
  const e=(db.events||[]).find(x=>x.id===eventId);
@@ -4985,6 +4988,8 @@ function safeDomId(s){return String(s||'').replace(/[^a-zA-Z0-9_\u4e00-\u9fff-]/
 function accountingIndependentGroups(date){
  const map={};
  accountingAllEventsForDate(date).forEach(e=>{
+   // Independent ledgers follow the same recognition rule as EPC's main ledger.
+   if(e.status!=='已結算')return;
    const g=accountingGroupForEvent(e); if(!g)return;
    (map[g]||(map[g]=[])).push(e);
  });
@@ -5161,6 +5166,7 @@ function renderIndependentAccountingSummary(){
  const from=$('accountingDateFrom')?.value||'',to=$('accountingDateTo')?.value||'';
  const map=new Map();
  (db.events||[]).forEach(e=>{
+   if(e.status!=='已結算')return;
    const date=businessDateForEvent(e);
    const group=accountingGroupForEvent(e);
    if(!group||!date||from&&date<from||to&&date>to)return;
