@@ -4087,14 +4087,40 @@ function epcSetPathValue_(root,path,value){
   const k=parts[i],next=parts[i+1];
   if(Array.isArray(cur)){
    let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===k);
-   if(idx<0)return false;cur=cur[idx];
-  }else{if(cur[k]==null)return false;cur=cur[k];}
+   if(idx<0){
+    // V55.1: realtime field paths may refer to a newly-created keyed array record
+    // (most importantly events[...].players[memberId]). Create the missing record
+    // instead of dropping the remote field update.
+    const rec={};
+    // Infer the stable identity from the parent collection.
+    const parent=String(parts[i-1]||'');
+    if(parent==='players')rec.memberId=k;
+    else if(parent==='events')rec.id=k;
+    else if(parent==='members')rec.id=k;
+    else rec.id=k;
+    cur.push(rec);idx=cur.length-1;
+   }
+   cur=cur[idx];
+  }else{
+   if(cur[k]==null){
+    // Create only the structural container required by the incoming verified path.
+    cur[k]=(/^\d+$/.test(next)?[]:{});
+   }
+   cur=cur[k];
+  }
  }
  if(!parts.length)return false;
  const last=parts[parts.length-1];
  if(Array.isArray(cur)){
-  const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
-  if(idx<0)return false;cur[idx]=cloneCloud_(value);
+  let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
+  if(idx<0){
+   const parent=String(parts[parts.length-2]||'');
+   const rec=(value&&typeof value==='object'&&!Array.isArray(value))?cloneCloud_(value):{};
+   if(parent==='players'&&rec.memberId==null)rec.memberId=last;
+   else if((parent==='events'||parent==='members')&&rec.id==null)rec.id=last;
+   else if(rec.id==null)rec.id=last;
+   cur.push(rec);idx=cur.length-1;
+  }else cur[idx]=cloneCloud_(value);
  }else cur[last]=cloneCloud_(value);
  return true;
 }
