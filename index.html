@@ -1794,7 +1794,7 @@ function epcFieldKey_(path){
 }
 window.epcFirebasePublishFieldChanges=async function(changes){
  if(!auth.currentUser)return false;
- const queue=(changes||[]).filter(x=>!x.publishedAt).slice(0,100);
+ const queue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict).slice(0,100);
  for(const ch of queue){
   const ref=doc(fs,'epcFieldVersionsV2',epcFieldKey_(String(ch.path||'')));
   const result=await runTransaction(fs,async tx=>{
@@ -1825,8 +1825,13 @@ window.epcFirebasePublishFieldChanges=async function(changes){
    ch.conflict=true;ch.remoteVersion=result.remoteVersion;ch.remoteValue=clean(old.value);
    ch.remoteClientId=String(old.clientId||'');
    delete ch.forceFromVersion;
-   window.epcFirebaseFieldConflict={path:String(ch.path||''),local:clean(ch.after),remote:clean(old.value),before:clean(ch.before),remoteVersion:result.remoteVersion};
-   if(typeof window.epcShowFieldConflict==='function')window.epcShowFieldConflict(window.epcFirebaseFieldConflict);
+   const isolatedConflict={path:String(ch.path||''),local:clean(ch.after),remote:clean(old.value),before:clean(ch.before),remoteVersion:result.remoteVersion};
+   // V1.51.20: isolate this path only. Do not replace an already-open conflict
+   // and do not let this field re-enter the publish queue until it is resolved.
+   if(!window.epcFirebaseFieldConflict){
+    window.epcFirebaseFieldConflict=isolatedConflict;
+    if(typeof window.epcShowFieldConflict==='function')window.epcShowFieldConflict(isolatedConflict);
+   }
    const el=document.getElementById('firebaseMirrorState');
    if(el){el.textContent='Firebase：⚠ 欄位版本衝突｜交易已阻止覆蓋｜'+String(ch.path||'');el.style.color='#ffb74d';}
    continue;
@@ -2041,7 +2046,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.50.62R Web · Conflict State Reset</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.20 DEV · Conflict Isolation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3644,8 +3649,9 @@ function epcScheduleFieldPublish_(){
   if(typeof window.epcFirebasePublishFieldChanges!=='function')return;
   try{
    const ok=await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]);
-   const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt||ch.conflict);
-   if(ok&&!unresolved&&!window.epcFirebaseFieldConflict){
+   const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt&&!ch.conflict);
+   const isolatedConflicts=(window.epcFieldChanges||[]).some(ch=>ch.conflict);
+   if(ok&&!unresolved&&!isolatedConflicts&&!window.epcFirebaseFieldConflict){
      localDirty=false;cloudPending=false;
      localStorage.removeItem('epcLocalDirty');
      // Pending whole-db snapshots are intentionally not auto-applied.
