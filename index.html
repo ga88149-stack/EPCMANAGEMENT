@@ -2035,7 +2035,7 @@ window.epcFirebaseVerify=async()=>{
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>{if(typeof window.epcRecoverSyncState_==='function')window.epcRecoverSyncState_();if(typeof window.epcFirebasePublishFieldChanges==='function'&&(window.epcFieldChanges||[]).some(ch=>ch&&!ch.publishedAt&&!ch.conflict))window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]).catch(e=>console.warn('startup field recovery deferred',e));window.epcFirebaseMirrorSchedule();},500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -2046,7 +2046,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.22 DEV · Conflict Queue</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.23 DEV · Sync State Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3544,6 +3544,22 @@ const epcClientId_=(()=>{
 })();
 let epcLastPersistSnapshot_=cloneCloud_(db);
 try{window.epcFieldChanges=JSON.parse(localStorage.getItem('epcFieldChangesV1')||'[]');if(!Array.isArray(window.epcFieldChanges))window.epcFieldChanges=[];}catch(_){window.epcFieldChanges=[];}
+function epcRecoverSyncState_(){
+ const ledger=window.epcFieldChanges||[];
+ const unpublished=ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).length;
+ const conflicts=ledger.filter(ch=>ch&&ch.conflict).length;
+ const hasWork=unpublished>0||conflicts>0;
+ if(hasWork){
+   localDirty=true;cloudPending=true;
+   localStorage.setItem('epcLocalDirty','1');
+ }else if(localStorage.getItem('epcLocalDirty')!=='1'){
+   localDirty=false;
+ }
+ window.epcRecoveredSyncState={unpublished,conflicts,hasWork,recoveredAt:Date.now()};
+ return window.epcRecoveredSyncState;
+}
+window.epcRecoverSyncState_=epcRecoverSyncState_;
+epcRecoverSyncState_();
 function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(out.length>5000)return out;
  const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
