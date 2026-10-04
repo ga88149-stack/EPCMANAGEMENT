@@ -4286,7 +4286,12 @@ function scheduleFirebaseConflictDrain_(){
  },1200);
 }
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
- // Diagnostic mode intentionally observes only; no automatic merge/write.
+ // V55: a verified remote generation must enter the guarded merge/apply pipeline.
+ // The observer already stores differing snapshots in epcFirebasePending.
+ // Drain only through the existing edit-lock / conflict-safe scheduler so another
+ // computer's newly added player appears automatically without whole-db overwrite.
+ if(e&&e.detail&&e.detail.sameAsLocal)return;
+ if(window.epcFirebasePending)scheduleFirebaseConflictDrain_();
 });
 
 function showProductionCanary_(){document.getElementById('epcProductionCanaryModal').style.display='flex';}
