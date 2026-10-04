@@ -1881,6 +1881,7 @@ window.epcFirebasePublishFieldChanges=async function(changes){
   }
  }
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(changes||[]));
+ if(typeof window.epcCompactFieldLedger_==='function')window.epcCompactFieldLedger_();
  // If this batch intentionally deferred later same-path edits, immediately
  // schedule the next ordered batch instead of waiting for the 30s recovery tick.
  if((changes||[]).some(x=>x&&!x.publishedAt&&!x.conflict)&&typeof epcScheduleFieldPublish_==='function')epcScheduleFieldPublish_();
@@ -2082,7 +2083,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.26 DEV · Same-Path Queue Ordering</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.27 DEV · Ledger Safety</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3594,6 +3595,28 @@ function epcRecoverSyncState_(){
  return window.epcRecoveredSyncState;
 }
 window.epcRecoverSyncState_=epcRecoverSyncState_;
+function epcCompactFieldLedger_(){
+ const ledger=Array.isArray(window.epcFieldChanges)?window.epcFieldChanges:[];
+ const protectedPaths=new Set(ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict)).map(ch=>String(ch.path||'')));
+ const publishedProtected=[],publishedSafe=[];
+ for(const ch of ledger){
+  if(!ch||!ch.publishedAt||ch.conflict)continue;
+  (protectedPaths.has(String(ch.path||''))?publishedProtected:publishedSafe).push(ch);
+ }
+ // Keep all unfinished/conflicted work, all published history for paths that
+ // still have unfinished chains, and only a bounded tail of fully settled history.
+ const unfinished=ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict));
+ const settledTail=publishedSafe.slice(-300);
+ const keepSet=new Set([...unfinished,...publishedProtected,...settledTail]);
+ const compacted=ledger.filter(ch=>keepSet.has(ch));
+ if(compacted.length!==ledger.length){
+   window.epcFieldChanges=compacted;
+   localStorage.setItem('epcFieldChangesV1',JSON.stringify(compacted));
+ }
+ return {before:ledger.length,after:compacted.length,unfinished:unfinished.length,protectedPublished:publishedProtected.length,settledTail:settledTail.length};
+}
+window.epcCompactFieldLedger_=epcCompactFieldLedger_;
+epcCompactFieldLedger_();
 epcRecoverSyncState_();
 function epcSyncOutstanding_(){
  const ledger=window.epcFieldChanges||[];
@@ -3850,7 +3873,9 @@ window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
 function persist(){
  const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
  if(changes.length)window.epcFieldChanges.push(...changes);
- if(window.epcFieldChanges.length>10000)window.epcFieldChanges=window.epcFieldChanges.slice(-10000);
+ // Never truncate by raw array position: that could delete an old-but-still
+ // pending/conflicted predecessor. Compact only records proven safe to discard.
+ epcCompactFieldLedger_();
  epcLastPersistSnapshot_=cloneCloud_(db);
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges));
  epcScheduleFieldPublish_();
