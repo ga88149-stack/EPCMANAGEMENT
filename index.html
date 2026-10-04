@@ -2179,7 +2179,7 @@ window.epcFirebaseStartRealtimeObserver=startRealtimeObserver_;
    field versions may update one safe path; a mirror snapshot still never
    blindly replaces the live EPC database. */
 let fieldRealtimeUnsub=null,fieldRealtimeReady=false;
-const epcRemoteFieldQueue_=new Map();
+const epcRemoteFieldQueue_=new Map(),epcAppliedRemoteVersions_=new Map();
 function epcHasLocalPathWork_(path){
  return (window.epcFieldChanges||[]).some(ch=>ch&&String(ch.path||'')===String(path||'')&&(!ch.publishedAt||ch.conflict));
 }
@@ -2189,11 +2189,13 @@ function epcQueueRemoteField_(d){
  if(!prev||Number(d.version||0)>=Number(prev.version||0))epcRemoteFieldQueue_.set(path,clean(d));
 }
 function epcApplyRemoteField_(d){
- const path=String(d&&d.path||'');
+ const path=String(d&&d.path||''),remoteVersion=Number(d&&d.version||0);
  if(!path||path.startsWith('__syncCanary.'))return {ok:false,ignored:'canary'};
  if(String(d.clientId||'')===String(epcClientId_||''))return {ok:false,ignored:'own-client'};
+ const appliedVersion=Number(epcAppliedRemoteVersions_.get(path)||0);
+ if(remoteVersion&&remoteVersion<=appliedVersion)return {ok:false,ignored:'stale-version'};
  if(epcHasLocalPathWork_(path))return {ok:false,deferred:'local-path-work'};
- if(epcEditLocked_())return {ok:false,deferred:'editing'};
+ if(epcEditLocked_())return {ok:false,deferred:'editing-or-draft'};
  const before=cloneCloud_(db);
  if(!epcSetPathValue_(db,path,clean(d.value)))return {ok:false,deferred:'path-missing'};
  try{
@@ -2205,8 +2207,9 @@ function epcApplyRemoteField_(d){
   localStorage.setItem('epcV1',JSON.stringify(db));
   if(cloudBase)try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(_){}
   if(!epcEditLocked_())render();
-  window.epcLastRemoteFieldApply={path,version:Number(d.version||0),clientId:String(d.clientId||''),appliedAt:Date.now()};
-  return {ok:true,path,version:Number(d.version||0)};
+  if(remoteVersion)epcAppliedRemoteVersions_.set(path,remoteVersion);
+  window.epcLastRemoteFieldApply={path,version:remoteVersion,clientId:String(d.clientId||''),appliedAt:Date.now()};
+  return {ok:true,path,version:remoteVersion};
  }catch(e){
   db=before;return {ok:false,error:String(e&&e.message||e)};
  }
@@ -2274,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.35 DEV · Field Realtime Apply</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.36 DEV · Rapid Edit Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3221,8 +3224,25 @@ function epcEditingField_(){
  const t=String(a.tagName||'').toUpperCase();
  return t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||a.isContentEditable;
 }
+function epcHasUnsavedEventDraft_(){
+ try{
+  const e=currentEvent&&currentEvent();if(!e)return false;
+  const pairs=[
+   ['eDate',String(e.date||'')],['eName',String(e.name||'')],
+   ['eStartTime',String(e.startTime||'')],['eRegCloseTime',String(e.regCloseTime||'')],
+   ['eLevel',String(Number(e.level||0))],['ePricingMode',String(e.pricingMode||'standard')],
+   ['ePoolUnit',String(Number(e.poolUnit||0))],['eAdmin',String(Number(e.admin||0))],
+   ['eBuyinTotal',String(Number(e.buyinTotal||0))],['eBuyinAdmin',String(Number(e.buyinAdmin||0))],
+   ['eRebuyTotal',String(Number(e.rebuyTotal||0))],['eRebuyAdmin',String(Number(e.rebuyAdmin||0))],
+   ['eOverbuyThreshold',String(Number(e.overbuyThreshold||10))],['eChips',String(Number(e.chips||0))],
+   ['eJP',String(Number(e.jp||0))],['eJPRound',String(Number(e.jpRound||0))],
+   ['ePayout',Array.isArray(e.payout)?e.payout.join(','):String(e.payout||'')]
+  ];
+  return pairs.some(([id,v])=>{const el=document.getElementById(id);return !!el&&String(el.value??'')!==v;});
+ }catch(_){return false;}
+}
 function epcEditLocked_(){
- return epcEditingField_()||!!epcActiveEdit_||Date.now()<epcEditLockUntil_;
+ return epcEditingField_()||!!epcActiveEdit_||Date.now()<epcEditLockUntil_||epcHasUnsavedEventDraft_();
 }
 function epcEditKey_(el){
  if(!el)return '';
