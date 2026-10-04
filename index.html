@@ -2188,7 +2188,7 @@ onAuthStateChanged(auth,async u=>{if(u&&String(u.email||"").toLowerCase()==="ga8
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.16 DEV · Firebase Granular Bootstrap</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.17 DEV · Firebase Startup Authority</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3236,8 +3236,9 @@ function startLiveSync_(){
  },1500);
 }
 async function initializeCloud(){
- setCloudState('● 本機已儲存｜正在連接雲端…');
+ setCloudState('● 本機已儲存｜正在連接 Google 備援…');
  try{
+   const localBeforeGoogle=cloneCloud_(db);
    const res=await cloudGet('load');
    const serverRevision=Number(res.revision||0);
    const hasRemote=!!(res.data&&typeof res.data==='object');
@@ -3280,6 +3281,11 @@ async function initializeCloud(){
      localStorage.setItem('epcLocalDirty','1');
    }
 
+   // Migration V3: Google full-db payload is backup evidence only and must never
+   // become startup authority. Restore the live local/Firebase state, then merge
+   // only the explicit member-sheet exchange data.
+   db=preserveMembers_(localBeforeGoogle,localBeforeGoogle,res.members);
+   localDirty=localStorage.getItem('epcLocalDirty')==='1';
    if(!db.settings)db.settings={};
    if(!db.settings.businessStart)db.settings.businessStart='16:00';
    if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
@@ -3292,7 +3298,7 @@ async function initializeCloud(){
    if(!hasRemote){if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();}
    else{
      const t=res.updatedAt?new Date(res.updatedAt).toLocaleTimeString():new Date().toLocaleTimeString();
-     setCloudState('☁ 雲端已載入｜Revision '+cloudRevision+'｜'+t);
+     setCloudState('☁ Google 備援已連線｜Revision '+cloudRevision+'｜'+t);
    }
  }catch(err){
    cloudReady=false;
