@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.49 DEV · Accounting Discount Consistency</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.50 DEV · Dashboard Ledger Consistency</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5685,7 +5685,9 @@ function reportingLedgerEntries(){
  // Event-level items are included only for normal/general-ledger events.
  // Events assigned to an independent accounting group stay outside the main ledger and reports.
  (db.events||[]).forEach(e=>{
-   if(isIndependentAccountingEvent(e))return;
+   // Dashboard/reporting is a formal ledger view: event-level income/expense
+   // becomes reportable only after that event is formally settled.
+   if(e.status!=='已結算'||isIndependentAccountingEvent(e))return;
    const date=businessDateForEvent(e);
    (Array.isArray(e.accountingItems)?e.accountingItems:[]).forEach(item=>{
      pushItem(date,item,`第${e.seq||1}場｜${Number(e.level||0).toLocaleString()} 賽事`);
@@ -5830,7 +5832,7 @@ function renderDashboardSummary(){
  if($('kNewMembers'))$('kNewMembers').textContent=newMembers;
  if($('kProfit')){$('kProfit').textContent=money(allLedger.net);$('kProfit').className='v '+(allLedger.net>=0?'pos':'neg');}
  if($('kMonthProfit')){$('kMonthProfit').textContent=money(rangeLedger.net);$('kMonthProfit').className='v '+(rangeLedger.net>=0?'pos':'neg');}
- if($('kJP'))$('kJP').textContent=money(rangeLedger.jp);
+ if($('kJP'))$('kJP').textContent=money(allLedger.jp);
  if($('kMonthExpense'))$('kMonthExpense').textContent=money(rangeLedger.expense);
  if($('kMonthEvents'))$('kMonthEvents').textContent=`${rangeLedger.events} 場`;
  if($('ledgerDateFrom') && !$('ledgerDateFrom').value)$('ledgerDateFrom').value=from;
