@@ -2773,13 +2773,13 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
 </main>
 
 
-<div id="epcTwoDeviceModal" style="display:none;position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
- <div style="width:min(620px,100%);background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:18px">
-  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">雙機同步測試</h3><button onclick="document.getElementById('epcTwoDeviceModal').style.display='none'">關閉</button></div>
-  <div class="small" style="margin:8px 0 12px">只使用 epcValidationTwoDeviceV1，不會修改正式 EPC 資料。兩台電腦請輸入相同測試代碼。</div>
-  <input id="epcTwoDeviceSession" placeholder="例如 EPC1005" style="margin-bottom:10px">
+<div id="epcTwoDeviceModal" style="display:none;position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.78);align-items:center;justify-content:center;padding:20px">
+ <div style="width:min(620px,100%);background:#17212c;color:#f4f7fa;border:2px solid #d6b35a;border-radius:14px;padding:20px;box-shadow:0 22px 70px rgba(0,0,0,.6)">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3 style="margin:0;color:#f2d67d!important;font-size:22px;font-weight:900">雙機同步測試</h3><button style="background:#f4f7fa;color:#17212c;border-color:#f4f7fa;font-weight:800" onclick="document.getElementById('epcTwoDeviceModal').style.display='none'">關閉</button></div>
+  <div style="margin:10px 0 14px;color:#d8e0e8;font-size:14px;line-height:1.6">只使用 epcValidationTwoDeviceV1，不會修改正式 EPC 資料。兩台電腦請輸入相同測試代碼。</div>
+  <input id="epcTwoDeviceSession" placeholder="例如 EPC1005" style="margin-bottom:12px;background:#fff!important;color:#111!important;border:2px solid #d6b35a!important;font-size:17px;font-weight:800">
   <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="runTwoDeviceAction_('init')">建立測試</button><button onclick="runTwoDeviceAction_('writeA')">本機當 A 寫入</button><button onclick="runTwoDeviceAction_('writeB')">本機當 B 寫入</button><button onclick="runTwoDeviceAction_('same')">同欄位寫入</button><button onclick="runTwoDeviceAction_('read')">讀取結果</button></div>
-  <pre id="epcTwoDeviceResult" style="margin-top:12px;white-space:pre-wrap;word-break:break-word;background:#0d141c;border:1px solid #263443;border-radius:10px;padding:12px;min-height:90px"></pre>
+  <pre id="epcTwoDeviceResult" style="margin-top:14px;white-space:pre-wrap;word-break:break-word;background:#090e14!important;color:#f4f7fa!important;border:1px solid #536476;border-radius:10px;padding:14px;min-height:110px;font-size:14px;line-height:1.55;font-weight:600"></pre>
  </div>
 </div>
 
