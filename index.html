@@ -1797,10 +1797,12 @@ window.epcFirebasePublishFieldChanges=async function(changes){
  const pendingQueue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict);
  // V1.51.26: preserve ledger order, but never process a later change for the
  // same path before its earlier local predecessor. Different paths still flow.
+ // A quarantined conflict also blocks only later edits of that same path.
+ const blockedPaths=new Set((changes||[]).filter(x=>x&&x.conflict).map(x=>String(x.path||'')));
  const seenPaths=new Set(),queue=[];
  for(const x of pendingQueue){
   const p=String(x.path||'');
-  if(seenPaths.has(p))continue;
+  if(blockedPaths.has(p)||seenPaths.has(p))continue;
   seenPaths.add(p);queue.push(x);
   if(queue.length>=100)break;
  }
