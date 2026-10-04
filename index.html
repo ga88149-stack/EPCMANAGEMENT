@@ -1794,7 +1794,7 @@ function epcFieldKey_(path){
 }
 window.epcFirebasePublishFieldChanges=async function(changes){
  if(!auth.currentUser)return false;
- const queue=(changes||[]).filter(x=>!x.publishedAt).slice(0,100);
+ const queue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict).slice(0,100);
  for(const ch of queue){
   const ref=doc(fs,'epcFieldVersionsV2',epcFieldKey_(String(ch.path||'')));
   const result=await runTransaction(fs,async tx=>{
@@ -1843,7 +1843,8 @@ window.epcFirebasePublishFieldChanges=async function(changes){
   }
  }
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(changes||[]));
- return true;
+ const more=(changes||[]).some(x=>!x.publishedAt&&!x.conflict);
+ return {ok:true,more};
 };
 
 function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
@@ -2089,7 +2090,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.1 DEV · Firebase Field Queue</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.2 DEV · Firebase Batch Drain</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3691,8 +3692,10 @@ function epcScheduleFieldPublish_(){
  epcFieldPublishTimer_=setTimeout(async function(){
   if(typeof window.epcFirebasePublishFieldChanges!=='function')return;
   try{
-   const ok=await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]);
+   const result=await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]);
+   const ok=!!(result&&result.ok!==false);
    const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt||ch.conflict);
+   if(result&&result.more){epcScheduleFieldPublish_();return;}
    if(ok&&!unresolved&&!window.epcFirebaseFieldConflict){
      localDirty=false;cloudPending=false;
      localStorage.removeItem('epcLocalDirty');
