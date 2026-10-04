@@ -1792,6 +1792,22 @@ function epcFieldKey_(path){
  for(let i=0;i<path.length;i++){h^=path.charCodeAt(i);h=Math.imul(h,16777619);}
  return 'f_'+(h>>>0).toString(16);
 }
+window.epcPublishLiveRoster_=async function(){
+ const u=auth.currentUser;if(!u||String(u.email||'').toLowerCase()!=='ga88149@gmail.com')return false;
+ try{
+  const events=Array.isArray(window.epcDb&&window.epcDb.events)?window.epcDb.events:[];
+  const live=events.filter(e=>(e.status||'進行中')!=='已結算').map(e=>({
+   id:String(e.id||''),date:e.date||'',seq:Number(e.seq||1),level:Number(e.level||0),chips:Number(e.chips||0),status:e.status||'進行中',
+   updatedAt:Number(e._eventUpdatedAt||e.createdAt||0),
+   players:(Array.isArray(e.players)?e.players:[]).map(p=>({
+    memberId:String(p.memberId||''),buyin:Number(p.buyin||0),rebuy:Number(p.rebuy||0),addon:Number(p.addon||0),
+    manualDiscount:Number(p.manualDiscount||0),stack:p.stack??'',nickname:p.nickname||'',group:p.group||'',prize:Number(p.prize||0)
+   }))
+  }));
+  await setDoc(doc(fs,'epcLiveRoster','current'),{events:clean(live),clientTime:new Date().toISOString(),updatedAt:serverTimestamp()},{merge:false});
+  return true;
+ }catch(e){console.warn('Live roster publish deferred',e);return false;}
+};
 window.epcFirebasePublishFieldChanges=async function(changes){
  if(!auth.currentUser)return false;
  const pendingQueue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict);
@@ -2277,7 +2293,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.56 DEV · Realtime Delete Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.57 DEV · Live Phone Roster</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4386,6 +4402,7 @@ function persist(){
  localStorage.setItem('epcLocalDirty','1');
  scheduleCloudSave();
  if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();
+ if(typeof window.epcPublishLiveRoster_==='function')window.epcPublishLiveRoster_();
 }
 document.querySelectorAll('#nav button[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const target=$(b.dataset.page);if(target)target.classList.add('active');render()});
 async function addMember(){
