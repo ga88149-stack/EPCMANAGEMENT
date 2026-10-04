@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.44 DEV · Instant Settlement & Fast Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.45 DEV · Auto Phone Stack Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3557,6 +3557,32 @@ async function manualCloudSync(){
  }
 }
 let __phoneStackSyncBusy=false;
+let __phoneStackAutoTimer=null;
+let __phoneStackAutoEventId='';
+let __phoneStackAutoLastRun=0;
+function epcSettlementPageOpen_(){
+ const el=document.getElementById('settle');
+ return !!(el&&el.classList.contains('active'));
+}
+function stopPhoneStackAutoSync_(){
+ if(__phoneStackAutoTimer){clearInterval(__phoneStackAutoTimer);__phoneStackAutoTimer=null;}
+ __phoneStackAutoEventId='';
+}
+function startPhoneStackAutoSync_(){
+ stopPhoneStackAutoSync_();
+ const e=currentEvent();
+ if(!e||e.status==='已結算'||!epcSettlementPageOpen_())return;
+ __phoneStackAutoEventId=String(e.id||'');
+ // Run once immediately, then poll while the settlement page remains open.
+ setTimeout(()=>syncPhoneStacksOnly({auto:true}),120);
+ __phoneStackAutoTimer=setInterval(()=>{
+   const cur=currentEvent();
+   if(!epcSettlementPageOpen_()||!cur||cur.status==='已結算'||String(cur.id||'')!==__phoneStackAutoEventId){
+     stopPhoneStackAutoSync_();return;
+   }
+   syncPhoneStacksOnly({auto:true});
+ },1500);
+}
 async function readPhoneStacksApi(eventId){
  // V1.38：改用 POST 讀取，避免 GitHub Pages -> Apps Script GET 偶發 404。
  // 只讀 PHONE_STACKS；失敗時不修改任何本機/雲端賽事資料。
@@ -3574,16 +3600,19 @@ async function readPhoneStacksApi(eventId){
  if(!j||j.ok!==true)throw new Error((j&&j.error)||'STACK_API_ERROR');
  return j;
 }
-async function syncPhoneStacksOnly(){
+async function syncPhoneStacksOnly(opts){
+ const auto=!!(opts&&opts.auto);
  const localEvent=currentEvent();
- if(!localEvent)return alert('請先選擇要結算的賽事');
- if(localEvent.status==='已結算')return alert('此賽事已正式結算，不能再同步籌碼。');
+ if(!localEvent){if(!auto)alert('請先選擇要結算的賽事');return;}
+ if(localEvent.status==='已結算'){if(!auto)alert('此賽事已正式結算，不能再同步籌碼。');return;}
+ if(auto&&!epcSettlementPageOpen_())return;
  if(__phoneStackSyncBusy)return;
- const btn=(typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;
+ __phoneStackAutoLastRun=Date.now();
+ const btn=(!auto&&typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;
  __phoneStackSyncBusy=true;
  if(btn){btn.disabled=true;btn.dataset.oldText=btn.textContent;btn.textContent='同步中…';}
  try{
-  setCloudState('☁ 正在讀取手機籌碼…');
+  if(!auto)setCloudState('☁ 正在讀取手機籌碼…');
   const res=await readPhoneStacksApi(localEvent.id);
   const map={};
   (res.stacks||[]).forEach(x=>{
@@ -3620,12 +3649,19 @@ async function syncPhoneStacksOnly(){
   // queued exact per-player stack fields for Firebase. Calling saveCloudNow() before
   // those field transactions settle can merge an older EPC_DATA snapshot back over
   // the just-imported phone stacks.
-  actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
-  setCloudState(updated>0?'☁ 手機籌碼已同步｜正在送往 Firebase':'☁ 手機籌碼已同步｜資料相同');
+  if(updated>0){
+    actionMsg(`手機籌碼自動同步完成｜更新 ${updated} 人`);
+    setCloudState('☁ 手機籌碼已同步｜正在送往 Firebase');
+  }else if(!auto){
+    actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
+    setCloudState('☁ 手機籌碼已同步｜資料相同');
+  }
  }catch(err){
   console.error(err);
-  setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
-  alert('同步手機籌碼失敗：'+String(err.message||err));
+  if(!auto){
+    setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
+    alert('同步手機籌碼失敗：'+String(err.message||err));
+  }
  }finally{
   __phoneStackSyncBusy=false;
   if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步籌碼';}
@@ -4565,7 +4601,7 @@ function goICM(){
  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
  $('settle').classList.add('active');
  document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
- render();window.scrollTo(0,0);
+ render();window.scrollTo(0,0);startPhoneStackAutoSync_();
 }
 function pricingDiscountFor(c,e){
  return (e.pricingMode||'standard')==='custom' ? 0 : (+c.auto||0);
@@ -7197,5 +7233,15 @@ document.addEventListener('focusout',function(e){
  },800);
 },true);
 
+
+(function(){
+ const settle=document.getElementById('settle');
+ if(!settle)return;
+ const obs=new MutationObserver(()=>{
+   if(settle.classList.contains('active'))startPhoneStackAutoSync_();
+   else stopPhoneStackAutoSync_();
+ });
+ obs.observe(settle,{attributes:true,attributeFilter:['class']});
+})();
 </script>
 </body></html>
