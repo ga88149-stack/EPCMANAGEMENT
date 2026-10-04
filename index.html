@@ -2046,7 +2046,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.23 DEV · Sync State Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.24 DEV · Sync Completion Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3252,8 +3252,7 @@ async function saveCloudNow(force=false){
      db=preserveActivityEdits_(candidate,db);
      db=preserveEventEdits_(candidate,db);
      db=preserveMembers_(candidate,db,latest.members);
-     localDirty=false;
-     localStorage.removeItem('epcLocalDirty');
+     epcMarkSyncCompleteIfSafe_();
    }
 
    cloudRevision=savedRevision;
@@ -3560,6 +3559,30 @@ function epcRecoverSyncState_(){
 }
 window.epcRecoverSyncState_=epcRecoverSyncState_;
 epcRecoverSyncState_();
+function epcSyncOutstanding_(){
+ const ledger=window.epcFieldChanges||[];
+ return {
+  unpublished:ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).length,
+  conflicts:ledger.filter(ch=>ch&&ch.conflict).length,
+  activeConflict:!!window.epcFirebaseFieldConflict,
+  pendingRemote:!!window.epcFirebasePending
+ };
+}
+function epcCanMarkSyncComplete_(){
+ const s=epcSyncOutstanding_();
+ return !s.unpublished&&!s.conflicts&&!s.activeConflict&&!s.pendingRemote;
+}
+function epcMarkSyncCompleteIfSafe_(){
+ if(!epcCanMarkSyncComplete_()){
+   localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
+   return false;
+ }
+ epcMarkSyncCompleteIfSafe_();
+ return true;
+}
+window.epcSyncOutstanding_=epcSyncOutstanding_;
+window.epcCanMarkSyncComplete_=epcCanMarkSyncComplete_;
+window.epcMarkSyncCompleteIfSafe_=epcMarkSyncCompleteIfSafe_;
 function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(out.length>5000)return out;
  const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
@@ -3686,8 +3709,7 @@ function epcScheduleFieldPublish_(){
    const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt&&!ch.conflict);
    const isolatedConflicts=(window.epcFieldChanges||[]).some(ch=>ch.conflict);
    if(ok&&!unresolved&&!isolatedConflicts&&!window.epcFirebaseFieldConflict){
-     localDirty=false;cloudPending=false;
-     localStorage.removeItem('epcLocalDirty');
+     epcMarkSyncCompleteIfSafe_();
      // Pending whole-db snapshots are intentionally not auto-applied.
    }
   }catch(e){console.warn('Field publish deferred',e);}
