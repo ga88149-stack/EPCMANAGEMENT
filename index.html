@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.39 DEV · Sheet Member Pull Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.40 DEV · Cloud Display Preferences</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6873,10 +6873,22 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoRefres
 const DISPLAY_API_KEY='epcDisplayApiUrlV1';
 const DISPLAY_PREFS_KEY='epcDisplayDevicePrefsV1';
 let displayDevicesCache=[];
-function displayPrefsAll_(){try{return JSON.parse(localStorage.getItem(DISPLAY_PREFS_KEY)||'{}')||{}}catch(_){return {}}}
+function displayPrefsAll_(){
+ // Firebase-synced DB is authoritative; localStorage remains a startup/offline fallback.
+ const cloud=(db&&db.systemSettings&&db.systemSettings.displayDevicePrefs);
+ if(cloud&&typeof cloud==='object'&&!Array.isArray(cloud))return cloud;
+ try{return JSON.parse(localStorage.getItem(DISPLAY_PREFS_KEY)||'{}')||{}}catch(_){return {}}
+}
 function displayPref_(id){return displayPrefsAll_()[id]||{}}
-function saveDisplayPref_(id,pref){const all=displayPrefsAll_();all[id]=pref;localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(all))}
-function removeDisplayPref_(id){const all=displayPrefsAll_();delete all[id];localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(all))}
+function saveDisplayPrefsAll_(all){
+ const safe=all&&typeof all==='object'?all:{};
+ localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(safe));
+ db.systemSettings=db.systemSettings||{};
+ db.systemSettings.displayDevicePrefs=safe;
+ persist();
+}
+function saveDisplayPref_(id,pref){const all=Object.assign({},displayPrefsAll_());all[id]=pref;saveDisplayPrefsAll_(all)}
+function removeDisplayPref_(id){const all=Object.assign({},displayPrefsAll_());delete all[id];saveDisplayPrefsAll_(all)}
 
 function displayApi_(){return String(localStorage.getItem(DISPLAY_API_KEY)||'').trim()}
 function displayApiSetInput_(){const el=$('displayApiUrl');if(el&&!el.value)el.value=displayApi_()}
