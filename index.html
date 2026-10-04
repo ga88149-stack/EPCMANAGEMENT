@@ -1796,6 +1796,10 @@ window.epcFirebasePublishFieldChanges=async function(changes){
  if(!auth.currentUser)return false;
  const queue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict).slice(0,100);
  for(const ch of queue){
+  // Capture immutable identity/value for this exact send. A later local edit may
+  // append a newer change for the same path while this transaction is in flight.
+  if(!ch.changeId)ch.changeId='legacy_'+Number(ch.changedAt||Date.now())+'_'+Math.random().toString(36).slice(2,8);
+  const ackChangeId=String(ch.changeId),ackChangedAt=Number(ch.changedAt||0),ackAfter=stableJson_(clean(ch.after));
   const ref=doc(fs,'epcFieldVersionsV2',epcFieldKey_(String(ch.path||'')));
   const result=await runTransaction(fs,async tx=>{
    const snap=await tx.get(ref);
@@ -1834,6 +1838,15 @@ window.epcFirebasePublishFieldChanges=async function(changes){
    }
    const el=document.getElementById('firebaseMirrorState');
    if(el){el.textContent='Firebase：⚠ 欄位版本衝突｜交易已阻止覆蓋｜'+String(ch.path||'');el.style.color='#ffb74d';}
+   continue;
+  }
+  const ackStillMatches=String(ch.changeId||'')===ackChangeId&&Number(ch.changedAt||0)===ackChangedAt&&stableJson_(clean(ch.after))===ackAfter;
+  if(!ackStillMatches){
+   // Stale ACK: the in-memory change object advanced while Firebase was in flight.
+   // Never clear/complete the newer local value.
+   ch.publishedAt=null;ch.conflict=false;ch.baseVersion=result.version;
+   delete ch.forceFromVersion;
+   localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
    continue;
   }
   ch.publishedAt=Date.now();ch.publishedVersion=result.version;ch.baseVersion=result.version;ch.conflict=false;
@@ -2046,7 +2059,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.24 DEV · Sync Completion Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.25 DEV · Queue ACK Integrity</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3577,7 +3590,7 @@ function epcMarkSyncCompleteIfSafe_(){
    localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
    return false;
  }
- epcMarkSyncCompleteIfSafe_();
+ localDirty=false;cloudPending=false;localStorage.removeItem('epcLocalDirty');
  return true;
 }
 window.epcSyncOutstanding_=epcSyncOutstanding_;
@@ -3598,7 +3611,7 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
    for(const k of new Set([...Object.keys(before),...Object.keys(after)]))epcCollectFieldChanges_(before[k],after[k],path?path+'.'+k:k,out);
    return out;
  }
- out.push({path:path||'(root)',before:cloneCloud_(before),after:cloneCloud_(after),clientId:epcClientId_,changedAt:Date.now()});
+ out.push({path:path||'(root)',before:cloneCloud_(before),after:cloneCloud_(after),clientId:epcClientId_,changedAt:Date.now(),changeId:'chg_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10)});
  return out;
 }
 window.epcGetFieldChanges=()=>cloneCloud_(window.epcFieldChanges||[]);
