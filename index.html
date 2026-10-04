@@ -1787,16 +1787,16 @@ const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
 let timer=null,busy=false,pending=false,lastFingerprint="",suppressMirrorUntil=0;
 let verifiedSnapshot=null,verifiedMeta=null;
-function epcFieldKey_(path){
- let h=2166136261;
- for(let i=0;i<path.length;i++){h^=path.charCodeAt(i);h=Math.imul(h,16777619);}
- return 'f_'+(h>>>0).toString(16);
+async function epcFieldKey_(path){
+ const bytes=new TextEncoder().encode(String(path||''));
+ const hash=await crypto.subtle.digest('SHA-256',bytes);
+ return 'f_'+Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 window.epcFirebasePublishFieldChanges=async function(changes){
  if(!auth.currentUser)return false;
  const queue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict).slice(0,100);
  for(const ch of queue){
-  const ref=doc(fs,'epcFieldVersionsV2',epcFieldKey_(String(ch.path||'')));
+  const ref=doc(fs,'epcFieldVersionsV3',await epcFieldKey_(String(ch.path||'')));
   const result=await runTransaction(fs,async tx=>{
    const snap=await tx.get(ref);
    const old=snap.exists()?snap.data():{};
@@ -1869,7 +1869,6 @@ async function hashText_(txt){
  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
 async function fullHash_(v){return hashText_(stableJson_(clean(v)));}
-function fingerprint(d){try{return JSON.stringify([d.updatedAt,(d.members||[]).length,(d.events||[]).length,d.currentEventId,d.activityManagement,d.dailySettlementReports,d.settings]).length+":"+String(d.updatedAt||"");}catch(_){return String(Date.now());}}
 async function commitOps(ops){
  for(let i=0;i<ops.length;i+=350){
   const batch=writeBatch(fs);
@@ -1907,11 +1906,11 @@ async function mirror(){
  const u=auth.currentUser;
  if(!u||String(u.email||"").toLowerCase()!=="ga88149@gmail.com"){state("Firebase：等待登入");return;}
  if(!window.epcDb||typeof window.epcDb!=="object")return;
- const snap=clean(window.epcDb),fp=fingerprint(snap);
- if(fp===lastFingerprint){state("Firebase：鏡像已同步");return;}
+ const snap=clean(window.epcDb);
  busy=true;pending=false;
  try{
-  const stable=stableJson_(snap),fullHash=await hashText_(stable),fullBytes=new TextEncoder().encode(stable).length;
+  const stable=stableJson_(snap),fullHash=await hashText_(stable),fp=fullHash,fullBytes=new TextEncoder().encode(stable).length;
+  if(fp===lastFingerprint){state("Firebase：鏡像已同步");return;}
   // If Firestore already contains this exact database, do not create another
   // generation. This breaks A<->B mirror echo loops.
   try{
@@ -2043,7 +2042,7 @@ function drainPendingFields_(){
 function startFieldRealtimeObserver_(){
  if(fieldRealtimeUnsub)fieldRealtimeUnsub();
  fieldRealtimePrimed=false;
- fieldRealtimeUnsub=onSnapshot(query(collection(fs,'epcFieldVersionsV2')),snap=>{
+ fieldRealtimeUnsub=onSnapshot(query(collection(fs,'epcFieldVersionsV3')),snap=>{
   const initial=!fieldRealtimePrimed;
   fieldRealtimePrimed=true;
   let applied=0,queued=0;
@@ -2136,7 +2135,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.12 DEV · Firebase Only Operations</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.13 DEV · Firebase SHA-256 Fields</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">Google 備份</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
