@@ -208,17 +208,30 @@ function startHeartbeat(id){
   beat();
   heartbeatTimer=setInterval(beat,10000);
 }
+let displayPollFailures_=0;
+let displayLastPayload_=null;
 async function poll(id){
   try{
     const s=await getState(id);
+    displayPollFailures_=0;
     if(s.ok && s.paired){
       paired();
       startHeartbeat(id);
-      renderPayload(s.payload);
+      if(s.payload!==undefined && s.payload!==null){
+        displayLastPayload_=s.payload;
+        renderPayload(s.payload);
+      }else if(displayLastPayload_!==null){
+        renderPayload(displayLastPayload_);
+      }
     }else if(s.ok){
       if(s.code) showCode(s.code);
     }
-  }catch(e){}
+  }catch(e){
+    // Temporary network/API failures must not blank or reset the TV.
+    // Keep the last successfully rendered payload and retry automatically.
+    displayPollFailures_++;
+    if(displayLastPayload_!==null && displayPollFailures_===1)renderPayload(displayLastPayload_);
+  }
   setTimeout(()=>poll(id),POLL_MS);
 }
 async function boot(){
