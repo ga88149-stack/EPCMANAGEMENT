@@ -1918,6 +1918,45 @@ window.epcFirebaseLiveValidation=async function(){
  const r={ok:passed===tests.length,passed,total:tests.length,tests,mode:'isolated-firestore-live',durationMs:Date.now()-startedAt,ranAt:new Date().toISOString()};
  window.epcFirebaseLiveValidationResult=r;return r;
 };
+window.epcTwoDeviceValidation=async function(action,sessionId){
+ if(!auth.currentUser)return {ok:false,needsLogin:true,message:'請先完成 Firebase 登入'};
+ const session=String(sessionId||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
+ if(!session)return {ok:false,message:'需要測試代碼'};
+ const ref=doc(fs,'epcValidationTwoDeviceV1',session);
+ const client=String(epcClientId_||''),now=Date.now();
+ try{
+  if(action==='init'){
+   await setDoc(ref,{kind:'EPC_TWO_DEVICE_VALIDATION_ONLY',session,a:null,b:null,same:null,sameVersion:0,createdBy:client,updatedAt:serverTimestamp()});
+   return {ok:true,action,session,message:'測試代碼已建立'};
+  }
+  if(action==='writeA'||action==='writeB'){
+   const field=action==='writeA'?'a':'b',token=field.toUpperCase()+'_'+now.toString(36);
+   await runTransaction(fs,async tx=>{
+    const snap=await tx.get(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
+    tx.update(ref,{[field]:{token,client,at:now},updatedAt:serverTimestamp()});
+   });
+   const snap=await getDoc(ref),d=snap.data()||{};
+   return {ok:!!d[field]&&d[field].token===token,action,session,token,state:{a:d.a||null,b:d.b||null}};
+  }
+  if(action==='same'){
+   const token='S_'+now.toString(36)+'_'+Math.random().toString(36).slice(2,5);
+   const result=await runTransaction(fs,async tx=>{
+    const snap=await tx.get(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
+    const d=snap.data()||{},previousVersion=Number(d.sameVersion||0),version=previousVersion+1;
+    tx.update(ref,{same:{token,client,at:now,previousVersion,version},sameVersion:version,updatedAt:serverTimestamp()});
+    return {previousVersion,version};
+   });
+   const snap=await getDoc(ref),d=snap.data()||{};
+   return {ok:!!d.same&&Number(d.sameVersion)===result.version,action,session,token,result,remote:d.same||null};
+  }
+  if(action==='read'){
+   const snap=await getDoc(ref);if(!snap.exists())return {ok:false,session,message:'測試代碼不存在'};
+   const d=snap.data()||{};
+   return {ok:true,action,session,state:{a:d.a||null,b:d.b||null,same:d.same||null,sameVersion:Number(d.sameVersion||0)}};
+  }
+  return {ok:false,message:'未知測試動作'};
+ }catch(e){return {ok:false,action,session,error:String(e&&e.message||e)};}
+};
 function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
 function clean(v){return JSON.parse(JSON.stringify(v??null));}
 function safeId(v,fallback){const s=String(v??fallback??"").trim().replaceAll("/","_");return s||String(fallback||Date.now());}
@@ -2113,7 +2152,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.31 DEV · Live Firebase Validation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.32 DEV · Two-Device Validation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2733,6 +2772,16 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
 
 </main>
 
+
+<div id="epcTwoDeviceModal" style="display:none;position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
+ <div style="width:min(620px,100%);background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:18px">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">雙機同步測試</h3><button onclick="document.getElementById('epcTwoDeviceModal').style.display='none'">關閉</button></div>
+  <div class="small" style="margin:8px 0 12px">只使用 epcValidationTwoDeviceV1，不會修改正式 EPC 資料。兩台電腦請輸入相同測試代碼。</div>
+  <input id="epcTwoDeviceSession" placeholder="例如 EPC1005" style="margin-bottom:10px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="runTwoDeviceAction_('init')">建立測試</button><button onclick="runTwoDeviceAction_('writeA')">本機當 A 寫入</button><button onclick="runTwoDeviceAction_('writeB')">本機當 B 寫入</button><button onclick="runTwoDeviceAction_('same')">同欄位寫入</button><button onclick="runTwoDeviceAction_('read')">讀取結果</button></div>
+  <pre id="epcTwoDeviceResult" style="margin-top:12px;white-space:pre-wrap;word-break:break-word;background:#0d141c;border:1px solid #263443;border-radius:10px;padding:12px;min-height:90px"></pre>
+ </div>
+</div>
 
 <div id="epcSyncDiagnosticsModal" style="display:none;position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
  <div style="width:min(760px,100%);max-height:82vh;overflow:auto;background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:18px">
@@ -3772,7 +3821,7 @@ function epcSyncDiagnostics_(){
  const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
  const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
  return {
-  version:'V1.51.31',
+  version:'V1.51.32',
   capturedAt:new Date().toISOString(),
   readOnly:true,
   local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
@@ -4023,6 +4072,16 @@ function scheduleFirebaseConflictDrain_(){
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
  // Diagnostic mode intentionally observes only; no automatic merge/write.
 });
+
+function showTwoDeviceValidation_(){document.getElementById('epcTwoDeviceModal').style.display='flex';}
+async function runTwoDeviceAction_(action){
+ const code=document.getElementById('epcTwoDeviceSession').value;
+ const out=document.getElementById('epcTwoDeviceResult');out.textContent='執行中…';
+ const r=await window.epcTwoDeviceValidation(action,code);
+ out.textContent=JSON.stringify(r,null,2);
+}
+window.showTwoDeviceValidation_=showTwoDeviceValidation_;
+window.runTwoDeviceAction_=runTwoDeviceAction_;
 
 async function runLiveFirebaseValidation_(){
  const btn=event&&event.currentTarget?event.currentTarget:null,old=btn?btn.textContent:'';
