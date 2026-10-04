@@ -2046,7 +2046,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.20 DEV · Conflict Isolation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.21 DEV · Remote Conflict Isolation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3700,13 +3700,31 @@ function scheduleFirebaseConflictDrain_(){
        const localNow=cloneCloud_(db);
        const conflicts=epcDetectConflicts_(base,localNow,remote);
        if(conflicts.length){
+         // V1.51.21: quarantine only the paths that actually conflict. First
+         // consume every non-conflicting remote field into the live working db.
+         // The conflicting paths are restored to the local values and remain
+         // explicitly unresolved for the operator.
+         const conflictPaths=new Set(conflicts.map(x=>String(x.path||'')));
+         let partial=mergeCloud3_(base,localNow,remote);
+         for(const x of conflicts)epcSetPathValue_(partial,x.path,x.local);
+         partial=preserveManualDiscountEdits_(localNow,partial);
+         partial=preserveActivityEdits_(localNow,partial);
+         partial=preserveEventEdits_(localNow,partial);
+         partial=preserveMembers_(localNow,partial);
+         db=partial;
+         epcLastPersistSnapshot_=cloneCloud_(db);
+         localStorage.setItem('epcV1',JSON.stringify(db));
          window.epcFirebaseConflicts=conflicts;
-         window.epcFirebasePending=p;
+         // The snapshot's safe fields have already been consumed. Keep only
+         // conflict metadata; do not let this whole snapshot block later updates.
+         window.epcFirebasePending=null;
+         localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
          const first=conflicts[0].path;
          const el=document.getElementById('firebaseMirrorState');
-         if(el){el.textContent='Firebase：⚠ 同欄位衝突 '+conflicts.length+' 處｜未覆蓋｜'+first;el.style.color='#ffb74d';}
-         console.warn('Firebase same-field conflicts',conflicts);
-         return; // Never silently choose a winner.
+         if(el){el.textContent='Firebase：⚠ 已同步其他欄位｜待處理同欄位衝突 '+conflicts.length+' 處｜'+first;el.style.color='#ffb74d';}
+         console.warn('Firebase isolated same-field conflicts',Array.from(conflictPaths),conflicts);
+         if(!epcEditLocked_())render();
+         return; // Only conflicting paths remain quarantined.
        }
        db=mergeCloud3_(base,localNow,remote);
        db=preserveManualDiscountEdits_(localNow,db);
