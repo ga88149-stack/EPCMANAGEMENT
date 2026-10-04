@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.48 DEV · Settled Accounting Only</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.49 DEV · Accounting Discount Consistency</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4858,18 +4858,22 @@ function setEventAccountingGroup(eventId,value){
  renderDailyAccountingDetail();
 }
 function accountingTotalsForEvents(events){
- // Use exactly the same per-event accounting figures shown in the top event-detail table.
- // This prevents the summary KPIs from drifting to a second/legacy discount formula.
+ // Accounting must use the accounting-specific discount fields. In custom pricing,
+ // the player-facing overbuy discount may show only the extra price reduction
+ // (e.g. 400/group), while accounting must expense the full waived original admin
+ // (e.g. 800/group). Using the display fields here understated expenses/profit.
  let gross=0,auto=0,manual=0,netAdmin=0,jp=0,groups=0,rebuyDiscount=0,groupDiscount=0;
  (events||[]).forEach(e=>{
    (Array.isArray(e.players)?e.players:[]).forEach(p=>{
      const x=calcPlayerForEvent(p,e);
+     const rb=x.accountingRebuyDiscount??(x.rebuyDiscount||0);
+     const gd=x.accountingGroupDiscount??(x.overbuyDiscount||0);
      groups+=x.groups||0;
      gross+=x.grossAdmin||0;
-     auto+=x.auto||0;
      manual+=x.manual||0;
-     rebuyDiscount+=x.rebuyDiscount||0;
-     groupDiscount+=x.overbuyDiscount||0;
+     rebuyDiscount+=rb;
+     groupDiscount+=gd;
+     auto+=rb+gd;
    });
    jp+=eventOwnJP(e);
  });
