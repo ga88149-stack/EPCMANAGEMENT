@@ -2277,7 +2277,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.51 DEV · Range JP Summary</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.52 DEV · Compact Summary Dashboard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2300,35 +2300,35 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
   </div>
  </div>
 
- <div class="grid" style="grid-template-columns:repeat(4,1fr)">
-  <div class="card kpi"><div class="l">總會員數</div><div class="v" id="kMembers">0</div></div>
-  <div class="card kpi"><div class="l">區間新增會員數</div><div class="v" id="kNewMembers">0</div></div>
-  <div class="card kpi"><div class="l">總營利</div><div class="v" id="kProfit">$0</div></div>
-  <div class="card kpi"><div class="l">區間總營利</div><div class="v" id="kMonthProfit">$0</div></div>
-  <div class="card kpi"><div class="l">總 JP 累計</div><div class="v" id="kJP">$0</div></div>
-  <div class="card kpi"><div class="l">區間 JP 累計</div><div class="v" id="kRangeJP">$0</div></div>
-  <div class="card kpi"><div class="l">區間總支出</div><div class="v" id="kMonthExpense">$0</div></div>
-  <div class="card kpi" style="grid-column:span 2"><div class="l">區間賽事場次</div><div class="v" id="kMonthEvents">0 場</div><div class="small" id="kLevelBreakdown">尚無賽事</div></div>
+ <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:8px">
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">總會員數</div><div class="v" id="kMembers">0</div></div>
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間新增會員數</div><div class="v" id="kNewMembers">0</div></div>
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">總營利</div><div class="v" id="kProfit">$0</div></div>
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間總營利</div><div class="v" id="kMonthProfit">$0</div></div>
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">總 JP 累計</div><div class="v" id="kJP">$0</div></div>
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間 JP 累計</div><div class="v" id="kRangeJP">$0</div></div>
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間總支出</div><div class="v" id="kMonthExpense">$0</div></div>
+  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間賽事場次</div><div class="v" id="kMonthEvents">0 場</div><div class="small" id="kLevelBreakdown">尚無賽事</div></div>
  </div>
 
- <div class="card" style="margin-top:14px">
+ <div class="card" style="margin-top:10px;padding:12px 14px">
   <div class="report-topbar" style="margin-bottom:10px">
    <div><h3 style="margin:0">日報表</h3><div class="small">查看指定營業日的 EPC 總帳收支；獨立帳務不納入。</div></div>
    <div style="min-width:220px"><label>營業日</label><input type="date" id="dashboardDailyDate" onchange="renderDashboardDailyReport()"></div>
   </div>
-  <div class="grid">
-   <div class="card kpi"><div class="l">賽事數</div><div class="v" id="drEvents">0 場</div></div>
-   <div class="card kpi"><div class="l">行政費收入</div><div class="v" id="drAdmin">$0</div></div>
-   <div class="card kpi"><div class="l">入會費收入</div><div class="v" id="drMembership">$0</div></div>
-   <div class="card kpi"><div class="l">折扣支出</div><div class="v" id="drDiscount">$0</div></div>
-   <div class="card kpi"><div class="l">其他收入</div><div class="v" id="drOtherIncome">$0</div></div>
-   <div class="card kpi"><div class="l">其他支出</div><div class="v" id="drOtherExpense">$0</div></div>
-   <div class="card kpi"><div class="l">淨收入</div><div class="v" id="drNet">$0</div></div>
-   <div class="card kpi"><div class="l">JP</div><div class="v" id="drJP">$0</div></div>
+  <div class="grid" style="grid-template-columns:repeat(8,1fr);gap:7px">
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">賽事數</div><div class="v" id="drEvents">0 場</div></div>
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">行政費收入</div><div class="v" id="drAdmin">$0</div></div>
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">入會費收入</div><div class="v" id="drMembership">$0</div></div>
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">折扣支出</div><div class="v" id="drDiscount">$0</div></div>
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">其他收入</div><div class="v" id="drOtherIncome">$0</div></div>
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">其他支出</div><div class="v" id="drOtherExpense">$0</div></div>
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">淨收入</div><div class="v" id="drNet">$0</div></div>
+   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">JP</div><div class="v" id="drJP">$0</div></div>
   </div>
-  <div class="tablewrap" style="margin-top:12px">
-   <table><thead><tr><th>方向</th><th>分類</th><th>項目名稱</th><th>金額</th><th>來源</th></tr></thead><tbody id="dashboardDailyItemRows"></tbody></table>
-  </div>
+  <details style="margin-top:8px"><summary class="small" style="cursor:pointer">查看日報表收支明細</summary>
+   <div class="tablewrap" style="margin-top:8px"><table><thead><tr><th>方向</th><th>分類</th><th>項目名稱</th><th>金額</th><th>來源</th></tr></thead><tbody id="dashboardDailyItemRows"></tbody></table></div>
+  </details>
  </div>
 
  <div class="card" style="margin-top:14px">
