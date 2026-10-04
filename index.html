@@ -1888,6 +1888,39 @@ window.epcFirebasePublishFieldChanges=async function(changes){
  return true;
 };
 
+window.epcProductionCanary=async function(action,sessionId){
+ if(!auth.currentUser)return {ok:false,needsLogin:true,message:'請先完成 Firebase 登入'};
+ const session=String(sessionId||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
+ if(!session)return {ok:false,message:'需要 Canary 代碼'};
+ const path='__syncCanary.'+session,ref=doc(fs,'epcFieldVersionsV2',epcFieldKey_(path));
+ const client=String(epcClientId_||''),key='epcProdCanaryBase_'+session;
+ try{
+  if(action==='capture'){
+   const snap=await getDoc(ref),d=snap.exists()?snap.data():{},version=Number(d.version||0),value=clean(d.value);
+   sessionStorage.setItem(key,JSON.stringify({version,value}));
+   return {ok:true,action,session,path,baseVersion:version,baseValue:value};
+  }
+  if(action==='commit'){
+   const raw=sessionStorage.getItem(key);if(!raw)return {ok:false,message:'本機尚未鎖定 Canary 基準'};
+   const base=JSON.parse(raw),token='PC_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,5);
+   const result=await runTransaction(fs,async tx=>{
+    const snap=await tx.get(ref),old=snap.exists()?snap.data():{},remoteVersion=Number(old.version||0);
+    const sameBase=stableJson_(clean(old.value))===stableJson_(clean(base.value));
+    if(remoteVersion!==Number(base.version)||!sameBase)return {conflict:true,remoteVersion,remoteValue:clean(old.value)};
+    const version=remoteVersion+1,value={token,client,at:Date.now()};
+    tx.set(ref,{path,value,previousValue:clean(base.value),clientId:client,clientChangedAt:Date.now(),previousVersion:remoteVersion,version,canary:true,updatedAt:serverTimestamp()});
+    return {conflict:false,remoteVersion,version,value};
+   });
+   const snap=await getDoc(ref),d=snap.exists()?snap.data():{};
+   return {ok:true,action,session,path,outcome:result.conflict?'CONFLICT':'PUBLISHED',result,remote:{version:Number(d.version||0),value:clean(d.value),clientId:String(d.clientId||'')}};
+  }
+  if(action==='read'){
+   const snap=await getDoc(ref),d=snap.exists()?snap.data():{};
+   return {ok:true,action,session,path,remote:snap.exists()?{version:Number(d.version||0),value:clean(d.value),clientId:String(d.clientId||''),canary:!!d.canary}:null};
+  }
+  return {ok:false,message:'未知 Canary 動作'};
+ }catch(e){return {ok:false,action,session,error:String(e&&e.message||e)};}
+};
 window.epcFirebaseLiveValidation=async function(){
  const startedAt=Date.now(),tests=[];
  const check=(name,ok,detail)=>tests.push({name,ok:!!ok,detail:detail??null});
@@ -2174,7 +2207,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.33 DEV · Real Conflict Simulation</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.34 DEV · Production Sync Canary</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2794,6 +2827,16 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
 
 </main>
 
+
+<div id="epcProductionCanaryModal" style="display:none;position:fixed;inset:0;z-index:10035;background:rgba(0,0,0,.78);align-items:center;justify-content:center;padding:20px">
+ <div style="width:min(620px,100%);background:#17212c;color:#f4f7fa;border:2px solid #d6b35a;border-radius:14px;padding:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0;color:#f2d67d!important">正式同步管線 Canary</h3><button style="background:#fff;color:#111" onclick="document.getElementById('epcProductionCanaryModal').style.display='none'">關閉</button></div>
+  <div style="margin:10px 0;color:#d8e0e8;line-height:1.6">使用正式 epcFieldVersionsV2 版本管線，但 path 固定為 __syncCanary，不會寫入 EPC db、會員、賽事或帳務。</div>
+  <input id="epcProductionCanarySession" placeholder="例如 CANARY1012" style="margin-bottom:12px;background:#fff!important;color:#111!important;border:2px solid #d6b35a!important;font-size:17px;font-weight:800">
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="runProductionCanary_('capture')">① 鎖定基準</button><button onclick="runProductionCanary_('commit')">② 提交 Canary</button><button onclick="runProductionCanary_('read')">讀取結果</button></div>
+  <pre id="epcProductionCanaryResult" style="margin-top:14px;white-space:pre-wrap;word-break:break-word;background:#090e14!important;color:#f4f7fa!important;border:1px solid #536476;border-radius:10px;padding:14px;min-height:110px"></pre>
+ </div>
+</div>
 
 <div id="epcTwoDeviceModal" style="display:none;position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.78);align-items:center;justify-content:center;padding:20px">
  <div style="width:min(620px,100%);background:#17212c;color:#f4f7fa;border:2px solid #d6b35a;border-radius:14px;padding:20px;box-shadow:0 22px 70px rgba(0,0,0,.6)">
@@ -3843,7 +3886,7 @@ function epcSyncDiagnostics_(){
  const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
  const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
  return {
-  version:'V1.51.33',
+  version:'V1.51.34',
   capturedAt:new Date().toISOString(),
   readOnly:true,
   local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
@@ -4094,6 +4137,13 @@ function scheduleFirebaseConflictDrain_(){
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
  // Diagnostic mode intentionally observes only; no automatic merge/write.
 });
+
+function showProductionCanary_(){document.getElementById('epcProductionCanaryModal').style.display='flex';}
+async function runProductionCanary_(action){
+ const code=document.getElementById('epcProductionCanarySession').value,out=document.getElementById('epcProductionCanaryResult');out.textContent='執行中…';
+ const r=await window.epcProductionCanary(action,code);out.textContent=JSON.stringify(r,null,2);
+}
+window.showProductionCanary_=showProductionCanary_;window.runProductionCanary_=runProductionCanary_;
 
 function showTwoDeviceValidation_(){document.getElementById('epcTwoDeviceModal').style.display='flex';}
 async function runTwoDeviceAction_(action){
