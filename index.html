@@ -2197,9 +2197,7 @@ window.epcFirebaseStartRealtimeObserver=startRealtimeObserver_;
 let fieldRealtimeUnsub=null,fieldRealtimeReady=false;
 const epcRemoteFieldQueue_=new Map(),epcAppliedRemoteVersions_=new Map();
 function epcHasLocalPathWork_(path){
- // Only an UNSENT, non-conflict edit is active local work. Historical conflict
- // markers from an older session must not freeze A→B realtime forever.
- return (window.epcFieldChanges||[]).some(ch=>ch&&String(ch.path||'')===String(path||'')&&!ch.publishedAt&&!ch.conflict);
+ return (window.epcFieldChanges||[]).some(ch=>ch&&String(ch.path||'')===String(path||'')&&(!ch.publishedAt||ch.conflict));
 }
 function epcQueueRemoteField_(d){
  const path=String(d&&d.path||'');if(!path)return;
@@ -2225,7 +2223,6 @@ function epcApplyRemoteField_(d){
   localStorage.setItem('epcV1',JSON.stringify(db));
   if(cloudBase)try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(_){}
   if(!epcEditLocked_()){render();setTimeout(()=>{try{refreshSettlementActionState_();}catch(_){}},0);}
-  scheduleDisplayRepublish_();
   if(remoteVersion)epcAppliedRemoteVersions_.set(path,remoteVersion);
   window.epcLastRemoteFieldApply={path,version:remoteVersion,clientId:String(d.clientId||''),appliedAt:Date.now()};
   return {ok:true,path,version:remoteVersion};
@@ -2234,14 +2231,12 @@ function epcApplyRemoteField_(d){
  }
 }
 function epcProtectAppliedRealtimeFields_(candidate,liveDb){
- // Global anti-rollback guard: field-version delivery is authoritative for EVERY
- // persisted EPC module (members, events, accounting, JP, activities, settings,
- // display preferences, etc.), not only events. A lagging whole-db snapshot may
- // fill untouched paths, but it may never overwrite a path whose newer verified
- // field version this browser has already consumed.
+ // A verified whole-db snapshot can lag behind field-version delivery.
+ // Once this browser has consumed a newer realtime field, never let the older
+ // snapshot/legacy merge roll that exact path back.
  if(!candidate||!liveDb)return candidate;
  for(const [path,version] of epcAppliedRemoteVersions_.entries()){
-  if(!version||String(path).startsWith('__syncCanary.'))continue;
+  if(!version||!String(path).startsWith('events['))continue;
   const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
   let cur=liveDb,ok=true;
   for(const k of parts){
@@ -2258,7 +2253,6 @@ function epcProtectAppliedRealtimeFields_(candidate,liveDb){
 function epcDrainRemoteFieldQueue_(){
  if(epcEditLocked_())return;
  for(const [path,d] of [...epcRemoteFieldQueue_.entries()]){
-  // A stale conflict record is diagnostic history, not an edit lock.
   const r=epcApplyRemoteField_(d);
   if(r.ok||r.ignored)epcRemoteFieldQueue_.delete(path);
  }
@@ -2268,27 +2262,9 @@ function startFieldRealtimeObserver_(){
  fieldRealtimeReady=false;
  const q=query(collection(fs,'epcFieldVersionsV2'),orderBy('updatedAt','desc'),limit(250));
  fieldRealtimeUnsub=onSnapshot(q,snap=>{
-  // IMPORTANT: the initial Firestore snapshot is not disposable history. It is
-  // the server-side version ledger that tells a freshly opened/reloaded machine
-  // which field values are newest. Seed/apply it before allowing any legacy
-  // whole-db snapshot to win. This survives browser reloads because authority
-  // lives in Firestore, not only in epcAppliedRemoteVersions_ memory.
-  if(!fieldRealtimeReady){
-   fieldRealtimeReady=true;
-   for(const docSnap of snap.docs){
-    const d=docSnap.data()||{},path=String(d.path||'');
-    if(!path||path.startsWith('__syncCanary.'))continue;
-    const version=Number(d.version||0);
-    if(String(d.clientId||'')===String(epcClientId_||'')){if(version)epcAppliedRemoteVersions_.set(path,version);continue;}
-    if(epcHasLocalPathWork_(path)||epcEditLocked_()){epcQueueRemoteField_(d);continue;}
-    // Initial ledger values are authoritative even after reload. Apply them so
-    // stale localStorage/mirror data cannot reappear simply because this browser
-    // missed the original realtime event.
-    epcApplyRemoteField_({...d,clientId:String(d.clientId||'')});
-   }
-   epcDrainRemoteFieldQueue_();
-   return;
-  }
+  // Firestore's first snapshot is historical state, not a remote event for this
+  // browser. Skip it; subsequent document changes are live field deliveries.
+  if(!fieldRealtimeReady){fieldRealtimeReady=true;return;}
   for(const chg of snap.docChanges()){
    if(chg.type!=='added'&&chg.type!=='modified')continue;
    const d=chg.doc.data()||{},path=String(d.path||'');
@@ -2304,21 +2280,14 @@ window.epcFirebaseDrainRemoteFields=epcDrainRemoteFieldQueue_;
 function epcRealtimeRollbackSelfTest_(){
  const tests=[],check=(name,ok,detail)=>tests.push({name,ok:!!ok,detail:detail||null});
  const path='events[EV_RACE].players[M_RACE].stack';
- const activityPath='activityManagement.rankAdjustByPeriod[2026-10-05_2026-10-11][M_RACE]';
- const accountingPath='accounting[ACC_RACE].amount';
- const stale={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:100}]}],activityManagement:{rankAdjustByPeriod:{'2026-10-05_2026-10-11':{M_RACE:1}}},accounting:[{id:'ACC_RACE',amount:100}]};
- const live={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:900}]}],activityManagement:{rankAdjustByPeriod:{'2026-10-05_2026-10-11':{M_RACE:3}}},accounting:[{id:'ACC_RACE',amount:900}]};
+ const stale={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:100}]}]};
+ const live={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:900}]}]};
  const oldVersions=new Map(epcAppliedRemoteVersions_);
  try{
-  epcAppliedRemoteVersions_.clear();
-  epcAppliedRemoteVersions_.set(path,7);
-  epcAppliedRemoteVersions_.set(activityPath,4);
-  epcAppliedRemoteVersions_.set(accountingPath,5);
+  epcAppliedRemoteVersions_.clear();epcAppliedRemoteVersions_.set(path,7);
   const guarded=epcProtectAppliedRealtimeFields_(cloneCloud_(stale),live);
   const got=guarded.events[0].players[0].stack;
   check('stale whole snapshot cannot roll back newer realtime stack',got===900,{expected:900,actual:got});
-  check('stale whole snapshot cannot roll back activity/ranking data',guarded.activityManagement.rankAdjustByPeriod['2026-10-05_2026-10-11'].M_RACE===3);
-  check('stale whole snapshot cannot roll back accounting data',guarded.accounting[0].amount===900);
   const unguarded=cloneCloud_(stale);
   check('fixture proves stale snapshot differs from live value',unguarded.events[0].players[0].stack!==live.events[0].players[0].stack);
  }finally{
@@ -2331,14 +2300,6 @@ window.epcRealtimeRollbackSelfTest_=epcRealtimeRollbackSelfTest_;
 window.epcRealtimeRollbackSelfTestResult=epcRealtimeRollbackSelfTest_();
 
 
-function epcRecoverStaleConflictLocks_(){
- let changed=false;
- for(const ch of (window.epcFieldChanges||[])){
-  if(ch&&ch.conflict&&ch.publishedAt){ch.conflict=false;changed=true;}
- }
- if(changed)localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges||[]));
-}
-epcRecoverStaleConflictLocks_();
 window.epcFirebaseRemoteFieldQueue=()=>[...epcRemoteFieldQueue_.values()].map(clean);
 setInterval(epcDrainRemoteFieldQueue_,250);
 window.epcFirebaseVerify=async()=>{
@@ -2375,7 +2336,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.86 DEV · Realtime Receive Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.87 RC · Sync Baseline Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3218,13 +3179,6 @@ function preserveActivityEdits_(local,merged){
  for(const k of ['hunter','umbrella','rankMultipliers','rankRecurringRules']){
    if(Array.isArray(la[k]))ma[k]=mergeActivityRecords_(la[k],ma[k]);
  }
- // Ranking period adjustments and activity ranges are keyed settings, not disposable
- // snapshots. Preserve keys from both machines so a stale whole-db snapshot cannot
- // blank the current weekly ranking configuration after settlement.
- ma.rankAdjustByPeriod={...(ma.rankAdjustByPeriod||{}),...(la.rankAdjustByPeriod||{})};
- ma.activityRanges={...(ma.activityRanges||{}),...(la.activityRanges||{})};
- ma.weeklyClaims={...(ma.weeklyClaims||{}),...(la.weeklyClaims||{})};
- ma.weeklyAdjust={...(ma.weeklyAdjust||{}),...(la.weeklyAdjust||{})};
  ma.hunterDeleted={...(ma.hunterDeleted||{}),...(la.hunterDeleted||{})};
  if(Array.isArray(ma.hunter)){
    ma.hunter=ma.hunter.filter(x=>{
@@ -3383,13 +3337,14 @@ function epcRestoreEdit_(){
 }
 function epcMarkLocalEdit_(el){
  epcCaptureEdit_(el);
- // Typing in a form is only a draft until that field's handler commits it to db.
- // Do NOT mark the whole database dirty here: a draft-only dirty flag can trigger
- // a legacy whole-db save even though no versioned business mutation exists yet.
- // Real mutations call persist(), which records the exact changed paths.
+ localDirty=true;
+ try{localStorage.setItem('epcLocalDirty','1');}catch(_){}
+ // Keep a local snapshot immediately. Existing field handlers then commit their model
+ // value; the delayed cloud save runs only after the operator has finished the edit.
  clearTimeout(epcEditCommitTimer_);
  epcEditCommitTimer_=setTimeout(()=>{
-   if(cloudReady&&!epcEditingField_()&&(window.epcFieldChanges||[]).some(ch=>ch&&!ch.publishedAt&&!ch.conflict))epcScheduleFieldPublish_();
+   try{localStorage.setItem('epcV1',JSON.stringify(db));}catch(_){}
+   if(cloudReady&&!epcEditingField_())scheduleCloudSave();
  },1800);
 }
 document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
@@ -3433,7 +3388,6 @@ function startLiveSync_(){
 
      if(!localDirty){
        backupLocal('before-live-remote-apply-v2');
-       remote=epcProtectAppliedRealtimeFields_(remote,db);
        db=remote;
        epcLastPersistSnapshot_=cloneCloud_(db);
        cloudRevision=loadedRev;
@@ -3450,7 +3404,6 @@ function startLiveSync_(){
      backupLocal('before-live-merge-v3');
      const localBeforeMerge=cloneCloud_(db);
      let merged=mergeCloud3_(cloudBase||remote,localBeforeMerge,remote);
-     merged=epcProtectAppliedRealtimeFields_(merged,localBeforeMerge);
      merged=preserveManualDiscountEdits_(localBeforeMerge,merged);
      merged=preserveActivityEdits_(localBeforeMerge,merged);
      merged=preserveEventEdits_(localBeforeMerge,merged);
@@ -3483,10 +3436,8 @@ async function initializeCloud(){
    if(remote){
      if(localDirty){
        backupLocal('startup-three-way-merge-v2');
-       const startupLiveBeforeMerge=cloneCloud_(db);
-       db=mergeCloud3_(cloudBase||remote,startupLiveBeforeMerge,remote);
-       db=epcProtectAppliedRealtimeFields_(db,startupLiveBeforeMerge);
-       db=preserveManualDiscountEdits_(startupLiveBeforeMerge,db);
+       db=mergeCloud3_(cloudBase||remote,db,remote);
+       db=preserveManualDiscountEdits_(db,db);
      db=preserveActivityEdits_(db,db);
      db=preserveEventEdits_(db,db);
        db=preserveMembers_(db,db,res.members);
@@ -3502,8 +3453,6 @@ async function initializeCloud(){
        return;
      }else{
        backupLocal('startup-cloud-load-v2');
-       const startupLiveBeforeLoad=cloneCloud_(db);
-       remote=epcProtectAppliedRealtimeFields_(remote,startupLiveBeforeLoad);
        db=remote;
        cloudRevision=serverRevision;
        setCloudBase_(remote);
@@ -3815,9 +3764,8 @@ async function manualCloudLoad(){
    backupLocal('before-manual-cloud-load');
    const res=await cloudGet('load');
    if(!res.data || typeof res.data!=='object')throw new Error('CLOUD_EMPTY');
-   const liveBeforeManualLoad=cloneCloud_(db);
-   db=epcProtectAppliedRealtimeFields_(cloneCloud_(res.data),liveBeforeManualLoad);
-   db=preserveMembers_(liveBeforeManualLoad,db,res.members);
+   db=res.data;
+   db=preserveMembers_(db,db,res.members);
    cloudRevision=Number(res.revision||0);
    setCloudBase_(db);
    localStorage.setItem('epcV1',JSON.stringify(db));
@@ -3839,7 +3787,7 @@ if(!db.settings.businessStart)db.settings.businessStart='16:00';
 if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
 
 // 自動清理舊版本留下的「孤兒會員盈虧紀錄」：eventId 已不存在於賽事資料時直接移除。
-function cleanupOrphanMemberHistory(syncChange=false){
+function cleanupOrphanMemberHistory(){
  const validEventIds=new Set((db.events||[]).map(e=>String(e.id)));
  let changed=false;
  (db.members||[]).forEach(m=>{
@@ -3847,15 +3795,9 @@ function cleanupOrphanMemberHistory(syncChange=false){
    m.history=(m.history||[]).filter(h=>h && h.eventId!=null && validEventIds.has(String(h.eventId)));
    if(m.history.length!==before)changed=true;
  });
- // Startup migration must not manufacture a new edit before sync is initialized.
- // Runtime cleanup (for example event deletion) must enter the versioned ledger.
- if(changed){
-   if(syncChange&&typeof persist==='function')persist();
-   else localStorage.setItem('epcV1',JSON.stringify(db));
- }
- return changed;
+ if(changed)localStorage.setItem('epcV1',JSON.stringify(db));
 }
-cleanupOrphanMemberHistory(false);
+cleanupOrphanMemberHistory();
 
 
 function hmMinutes(v,fallback){
@@ -4944,36 +4886,14 @@ function eventDisplayName_(e){
  const manual=String(e?.name||'').trim();
  return manual||eventOrdinalName_(e?.seq||1);
 }
-async function newEvent(){
+function newEvent(){
  let e=blankEvent();
  let bd=$('eventBusinessDate')?.value||new Date().toISOString().slice(0,10);
  e.date=bd;
  e.startTime=db.settings.businessStart||'16:00';
  let same=db.events.filter(x=>businessDateForEvent(x)===bd);
  e.seq=same.length?Math.max(...same.map(x=>+x.seq||0))+1:1;
- // Create the complete keyed event as ONE versioned field mutation. Diffing an
- // absent event into many child fields can leave another client with a partial
- // skeleton while transactions are still in flight.
- const before=cloneCloud_(db);
- db.events.unshift(e); setCurrentEventDevice_(e.id);
- const path='events['+String(e.id)+']';
- const change={path,before:undefined,after:cloneCloud_(e),clientId:epcClientId_,changedAt:Date.now(),changeId:'evt_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10)};
- window.epcFieldChanges.push(change);
- epcCompactFieldLedger_();
- epcLastPersistSnapshot_=cloneCloud_(db);
- localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges));
- localStorage.setItem('epcV1',JSON.stringify(db));
- localDirty=true;localStorage.setItem('epcLocalDirty','1');
- epcScheduleFieldPublish_();
- if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();
- if(typeof window.epcPublishLiveRoster_==='function')window.epcPublishLiveRoster_();
- scheduleCloudSave();
- showPage('event');
- // New-event creation is operationally critical: publish immediately instead of
- // waiting for the normal debounce so every EPC terminal sees the new round.
- if(typeof window.epcFirebasePublishFieldChanges==='function'){
-   try{await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]);}catch(err){console.warn('new event fast publish deferred',err);}
- }
+ db.events.unshift(e); setCurrentEventDevice_(e.id); persist(); showPage('event');
 }
 function openEvent(id){
  const e=(db.events||[]).find(x=>String(x.id)===String(id));
@@ -4997,19 +4917,15 @@ async function performDeleteEventByIndex(index){
    m.history=(m.history||[]).filter(h=>String(h.eventId)!==String(id));
  });
  db.events.splice(index,1);
- // History removal is part of the same business mutation; persist once below so
- // event deletion + member settlement-history deletion share one versioned batch.
- cleanupOrphanMemberHistory(false);
+ cleanupOrphanMemberHistory();
  if(String(localStorage.getItem(EPC_DEVICE_EVENT_KEY)||db.currentEventId||'')===String(id)){
    const nextId=db.events[0]?.id||null;
    setCurrentEventDevice_(nextId);
  }
- // Deletion must enter the same versioned field ledger as every other edit.
- // Direct whole-db save could let another machine resurrect the deleted event.
- persist();
+ localStorage.setItem('epcV1',JSON.stringify(db));
  render();
  actionMsg(`已刪除：${label}；分帳報表已同步更新`);
- // Field transaction is queued by persist(); whole-db save remains secondary.
+ // 不等待 900ms 排程，避免刪除後立刻關閉頁面造成雲端仍保留舊賽事。
  if(cloudReady) await saveCloudNow();
 }
 function removePlayerByIndex(index){
@@ -5688,7 +5604,6 @@ async function executeFormalSettlement(){
  e.finalAccounting={...acc};
  e.status='已結算';
  e.settledAt=Date.now();
- e._settlementRevision=Math.max(1,Number(e._settlementRevision||0)+1);
  touchEvent_(e);
  persist();
  closeSettlementConfirm();
@@ -6497,7 +6412,6 @@ function actUmbrella_(){
 }
 function bossSet_(k,v,type='num'){const B=db.activityManagement.boss;B[k]=type==='bool'?!!v:Number(v)||0;persist();renderActivities()}
 
-function bossEventKey_(e){return String(businessDateForEvent(e)||e?.date||'')+'T'+String(e?.startTime||'00:00')+'|'+String(e?.id||'')}
 function bossEvents_(){
  const B=db.activityManagement.boss,b=activeBoss_();
  // Compatibility repair for a boss that was created before per-boss round cutoffs
@@ -6532,6 +6446,15 @@ function bossEvents_(){
  })
 }
 function bossBonus_(n,step,amt,ignore){return Math.floor(Math.max(0,(+n||0)-Math.max(0,+ignore||0))/Math.max(1,+step||1))*(+amt||0)}
+function bossEventKey_(e){return String(businessDateForEvent(e)||e?.date||'')+'T'+String(e?.startTime||'00:00')+'|'+String(e?.id||'')}
+function bossLatestEventKey_(){
+ const B=db.activityManagement.boss;
+ const ev=(db.events||[]).filter(e=>{
+  const d=businessDateForEvent(e)||String(e.date||'');
+  return (!B.activityFrom||d>=B.activityFrom)&&(!B.activityTo||d<=B.activityTo)&&!(B.excludedEventIds||[]).includes(String(e.id));
+ }).sort((a,b)=>bossEventKey_(a).localeCompare(bossEventKey_(b)));
+ return ev.length?bossEventKey_(ev[ev.length-1]):'';
+}
 function bossStats_(){
  const B=db.activityManagement.boss;
  const ev=bossEvents_().slice().sort((a,b)=>{
@@ -6595,25 +6518,8 @@ function bossStats_(){
      if(gb>0){hgb+=gb;huntQualifyingEvents++;pool+=gb}
    }
  }
- // Attack state belongs to the ACTIVE BOSS, never to the activity globally.
- // Legacy B.attackEnabled / B.huntStartedAt are intentionally ignored here so a
- // previous boss or a stale snapshot cannot reopen a fresh boss.
- const currentBoss=activeBoss_();
- // Safety invariant: a brand-new round at the configured starting pool with no
- // counted events and no attacks is ALWAYS off. This makes stale/manual legacy
- // flags incapable of turning a fresh boss on, even if an old field-version
- // record is replayed from Firebase.
- const pristineRound=!!currentBoss&&ev.length===0&&(currentBoss.attacks||[]).length===0&&pool===start;
- // Fresh boss defaults OFF. An explicit manual action on THIS boss is allowed.
- // Old/stale attackEnabled=true without a per-boss manual timestamp is ignored.
- const explicitManual=!!(currentBoss&&currentBoss.manualAttackSetAt&&currentBoss.attackEnabled);
- if(pristineRound&&currentBoss.attackEnabled&&!explicitManual)currentBoss.attackEnabled=false;
- const manualActive=!!(currentBoss&&currentBoss.attackEnabled&&(explicitManual||!pristineRound));
- const active=!!(hunt||manualActive||pool>=threshold);
- if(currentBoss){
-   if(active&&!currentBoss.huntStartedAt)currentBoss.huntStartedAt=(manualActive?new Date().toISOString().slice(0,16):'AUTO_THRESHOLD');
-   if(!active&&currentBoss.huntStartedAt==='AUTO_THRESHOLD')currentBoss.huntStartedAt='';
- }
+ const active=hunt||!!B.attackEnabled||pool>=threshold||!!B.huntStartedAt;
+ if(active&&!B.huntStartedAt)B.huntStartedAt='AUTO_THRESHOLD';
  if(cap>0)pool=Math.min(pool,cap);
  return {np,ng,hp,hg,npb,ngb,hpb,hgb,pool,active,normalQualifyingEvents,huntQualifyingEvents}
 }
@@ -6624,14 +6530,6 @@ function bossExclude_(id,on){const B=db.activityManagement.boss;B.excludedEventI
 function bossAddExclude_(){const id=$('bossExcludeSelect')?.value;if(id)bossExclude_(id,true)}
 function bossRemoveExclude_(id){bossExclude_(id,false)}
 function bossToggleAttack_(on){const b=activeBoss_();if(!b)return;b.attackEnabled=!!on;b.manualAttackSetAt=Date.now();if(on)b.huntStartedAt=new Date().toISOString().slice(0,16);else b.huntStartedAt='';persist();renderActivities()}
-function bossLatestEventKey_(){
- const B=db.activityManagement.boss;
- const ev=(db.events||[]).filter(e=>{
-  const d=businessDateForEvent(e)||String(e.date||'');
-  return (!B.activityFrom||d>=B.activityFrom)&&(!B.activityTo||d<=B.activityTo)&&!(B.excludedEventIds||[]).includes(String(e.id));
- }).sort((a,b)=>bossEventKey_(a).localeCompare(bossEventKey_(b)));
- return ev.length?bossEventKey_(ev[ev.length-1]):'';
-}
 function addNewBoss_(){
  const B=db.activityManagement.boss,id='BOSS'+Date.now(),prev=activeBoss_();
  // A new boss always starts a fresh round at startPrize. Freeze the previous
@@ -7444,10 +7342,7 @@ function displayLeaderboard_(kind){
  }else if(kind==='hunter'){
   (A.hunter||[]).filter(x=>inRange(x.date)).forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));
  }else if(kind==='umbrella'){
-  // Keep DISPLAY consistent with the management leaderboard: registered umbrella
-  // records remain ranked even when the activity range is only used to control
-  // when the slide itself is visible.
-  (A.umbrella||[]).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
+  (A.umbrella||[]).filter(x=>inRange(x.date)).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
  }else if(kind==='rank'){
   actEvents_('rank').forEach(e=>eventTopScores_(e).forEach(x=>tot[x.id]=(tot[x.id]||0)+(+x.score||0)));
   const key=(range.from||'')+'_'+(range.to||''),adj=(A.rankAdjustByPeriod||{})[key]||{};
@@ -7506,14 +7401,6 @@ async function publishAllDisplays_(){
 const _renderActivitiesDisplayBase=typeof renderActivities==='function'?renderActivities:null;
 if(_renderActivitiesDisplayBase){
  renderActivities=function(){const r=_renderActivitiesDisplayBase.apply(this,arguments);setTimeout(()=>publishAllDisplays_(),250);return r}
-}
-// Remote Firebase updates can call the main render() without opening Activity Management.
-// Republish displays after any settled/activity data change so TV content follows the
-// same synchronized db instead of waiting for someone to visit the activity page.
-let epcDisplayPublishTimer_=0;
-function scheduleDisplayRepublish_(){
- clearTimeout(epcDisplayPublishTimer_);
- epcDisplayPublishTimer_=setTimeout(()=>{try{publishAllDisplays_()}catch(_){}},500);
 }
 let epcDisplayReconnectBusy_=false;
 async function reconnectDisplays_(republish=false){
