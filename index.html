@@ -1781,7 +1781,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
    being mistaken for proof that the actual Firestore payload is complete. */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot,runTransaction,collection,query,orderBy,limit} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot,runTransaction} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDomain:"epcmenagement.firebaseapp.com",projectId:"epcmenagement",storageBucket:"epcmenagement.firebasestorage.app",messagingSenderId:"257676873693",appId:"1:257676873693:web:f4edfe9199cc60e8d93034"});
 const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
@@ -1792,42 +1792,11 @@ function epcFieldKey_(path){
  for(let i=0;i<path.length;i++){h^=path.charCodeAt(i);h=Math.imul(h,16777619);}
  return 'f_'+(h>>>0).toString(16);
 }
-window.epcPublishLiveRoster_=async function(){
- const u=auth.currentUser;if(!u||String(u.email||'').toLowerCase()!=='ga88149@gmail.com')return false;
- try{
-  const events=Array.isArray(window.epcDb&&window.epcDb.events)?window.epcDb.events:[];
-  const live=events.filter(e=>(e.status||'進行中')!=='已結算').map(e=>({
-   id:String(e.id||''),date:e.date||'',seq:Number(e.seq||1),level:Number(e.level||0),chips:Number(e.chips||0),status:e.status||'進行中',
-   updatedAt:Number(e._eventUpdatedAt||e.createdAt||0),
-   players:(Array.isArray(e.players)?e.players:[]).map(p=>({
-    memberId:String(p.memberId||''),buyin:Number(p.buyin||0),rebuy:Number(p.rebuy||0),addon:Number(p.addon||0),
-    manualDiscount:Number(p.manualDiscount||0),stack:p.stack??'',nickname:p.nickname||'',group:p.group||'',prize:Number(p.prize||0)
-   }))
-  }));
-  await setDoc(doc(fs,'epcLiveRoster','current'),{events:clean(live),clientTime:new Date().toISOString(),updatedAt:serverTimestamp()},{merge:false});
-  return true;
- }catch(e){console.warn('Live roster publish deferred',e);return false;}
-};
 window.epcFirebasePublishFieldChanges=async function(changes){
  if(!auth.currentUser)return false;
- const pendingQueue=(changes||[]).filter(x=>!x.publishedAt&&!x.conflict);
- // V1.51.26: preserve ledger order, but never process a later change for the
- // same path before its earlier local predecessor. Different paths still flow.
- // A quarantined conflict also blocks only later edits of that same path.
- const blockedPaths=new Set((changes||[]).filter(x=>x&&x.conflict).map(x=>String(x.path||'')));
- const seenPaths=new Set(),queue=[];
- for(const x of pendingQueue){
-  const p=String(x.path||'');
-  if(blockedPaths.has(p)||seenPaths.has(p))continue;
-  seenPaths.add(p);queue.push(x);
-  if(queue.length>=100)break;
- }
+ const queue=(changes||[]).filter(x=>!x.publishedAt).slice(0,100);
  for(const ch of queue){
-  // Capture immutable identity/value for this exact send. A later local edit may
-  // append a newer change for the same path while this transaction is in flight.
-  if(!ch.changeId)ch.changeId='legacy_'+Number(ch.changedAt||Date.now())+'_'+Math.random().toString(36).slice(2,8);
-  const ackChangeId=String(ch.changeId),ackChangedAt=Number(ch.changedAt||0),ackAfter=stableJson_(clean(ch.after));
-  const ref=doc(fs,'epcFieldVersionsV2',epcFieldKey_(String(ch.path||'')));
+  const ref=doc(fs,'epcFieldVersions',epcFieldKey_(String(ch.path||'')));
   const result=await runTransaction(fs,async tx=>{
    const snap=await tx.get(ref);
    const old=snap.exists()?snap.data():{};
@@ -1856,37 +1825,14 @@ window.epcFirebasePublishFieldChanges=async function(changes){
    ch.conflict=true;ch.remoteVersion=result.remoteVersion;ch.remoteValue=clean(old.value);
    ch.remoteClientId=String(old.clientId||'');
    delete ch.forceFromVersion;
-   const isolatedConflict={path:String(ch.path||''),local:clean(ch.after),remote:clean(old.value),before:clean(ch.before),remoteVersion:result.remoteVersion};
-   // V1.51.20: isolate this path only. Do not replace an already-open conflict
-   // and do not let this field re-enter the publish queue until it is resolved.
-   if(!window.epcFirebaseFieldConflict){
-    window.epcFirebaseFieldConflict=isolatedConflict;
-    if(typeof window.epcShowFieldConflict==='function')window.epcShowFieldConflict(isolatedConflict);
-   }
+   window.epcFirebaseFieldConflict={path:String(ch.path||''),local:clean(ch.after),remote:clean(old.value),before:clean(ch.before),remoteVersion:result.remoteVersion};
+   if(typeof window.epcShowFieldConflict==='function')window.epcShowFieldConflict(window.epcFirebaseFieldConflict);
    const el=document.getElementById('firebaseMirrorState');
    if(el){el.textContent='Firebase：⚠ 欄位版本衝突｜交易已阻止覆蓋｜'+String(ch.path||'');el.style.color='#ffb74d';}
    continue;
   }
-  const ackStillMatches=String(ch.changeId||'')===ackChangeId&&Number(ch.changedAt||0)===ackChangedAt&&stableJson_(clean(ch.after))===ackAfter;
-  if(!ackStillMatches){
-   // Stale ACK: the in-memory change object advanced while Firebase was in flight.
-   // Never clear/complete the newer local value.
-   ch.publishedAt=null;ch.conflict=false;ch.baseVersion=result.version;
-   delete ch.forceFromVersion;
-   localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
-   continue;
-  }
   ch.publishedAt=Date.now();ch.publishedVersion=result.version;ch.baseVersion=result.version;ch.conflict=false;
   delete ch.forceFromVersion;
-  // Chain the next unsent local edit for this same path to the version/value
-  // just acknowledged. This prevents our own v3 -> v4 -> v5 sequence from
-  // looking like a cross-device conflict.
-  const chIndex=(changes||[]).indexOf(ch);
-  const nextSame=(changes||[]).slice(chIndex+1).find(x=>x&&!x.publishedAt&&!x.conflict&&String(x.path||'')===String(ch.path||''));
-  if(nextSame){
-   nextSame.before=clean(ch.after);
-   nextSame.baseVersion=result.version;
-  }
   if(ch.needsMirrorAfterPublish){
    delete ch.needsMirrorAfterPublish;
    // Conflict resolution may change a field that the old lightweight fingerprint
@@ -1897,137 +1843,9 @@ window.epcFirebasePublishFieldChanges=async function(changes){
   }
  }
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(changes||[]));
- if(typeof window.epcCompactFieldLedger_==='function')window.epcCompactFieldLedger_();
- // If this batch intentionally deferred later same-path edits, immediately
- // schedule the next ordered batch instead of waiting for the 30s recovery tick.
- if((changes||[]).some(x=>x&&!x.publishedAt&&!x.conflict)&&typeof epcScheduleFieldPublish_==='function')epcScheduleFieldPublish_();
  return true;
 };
 
-window.epcProductionCanary=async function(action,sessionId){
- if(!auth.currentUser)return {ok:false,needsLogin:true,message:'請先完成 Firebase 登入'};
- const session=String(sessionId||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
- if(!session)return {ok:false,message:'需要 Canary 代碼'};
- const path='__syncCanary.'+session,ref=doc(fs,'epcFieldVersionsV2',epcFieldKey_(path));
- const client=String(epcClientId_||''),key='epcProdCanaryBase_'+session;
- try{
-  if(action==='capture'){
-   const snap=await getDoc(ref),d=snap.exists()?snap.data():{},version=Number(d.version||0),value=clean(d.value);
-   sessionStorage.setItem(key,JSON.stringify({version,value}));
-   return {ok:true,action,session,path,baseVersion:version,baseValue:value};
-  }
-  if(action==='commit'){
-   const raw=sessionStorage.getItem(key);if(!raw)return {ok:false,message:'本機尚未鎖定 Canary 基準'};
-   const base=JSON.parse(raw),token='PC_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,5);
-   const result=await runTransaction(fs,async tx=>{
-    const snap=await tx.get(ref),old=snap.exists()?snap.data():{},remoteVersion=Number(old.version||0);
-    const sameBase=stableJson_(clean(old.value))===stableJson_(clean(base.value));
-    if(remoteVersion!==Number(base.version)||!sameBase)return {conflict:true,remoteVersion,remoteValue:clean(old.value)};
-    const version=remoteVersion+1,value={token,client,at:Date.now()};
-    tx.set(ref,{path,value,previousValue:clean(base.value),clientId:client,clientChangedAt:Date.now(),previousVersion:remoteVersion,version,canary:true,updatedAt:serverTimestamp()});
-    return {conflict:false,remoteVersion,version,value};
-   });
-   const snap=await getDoc(ref),d=snap.exists()?snap.data():{};
-   return {ok:true,action,session,path,outcome:result.conflict?'CONFLICT':'PUBLISHED',result,remote:{version:Number(d.version||0),value:clean(d.value),clientId:String(d.clientId||'')}};
-  }
-  if(action==='read'){
-   const snap=await getDoc(ref),d=snap.exists()?snap.data():{};
-   return {ok:true,action,session,path,remote:snap.exists()?{version:Number(d.version||0),value:clean(d.value),clientId:String(d.clientId||''),canary:!!d.canary}:null};
-  }
-  return {ok:false,message:'未知 Canary 動作'};
- }catch(e){return {ok:false,action,session,error:String(e&&e.message||e)};}
-};
-window.epcFirebaseLiveValidation=async function(){
- const startedAt=Date.now(),tests=[];
- const check=(name,ok,detail)=>tests.push({name,ok:!!ok,detail:detail??null});
- if(!auth.currentUser){
-  const r={ok:false,needsLogin:true,tests:[{name:'firebase authenticated',ok:false,detail:'請先完成 Firebase 登入'}],mode:'isolated-firestore-live',ranAt:new Date().toISOString()};
-  window.epcFirebaseLiveValidationResult=r;return r;
- }
- const uid=String(auth.currentUser.uid||'anonymous');
- const ref=doc(fs,'epcValidationProbesV1','single_'+uid);
- const token='probe_'+startedAt.toString(36)+'_'+Math.random().toString(36).slice(2,8);
- try{
-  const txResult=await runTransaction(fs,async tx=>{
-   const snap=await tx.get(ref),old=snap.exists()?snap.data():{};
-   const previousVersion=Number(old.version||0),version=previousVersion+1;
-   tx.set(ref,{kind:'EPC_SYNC_VALIDATION_ONLY',token,clientId:String(epcClientId_||''),previousVersion,version,updatedAt:serverTimestamp()});
-   return {previousVersion,version};
-  });
-  check('transaction ACK received',Number(txResult.version)>Number(txResult.previousVersion),txResult);
-  const read=await getDoc(ref),data=read.exists()?read.data():null;
-  check('probe read-back exists',!!data,{exists:!!data});
-  check('read-back token matches ACK',!!data&&String(data.token||'')===token,{expected:token,actual:data&&data.token});
-  check('read-back version matches ACK',!!data&&Number(data.version||0)===Number(txResult.version),{expected:txResult.version,actual:data&&data.version});
-  check('probe isolated from production fields',String(ref.path||'').startsWith('epcValidationProbesV1/'),{path:ref.path});
- }catch(e){
-  check('live Firestore operation',false,String(e&&e.message||e));
- }
- const passed=tests.filter(x=>x.ok).length;
- const r={ok:passed===tests.length,passed,total:tests.length,tests,mode:'isolated-firestore-live',durationMs:Date.now()-startedAt,ranAt:new Date().toISOString()};
- window.epcFirebaseLiveValidationResult=r;return r;
-};
-window.epcTwoDeviceValidation=async function(action,sessionId){
- if(!auth.currentUser)return {ok:false,needsLogin:true,message:'請先完成 Firebase 登入'};
- const session=String(sessionId||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
- if(!session)return {ok:false,message:'需要測試代碼'};
- const ref=doc(fs,'epcValidationTwoDeviceV1',session);
- const client=String(epcClientId_||''),now=Date.now();
- try{
-  if(action==='init'){
-   await setDoc(ref,{kind:'EPC_TWO_DEVICE_VALIDATION_ONLY',session,a:null,b:null,same:null,sameVersion:0,conflictValue:null,conflictVersion:0,createdBy:client,updatedAt:serverTimestamp()});
-   return {ok:true,action,session,message:'測試代碼已建立'};
-  }
-  if(action==='writeA'||action==='writeB'){
-   const field=action==='writeA'?'a':'b',token=field.toUpperCase()+'_'+now.toString(36);
-   await runTransaction(fs,async tx=>{
-    const snap=await tx.get(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
-    tx.update(ref,{[field]:{token,client,at:now},updatedAt:serverTimestamp()});
-   });
-   const snap=await getDoc(ref),d=snap.data()||{};
-   return {ok:!!d[field]&&d[field].token===token,action,session,token,state:{a:d.a||null,b:d.b||null}};
-  }
-  if(action==='same'){
-   const token='S_'+now.toString(36)+'_'+Math.random().toString(36).slice(2,5);
-   const result=await runTransaction(fs,async tx=>{
-    const snap=await tx.get(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
-    const d=snap.data()||{},previousVersion=Number(d.sameVersion||0),version=previousVersion+1;
-    tx.update(ref,{same:{token,client,at:now,previousVersion,version},sameVersion:version,updatedAt:serverTimestamp()});
-    return {previousVersion,version};
-   });
-   const snap=await getDoc(ref),d=snap.data()||{};
-   return {ok:!!d.same&&Number(d.sameVersion)===result.version,action,session,token,result,remote:d.same||null};
-  }
-  if(action==='captureBase'){
-   const snap=await getDoc(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
-   const d=snap.data()||{},baseVersion=Number(d.conflictVersion||0);
-   sessionStorage.setItem('epcConflictBase_'+session,String(baseVersion));
-   return {ok:true,action,session,baseVersion,message:'本機已鎖定基準版本 '+baseVersion};
-  }
-  if(action==='commitConflict'){
-   const raw=sessionStorage.getItem('epcConflictBase_'+session);
-   if(raw===null)return {ok:false,action,session,message:'本機尚未取得基準版本'};
-   const baseVersion=Number(raw),token='C_'+now.toString(36)+'_'+Math.random().toString(36).slice(2,5);
-   const result=await runTransaction(fs,async tx=>{
-    const snap=await tx.get(ref);if(!snap.exists())throw new Error('SESSION_NOT_FOUND');
-    const d=snap.data()||{},remoteVersion=Number(d.conflictVersion||0);
-    if(remoteVersion!==baseVersion)return {conflict:true,baseVersion,remoteVersion,remote:d.conflictValue||null};
-    const version=remoteVersion+1;
-    tx.update(ref,{conflictValue:{token,client,at:now,baseVersion,version},conflictVersion:version,updatedAt:serverTimestamp()});
-    return {conflict:false,baseVersion,remoteVersion,version};
-   });
-   const snap=await getDoc(ref),d=snap.data()||{};
-   return {ok:true,action,session,outcome:result.conflict?'CONFLICT':'PUBLISHED',result,remote:{value:d.conflictValue||null,version:Number(d.conflictVersion||0)}};
-  }
-  if(action==='read'){
-
-   const snap=await getDoc(ref);if(!snap.exists())return {ok:false,session,message:'測試代碼不存在'};
-   const d=snap.data()||{};
-   return {ok:true,action,session,state:{a:d.a||null,b:d.b||null,same:d.same||null,sameVersion:Number(d.sameVersion||0),conflictValue:d.conflictValue||null,conflictVersion:Number(d.conflictVersion||0)}};
-  }
-  return {ok:false,message:'未知測試動作'};
- }catch(e){return {ok:false,action,session,error:String(e&&e.message||e)};}
-};
 function state(s,bad=false){const e=document.getElementById("firebaseMirrorState");if(e){e.textContent=s;e.style.color=bad?"#ff6b6b":"#91a0b2";}}
 function clean(v){return JSON.parse(JSON.stringify(v??null));}
 function safeId(v,fallback){const s=String(v??fallback??"").trim().replaceAll("/","_");return s||String(fallback||Date.now());}
@@ -2189,131 +2007,6 @@ function startRealtimeObserver_(){
  },e=>{console.error("Firebase realtime observer failed",e);state("Firebase：即時監聽中斷｜正式資料不受影響",true);});
 }
 window.epcFirebaseStartRealtimeObserver=startRealtimeObserver_;
-
-/* V1.51.35 field-level realtime apply.
-   This is deliberately separate from the whole-db mirror observer. Firestore
-   field versions may update one safe path; a mirror snapshot still never
-   blindly replaces the live EPC database. */
-let fieldRealtimeUnsub=null,fieldRealtimeReady=false;
-const epcRemoteFieldQueue_=new Map(),epcAppliedRemoteVersions_=new Map();
-try{
- const saved=JSON.parse(localStorage.getItem('epcAppliedRemoteVersionsV2')||'[]');
- if(Array.isArray(saved))for(const x of saved){if(Array.isArray(x)&&x.length===2)epcAppliedRemoteVersions_.set(String(x[0]),Number(x[1])||0);}
-}catch(_){}
-function epcPersistAppliedVersions_(){
- try{localStorage.setItem('epcAppliedRemoteVersionsV2',JSON.stringify([...epcAppliedRemoteVersions_.entries()].slice(-1000)));}catch(_){}
-}
-function epcHasLocalPathWork_(path){
- return (window.epcFieldChanges||[]).some(ch=>ch&&String(ch.path||'')===String(path||'')&&(!ch.publishedAt||ch.conflict));
-}
-function epcQueueRemoteField_(d){
- const path=String(d&&d.path||'');if(!path)return;
- const prev=epcRemoteFieldQueue_.get(path);
- if(!prev||Number(d.version||0)>=Number(prev.version||0))epcRemoteFieldQueue_.set(path,clean(d));
-}
-function epcApplyRemoteField_(d){
- const path=String(d&&d.path||''),remoteVersion=Number(d&&d.version||0);
- if(!path||path.startsWith('__syncCanary.'))return {ok:false,ignored:'canary'};
- if(String(d.clientId||'')===String(epcClientId_||''))return {ok:false,ignored:'own-client'};
- const appliedVersion=Number(epcAppliedRemoteVersions_.get(path)||0);
- if(remoteVersion&&remoteVersion<=appliedVersion)return {ok:false,ignored:'stale-version'};
- if(epcHasLocalPathWork_(path))return {ok:false,deferred:'local-path-work'};
- if(epcEditLocked_())return {ok:false,deferred:'editing-or-draft'};
- const before=cloneCloud_(db);
- if(!epcSetPathValue_(db,path,clean(d.value)))return {ok:false,deferred:'path-missing'};
- try{
-  // Remote field consumption is not a local edit: advance both the live db and
-  // persist baseline together so persist() cannot rediscover it as a new change.
-  epcSetPathValue_(epcLastPersistSnapshot_,path,clean(d.value));
-  if(cloudBase&&typeof cloudBase==='object')epcSetPathValue_(cloudBase,path,clean(d.value));
-  suppressMirrorUntil=Date.now()+2500;
-  localStorage.setItem('epcV1',JSON.stringify(db));
-  if(cloudBase)try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(_){}
-  if(!epcEditLocked_()){render();setTimeout(()=>{try{refreshSettlementActionState_();}catch(_){}},0);}
-  if(remoteVersion){epcAppliedRemoteVersions_.set(path,remoteVersion);epcPersistAppliedVersions_();}
-  window.epcLastRemoteFieldApply={path,version:remoteVersion,clientId:String(d.clientId||''),appliedAt:Date.now()};
-  return {ok:true,path,version:remoteVersion};
- }catch(e){
-  db=before;return {ok:false,error:String(e&&e.message||e)};
- }
-}
-function epcProtectAppliedRealtimeFields_(candidate,liveDb){
- // A verified whole-db snapshot can lag behind field-version delivery.
- // Once this browser has consumed a newer realtime field, never let the older
- // snapshot/legacy merge roll that exact path back.
- if(!candidate||!liveDb)return candidate;
- for(const [path,version] of epcAppliedRemoteVersions_.entries()){
-  if(!version||!String(path).startsWith('events['))continue;
-  const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
-  let cur=liveDb,ok=true;
-  for(const k of parts){
-   if(Array.isArray(cur)){
-    const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===String(k));
-    if(idx<0){ok=false;break;} cur=cur[idx];
-   }else if(cur&&Object.prototype.hasOwnProperty.call(cur,k))cur=cur[k];
-   else {ok=false;break;}
-  }
-  if(ok)epcSetPathValue_(candidate,path,cloneCloud_(cur));
- }
- return candidate;
-}
-function epcDrainRemoteFieldQueue_(){
- if(epcEditLocked_())return;
- for(const [path,d] of [...epcRemoteFieldQueue_.entries()]){
-  const r=epcApplyRemoteField_(d);
-  if(r.ok||r.ignored)epcRemoteFieldQueue_.delete(path);
- }
-}
-function startFieldRealtimeObserver_(){
- if(fieldRealtimeUnsub)fieldRealtimeUnsub();
- fieldRealtimeReady=false;
- // 1000 latest field documents are small and allow a reloaded/stale terminal to
- // catch up to the current per-field authority instead of waiting for a future edit.
- const q=query(collection(fs,'epcFieldVersionsV2'),orderBy('updatedAt','desc'),limit(1000));
- fieldRealtimeUnsub=onSnapshot(q,snap=>{
-  const first=!fieldRealtimeReady; fieldRealtimeReady=true;
-  for(const chg of snap.docChanges()){
-   if(chg.type!=='added'&&chg.type!=='modified')continue;
-   const d=chg.doc.data()||{},path=String(d.path||'');
-   if(!path||path.startsWith('__syncCanary.'))continue;
-   // On first hydration, consume current authoritative EVENT fields too. This is
-   // what repairs a B terminal whose whole snapshot says 6/0 while A already
-   // published player buyin/rebuy fields representing 8/10.
-   const applied=Number(epcAppliedRemoteVersions_.get(path)||0);
-   if(first&&Number(d.version||0)<=applied)continue;
-   const r=epcApplyRemoteField_(d);
-   if(r.deferred)epcQueueRemoteField_(d);
-  }
-  epcDrainRemoteFieldQueue_();
- },e=>console.warn('Field realtime observer deferred',e));
-}
-window.epcFirebaseStartFieldRealtimeObserver=startFieldRealtimeObserver_;
-window.epcFirebaseDrainRemoteFields=epcDrainRemoteFieldQueue_;
-function epcRealtimeRollbackSelfTest_(){
- const tests=[],check=(name,ok,detail)=>tests.push({name,ok:!!ok,detail:detail||null});
- const path='events[EV_RACE].players[M_RACE].stack';
- const stale={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:100}]}]};
- const live={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:900}]}]};
- const oldVersions=new Map(epcAppliedRemoteVersions_);
- try{
-  epcAppliedRemoteVersions_.clear();epcAppliedRemoteVersions_.set(path,7);
-  const guarded=epcProtectAppliedRealtimeFields_(cloneCloud_(stale),live);
-  const got=guarded.events[0].players[0].stack;
-  check('stale whole snapshot cannot roll back newer realtime stack',got===900,{expected:900,actual:got});
-  const unguarded=cloneCloud_(stale);
-  check('fixture proves stale snapshot differs from live value',unguarded.events[0].players[0].stack!==live.events[0].players[0].stack);
- }finally{
-  epcAppliedRemoteVersions_.clear();for(const [k,v] of oldVersions)epcAppliedRemoteVersions_.set(k,v);
- }
- const passed=tests.filter(x=>x.ok).length;
- return {ok:passed===tests.length,passed,total:tests.length,tests,mode:'memory-race-regression',ranAt:new Date().toISOString()};
-}
-window.epcRealtimeRollbackSelfTest_=epcRealtimeRollbackSelfTest_;
-window.epcRealtimeRollbackSelfTestResult=epcRealtimeRollbackSelfTest_();
-
-
-window.epcFirebaseRemoteFieldQueue=()=>[...epcRemoteFieldQueue_.values()].map(clean);
-setInterval(epcDrainRemoteFieldQueue_,250);
 window.epcFirebaseVerify=async()=>{
  const u=auth.currentUser;
  if(!u){state("Firebase：請先登入",true);return false;}
@@ -2337,7 +2030,7 @@ window.epcFirebaseVerify=async()=>{
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();startFieldRealtimeObserver_();setTimeout(()=>{if(typeof window.epcRecoverSyncState_==='function')window.epcRecoverSyncState_();if(typeof window.epcFirebasePublishFieldChanges==='function'&&(window.epcFieldChanges||[]).some(ch=>ch&&!ch.publishedAt&&!ch.conflict))window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]).catch(e=>console.warn('startup field recovery deferred',e));window.epcFirebaseMirrorSchedule();},500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -2348,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.89 RC · Field Version Hydration</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.90 RECOVERY · Verified Sync Baseline</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2371,35 +2064,34 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
   </div>
  </div>
 
- <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:8px">
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">總會員數</div><div class="v" id="kMembers">0</div></div>
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間新增會員數</div><div class="v" id="kNewMembers">0</div></div>
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">總營利</div><div class="v" id="kProfit">$0</div></div>
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間總營利</div><div class="v" id="kMonthProfit">$0</div></div>
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">總 JP 累計</div><div class="v" id="kJP">$0</div></div>
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間 JP 累計</div><div class="v" id="kRangeJP">$0</div></div>
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間總支出</div><div class="v" id="kMonthExpense">$0</div></div>
-  <div class="card kpi" style="padding:11px 14px;margin-bottom:0"><div class="l">區間賽事場次</div><div class="v" id="kMonthEvents">0 場</div><div class="small" id="kLevelBreakdown">尚無賽事</div></div>
+ <div class="grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="card kpi"><div class="l">總會員數</div><div class="v" id="kMembers">0</div></div>
+  <div class="card kpi"><div class="l">區間新增會員數</div><div class="v" id="kNewMembers">0</div></div>
+  <div class="card kpi"><div class="l">總營利</div><div class="v" id="kProfit">$0</div></div>
+  <div class="card kpi"><div class="l">區間總營利</div><div class="v" id="kMonthProfit">$0</div></div>
+  <div class="card kpi"><div class="l">總 JP 累計</div><div class="v" id="kJP">$0</div></div>
+  <div class="card kpi"><div class="l">區間總支出</div><div class="v" id="kMonthExpense">$0</div></div>
+  <div class="card kpi" style="grid-column:span 2"><div class="l">區間賽事場次</div><div class="v" id="kMonthEvents">0 場</div><div class="small" id="kLevelBreakdown">尚無賽事</div></div>
  </div>
 
- <div class="card" style="margin-top:10px;padding:12px 14px">
+ <div class="card" style="margin-top:14px">
   <div class="report-topbar" style="margin-bottom:10px">
    <div><h3 style="margin:0">日報表</h3><div class="small">查看指定營業日的 EPC 總帳收支；獨立帳務不納入。</div></div>
    <div style="min-width:220px"><label>營業日</label><input type="date" id="dashboardDailyDate" onchange="renderDashboardDailyReport()"></div>
   </div>
-  <div class="grid" style="grid-template-columns:repeat(8,1fr);gap:7px">
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">賽事數</div><div class="v" id="drEvents">0 場</div></div>
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">行政費收入</div><div class="v" id="drAdmin">$0</div></div>
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">入會費收入</div><div class="v" id="drMembership">$0</div></div>
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">折扣支出</div><div class="v" id="drDiscount">$0</div></div>
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">其他收入</div><div class="v" id="drOtherIncome">$0</div></div>
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">其他支出</div><div class="v" id="drOtherExpense">$0</div></div>
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">淨收入</div><div class="v" id="drNet">$0</div></div>
-   <div class="card kpi" style="padding:10px 9px;margin-bottom:0"><div class="l">JP</div><div class="v" id="drJP">$0</div></div>
+  <div class="grid">
+   <div class="card kpi"><div class="l">賽事數</div><div class="v" id="drEvents">0 場</div></div>
+   <div class="card kpi"><div class="l">行政費收入</div><div class="v" id="drAdmin">$0</div></div>
+   <div class="card kpi"><div class="l">入會費收入</div><div class="v" id="drMembership">$0</div></div>
+   <div class="card kpi"><div class="l">折扣支出</div><div class="v" id="drDiscount">$0</div></div>
+   <div class="card kpi"><div class="l">其他收入</div><div class="v" id="drOtherIncome">$0</div></div>
+   <div class="card kpi"><div class="l">其他支出</div><div class="v" id="drOtherExpense">$0</div></div>
+   <div class="card kpi"><div class="l">淨收入</div><div class="v" id="drNet">$0</div></div>
+   <div class="card kpi"><div class="l">JP</div><div class="v" id="drJP">$0</div></div>
   </div>
-  <details style="margin-top:8px"><summary class="small" style="cursor:pointer">查看日報表收支明細</summary>
-   <div class="tablewrap" style="margin-top:8px"><table><thead><tr><th>方向</th><th>分類</th><th>項目名稱</th><th>金額</th><th>來源</th></tr></thead><tbody id="dashboardDailyItemRows"></tbody></table></div>
-  </details>
+  <div class="tablewrap" style="margin-top:12px">
+   <table><thead><tr><th>方向</th><th>分類</th><th>項目名稱</th><th>金額</th><th>來源</th></tr></thead><tbody id="dashboardDailyItemRows"></tbody></table>
+  </div>
  </div>
 
  <div class="card" style="margin-top:14px">
@@ -2970,34 +2662,6 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
 </main>
 
 
-<div id="epcProductionCanaryModal" style="display:none;position:fixed;inset:0;z-index:10035;background:rgba(0,0,0,.78);align-items:center;justify-content:center;padding:20px">
- <div style="width:min(620px,100%);background:#17212c;color:#f4f7fa;border:2px solid #d6b35a;border-radius:14px;padding:20px">
-  <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0;color:#f2d67d!important">正式同步管線 Canary</h3><button style="background:#fff;color:#111" onclick="document.getElementById('epcProductionCanaryModal').style.display='none'">關閉</button></div>
-  <div style="margin:10px 0;color:#d8e0e8;line-height:1.6">使用正式 epcFieldVersionsV2 版本管線，但 path 固定為 __syncCanary，不會寫入 EPC db、會員、賽事或帳務。</div>
-  <input id="epcProductionCanarySession" placeholder="例如 CANARY1012" style="margin-bottom:12px;background:#fff!important;color:#111!important;border:2px solid #d6b35a!important;font-size:17px;font-weight:800">
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="runProductionCanary_('capture')">① 鎖定基準</button><button onclick="runProductionCanary_('commit')">② 提交 Canary</button><button onclick="runProductionCanary_('read')">讀取結果</button></div>
-  <pre id="epcProductionCanaryResult" style="margin-top:14px;white-space:pre-wrap;word-break:break-word;background:#090e14!important;color:#f4f7fa!important;border:1px solid #536476;border-radius:10px;padding:14px;min-height:110px"></pre>
- </div>
-</div>
-
-<div id="epcTwoDeviceModal" style="display:none;position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.78);align-items:center;justify-content:center;padding:20px">
- <div style="width:min(620px,100%);background:#17212c;color:#f4f7fa;border:2px solid #d6b35a;border-radius:14px;padding:20px;box-shadow:0 22px 70px rgba(0,0,0,.6)">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3 style="margin:0;color:#f2d67d!important;font-size:22px;font-weight:900">雙機同步測試</h3><button style="background:#f4f7fa;color:#17212c;border-color:#f4f7fa;font-weight:800" onclick="document.getElementById('epcTwoDeviceModal').style.display='none'">關閉</button></div>
-  <div style="margin:10px 0 14px;color:#d8e0e8;font-size:14px;line-height:1.6">只使用 epcValidationTwoDeviceV1，不會修改正式 EPC 資料。兩台電腦請輸入相同測試代碼。</div>
-  <input id="epcTwoDeviceSession" placeholder="例如 EPC1005" style="margin-bottom:12px;background:#fff!important;color:#111!important;border:2px solid #d6b35a!important;font-size:17px;font-weight:800">
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="runTwoDeviceAction_('init')">建立測試</button><button onclick="runTwoDeviceAction_('writeA')">本機當 A 寫入</button><button onclick="runTwoDeviceAction_('writeB')">本機當 B 寫入</button><button onclick="runTwoDeviceAction_('same')">同欄位寫入</button><button onclick="runTwoDeviceAction_('captureBase')">① 鎖定衝突基準</button><button onclick="runTwoDeviceAction_('commitConflict')">② 提交衝突測試</button><button onclick="runTwoDeviceAction_('read')">讀取結果</button></div>
-  <pre id="epcTwoDeviceResult" style="margin-top:14px;white-space:pre-wrap;word-break:break-word;background:#090e14!important;color:#f4f7fa!important;border:1px solid #536476;border-radius:10px;padding:14px;min-height:110px;font-size:14px;line-height:1.55;font-weight:600"></pre>
- </div>
-</div>
-
-<div id="epcSyncDiagnosticsModal" style="display:none;position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
- <div style="width:min(760px,100%);max-height:82vh;overflow:auto;background:#17212c;border:1px solid #d6b35a;border-radius:14px;padding:18px">
-  <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><h3 style="margin:0">同步診斷</h3><button onclick="document.getElementById('epcSyncDiagnosticsModal').style.display='none'">關閉</button></div>
-  <div class="small" style="margin:8px 0 12px">只讀資訊，不會寫入 Firebase、Google Sheet 或正式資料。</div>
-  <pre id="epcSyncDiagnosticsText" style="white-space:pre-wrap;word-break:break-word;background:#0d141c;border:1px solid #263443;border-radius:10px;padding:14px;line-height:1.55"></pre>
- </div>
-</div>
-
 <div id="deleteConfirmModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px">
  <div style="width:min(440px,100%);background:#17212c;border:1px solid #e05d5d;border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
   <h3 style="margin-top:0">確認刪除</h3>
@@ -3054,13 +2718,8 @@ function mergeFormMembers(baseMembers,formMembers){
 }
 function preserveMembers_(local,merged,formMembers){
  if(!merged||typeof merged!=='object')merged={};
- // Google Form/Sheet is authoritative for shared member fields (id/name).
- // mergeFormMembers preserves EPC-only local fields such as group/note/history,
- // while allowing the newest Sheet name to replace the cached local name.
- const localMembers=(local&&Array.isArray(local.members))?local.members:[];
- const mergedMembers=(merged&&Array.isArray(merged.members))?merged.members:[];
- let members=mergeFormMembers(localMembers,mergedMembers);
- members=mergeFormMembers(members,formMembers||[]);
+ let members=mergeFormMembers((merged&&merged.members)||[],formMembers||[]);
+ members=mergeFormMembers(members,(local&&local.members)||[]);
  merged.members=members;
  return merged;
 }
@@ -3170,33 +2829,12 @@ function preserveEventEdits_(local,merged){
  for(const e of le){
    const k=String(e&&e.id||''); if(!k)continue;
    const r=mm.get(k);
-   if(!r){me.push(cloneCloud_(e));mm.set(k,me[me.length-1]);continue;}
+   if(!r){me.push(cloneCloud_(e));continue;}
    const lt=Number(e._eventUpdatedAt||0),rt=Number(r._eventUpdatedAt||0);
    if(lt>rt){
-     const idx=me.indexOf(r); me[idx]=cloneCloud_(e); mm.set(k,me[idx]); continue;
-   }
-   // Hard anti-rollback floor for event operational data. Older/equal snapshots
-   // may add missing information, but they may never reduce an existing event.
-   const lp=Array.isArray(e.players)?e.players:[],rp=Array.isArray(r.players)?r.players:[];
-   const rpm=new Map(rp.map(p=>[String(p.memberId||''),p]));
-   for(const p of lp){
-     const pk=String(p&&p.memberId||''); if(!pk)continue;
-     const q=rpm.get(pk);
-     if(!q){rp.push(cloneCloud_(p));rpm.set(pk,rp[rp.length-1]);continue;}
-     // Counts/stacks/prizes are monotonic only against an older event snapshot.
-     for(const f of ['buyin','rebuy','manualDiscount','stack','prize']){
-       const lv=Number(p[f]||0),rv=Number(q[f]||0);
-       if(lv>rv)q[f]=p[f];
-     }
-     if(p.group&&!q.group)q.group=p.group;
-   }
-   r.players=rp;
-   // Never let an older snapshot reopen a formally settled event.
-   if(String(e.status||'')==='已結算'&&String(r.status||'')!=='已結算'){
-     r.status='已結算';
-     if(e.finalAccounting)r.finalAccounting=cloneCloud_(e.finalAccounting);
-     if(e.finalJP!=null)r.finalJP=e.finalJP;
-     if(e.settledAt)r.settledAt=e.settledAt;
+     const idx=me.indexOf(r);
+     me[idx]=cloneCloud_(e);
+     mm.set(k,me[idx]);
    }
  }
  if(merged)merged.events=me;
@@ -3322,15 +2960,8 @@ function epcEditingField_(){
  const t=String(a.tagName||'').toUpperCase();
  return t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||a.isContentEditable;
 }
-const EPC_EVENT_DRAFT_IDS=new Set(['eDate','eName','eStartTime','eRegCloseTime','eLevel','ePricingMode','ePoolUnit','eAdmin','eBuyinTotal','eBuyinAdmin','eRebuyTotal','eRebuyAdmin','eOverbuyThreshold','eChips','eJP','eJPRound','ePayout']);
-let epcUnsavedEventDraft_=false;
-function epcHasUnsavedEventDraft_(){return epcUnsavedEventDraft_;}
 function epcEditLocked_(){
- // V55.2: focus alone is not an unsaved edit. Treating every focused INPUT/SELECT
- // as a global lock left remote player additions permanently queued while an
- // operator merely had a search/select control focused. epcActiveEdit_ and the
- // short commit lock already protect actual in-progress edits.
- return !!epcActiveEdit_||Date.now()<epcEditLockUntil_||epcHasUnsavedEventDraft_();
+ return epcEditingField_()||!!epcActiveEdit_||Date.now()<epcEditLockUntil_;
 }
 function epcEditKey_(el){
  if(!el)return '';
@@ -3381,8 +3012,8 @@ function epcMarkLocalEdit_(el){
  },1800);
 }
 document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
-document.addEventListener('input',e=>{if(e.target&&EPC_EVENT_DRAFT_IDS.has(String(e.target.id||'')))epcUnsavedEventDraft_=true;epcMarkLocalEdit_(e.target)},true);
-document.addEventListener('change',e=>{if(e.target&&EPC_EVENT_DRAFT_IDS.has(String(e.target.id||'')))epcUnsavedEventDraft_=true;epcMarkLocalEdit_(e.target)},true);
+document.addEventListener('input',e=>epcMarkLocalEdit_(e.target),true);
+document.addEventListener('change',e=>epcMarkLocalEdit_(e.target),true);
 document.addEventListener('focusout',e=>{
  // After leaving a manual field, keep cloud/background redraw locked long enough for
  // onchange/persist/render/save handlers to finish. This applies globally.
@@ -3421,9 +3052,7 @@ function startLiveSync_(){
 
      if(!localDirty){
        backupLocal('before-live-remote-apply-v2');
-       const localBeforeRemote=cloneCloud_(db);
-       db=preserveEventEdits_(localBeforeRemote,remote);
-       db=preserveActivityEdits_(localBeforeRemote,db);
+       db=remote;
        epcLastPersistSnapshot_=cloneCloud_(db);
        cloudRevision=loadedRev;
        setCloudBase_(remote);
@@ -3488,9 +3117,7 @@ async function initializeCloud(){
        return;
      }else{
        backupLocal('startup-cloud-load-v2');
-       const localBeforeStartup=cloneCloud_(db);
-       db=preserveEventEdits_(localBeforeStartup,remote);
-       db=preserveActivityEdits_(localBeforeStartup,db);
+       db=remote;
        cloudRevision=serverRevision;
        setCloudBase_(remote);
        localStorage.setItem('epcV1',JSON.stringify(db));
@@ -3554,30 +3181,9 @@ function scheduleCloudSave(){
    scheduleCloudReconnect_();
    return;
  }
- // V1.51.46: the legacy whole-db writer must never race ahead of pending
- // Firebase field transactions. That race could return an older EPC_DATA
- // snapshot and roll back a just-imported phone stack (or newly added player).
- const fieldBusy=()=>{
-   const s=typeof epcSyncOutstanding_==='function'?epcSyncOutstanding_():null;
-   return !!(s&&(s.unpublished||s.conflicts||s.activeConflict||s.pendingRemote));
- };
- const waitForFields=()=>{
-   clearTimeout(cloudSaveTimer);
-   if(fieldBusy()){
-     cloudSaveTimer=setTimeout(waitForFields,350);
-     return;
-   }
-   cloudSaveTimer=setTimeout(()=>saveCloudNow(false),120);
- };
- waitForFields();
+ cloudSaveTimer=setTimeout(saveCloudNow,900);
 }
 async function saveCloudNow(force=false){
- const outstanding=typeof epcSyncOutstanding_==='function'?epcSyncOutstanding_():null;
- if(!force&&outstanding&&(outstanding.unpublished||outstanding.conflicts||outstanding.activeConflict||outstanding.pendingRemote)){
-   cloudPending=true;
-   scheduleCloudSave();
-   return false;
- }
  const fieldConflict=!!window.epcFirebaseFieldConflict||(window.epcFieldChanges||[]).some(ch=>ch.conflict);
  if((window.epcFirebaseConflicts||[]).length||fieldConflict){
    cloudPending=true;
@@ -3606,7 +3212,6 @@ async function saveCloudNow(force=false){
    const localAtStart=cloneCloud_(db);
 
    let candidate=mergeCloud3_(base,localAtStart,remote);
-   candidate=epcProtectAppliedRealtimeFields_(candidate,localAtStart);
    candidate=preserveManualDiscountEdits_(localAtStart,candidate);
    candidate=preserveMembers_(localAtStart,candidate,latest.members);
 
@@ -3642,7 +3247,8 @@ async function saveCloudNow(force=false){
      db=preserveActivityEdits_(candidate,db);
      db=preserveEventEdits_(candidate,db);
      db=preserveMembers_(candidate,db,latest.members);
-     epcMarkSyncCompleteIfSafe_();
+     localDirty=false;
+     localStorage.removeItem('epcLocalDirty');
    }
 
    cloudRevision=savedRevision;
@@ -3680,32 +3286,6 @@ async function manualCloudSync(){
  }
 }
 let __phoneStackSyncBusy=false;
-let __phoneStackAutoTimer=null;
-let __phoneStackAutoEventId='';
-let __phoneStackAutoLastRun=0;
-function epcSettlementPageOpen_(){
- const el=document.getElementById('settle');
- return !!(el&&el.classList.contains('active'));
-}
-function stopPhoneStackAutoSync_(){
- if(__phoneStackAutoTimer){clearInterval(__phoneStackAutoTimer);__phoneStackAutoTimer=null;}
- __phoneStackAutoEventId='';
-}
-function startPhoneStackAutoSync_(){
- stopPhoneStackAutoSync_();
- const e=currentEvent();
- if(!e||e.status==='已結算'||!epcSettlementPageOpen_())return;
- __phoneStackAutoEventId=String(e.id||'');
- // Run once immediately, then poll while the settlement page remains open.
- setTimeout(()=>syncPhoneStacksOnly({auto:true}),120);
- __phoneStackAutoTimer=setInterval(()=>{
-   const cur=currentEvent();
-   if(!epcSettlementPageOpen_()||!cur||cur.status==='已結算'||String(cur.id||'')!==__phoneStackAutoEventId){
-     stopPhoneStackAutoSync_();return;
-   }
-   syncPhoneStacksOnly({auto:true});
- },1500);
-}
 async function readPhoneStacksApi(eventId){
  // V1.38：改用 POST 讀取，避免 GitHub Pages -> Apps Script GET 偶發 404。
  // 只讀 PHONE_STACKS；失敗時不修改任何本機/雲端賽事資料。
@@ -3723,72 +3303,46 @@ async function readPhoneStacksApi(eventId){
  if(!j||j.ok!==true)throw new Error((j&&j.error)||'STACK_API_ERROR');
  return j;
 }
-async function syncPhoneStacksOnly(opts){
- const auto=!!(opts&&opts.auto);
+async function syncPhoneStacksOnly(){
  const localEvent=currentEvent();
- if(!localEvent){if(!auto)alert('請先選擇要結算的賽事');return;}
- if(localEvent.status==='已結算'){if(!auto)alert('此賽事已正式結算，不能再同步籌碼。');return;}
- if(auto&&!epcSettlementPageOpen_())return;
+ if(!localEvent)return alert('請先選擇要結算的賽事');
+ if(localEvent.status==='已結算')return alert('此賽事已正式結算，不能再同步籌碼。');
  if(__phoneStackSyncBusy)return;
- __phoneStackAutoLastRun=Date.now();
- const btn=(!auto&&typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;
+ const btn=(typeof event!=='undefined'&&event&&event.currentTarget)?event.currentTarget:null;
  __phoneStackSyncBusy=true;
  if(btn){btn.disabled=true;btn.dataset.oldText=btn.textContent;btn.textContent='同步中…';}
  try{
-  if(!auto)setCloudState('☁ 正在讀取手機籌碼…');
+  setCloudState('☁ 正在讀取手機籌碼…');
   const res=await readPhoneStacksApi(localEvent.id);
   const map={};
-  (res.stacks||[]).forEach(x=>{
-    const k=String(x.memberId==null?'':x.memberId).trim();
-    const stack=Number(x.stack);
-    if(k&&Number.isFinite(stack)&&stack>=0)map[k]=stack;
-  });
+  (res.stacks||[]).forEach(x=>map[String(x.memberId)]=x.stack);
   let updated=0,unchanged=0,missing=0;
   (localEvent.players||[]).forEach(lp=>{
-    const k=String(lp.memberId==null?'':lp.memberId).trim();
-    if(!k||!Object.prototype.hasOwnProperty.call(map,k)){missing++;return;}
-    const stack=map[k];
+    const k=String(lp.memberId);
+    if(!Object.prototype.hasOwnProperty.call(map,k)){missing++;return;}
+    const stack=Number(map[k]);
+    if(!Number.isFinite(stack)||stack<0){missing++;return;}
     if(Number(lp.stack)!==stack){lp.stack=stack;updated++;}else unchanged++;
   });
-
-  // IMPORTANT: feed phone stack edits through the normal persist() field ledger.
-  // Direct localStorage/saveCloudNow writes bypassed Firebase per-field realtime sync,
-  // so another EPC computer could stay stale or later restore an older stack.
+  // 手機籌碼讀回後必須成為正式賽事資料，否則下一次 EPC_DATA 雲端同步
+  // 會把剛讀到的 stack 當成本機暫存而覆蓋掉。
   if(updated>0){
     touchEvent_(localEvent);
-    persist();
-    // Phone settlement is latency-sensitive. The normal persist() timer is safe but
-    // unnecessarily waits before publishing. Kick the existing field publisher now;
-    // it still uses the same versioned transaction/conflict guard.
-    if(typeof window.epcFirebasePublishFieldChanges==='function'){
-      Promise.resolve(window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]))
-        .then(()=>{if(typeof epcMarkSyncCompleteIfSafe_==='function')epcMarkSyncCompleteIfSafe_()})
-        .catch(err=>console.warn('phone stack fast publish deferred',err));
-    }
+    localDirty=true;
+    localStorage.setItem('epcLocalDirty','1');
+    localStorage.setItem('epcV1',JSON.stringify(db));
   }
   render();
-  setTimeout(()=>{try{refreshSettlementActionState_();}catch(_){}},0);
-
-  // Do not immediately invoke the legacy whole-db writer here. persist() has already
-  // queued exact per-player stack fields for Firebase. Calling saveCloudNow() before
-  // those field transactions settle can merge an older EPC_DATA snapshot back over
-  // the just-imported phone stacks.
-  if(updated>0){
-    actionMsg(`手機籌碼自動同步完成｜更新 ${updated} 人`);
-    setCloudState('☁ 手機籌碼已同步｜正在送往 Firebase');
-  }else if(!auto){
-    actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
-    setCloudState('☁ 手機籌碼已同步｜資料相同');
-  }
+  if(updated>0 && cloudReady)await saveCloudNow(false);
+  actionMsg(`手機籌碼同步完成｜更新 ${updated} 人｜相同 ${unchanged} 人｜未輸入 ${missing} 人`);
+  setCloudState(updated>0?'☁ 手機籌碼已同步至電腦與雲端':'☁ 手機籌碼已同步｜資料相同');
  }catch(err){
   console.error(err);
-  if(!auto){
-    setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
-    alert('同步手機籌碼失敗：'+String(err.message||err));
-  }
+  setCloudState('⚠ 手機籌碼同步失敗｜電腦資料未被覆蓋',true);
+  alert('同步手機籌碼失敗：'+String(err.message||err));
  }finally{
   __phoneStackSyncBusy=false;
-  if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步籌碼';}
+  if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步手機籌碼';}
  }
 }
 async function manualCloudLoad(){
@@ -3933,9 +3487,7 @@ window.epcFirebaseApplyRemote=function(remote,meta){
    suppressMirrorUntil=Date.now()+5000;
    clearTimeout(timer);
    backupLocal('before-firebase-safe-apply-v1');
-   const liveBeforeApply=cloneCloud_(db);
    db=cloneCloud_(remote);
-   db=epcProtectAppliedRealtimeFields_(db,liveBeforeApply);
    epcLastPersistSnapshot_=cloneCloud_(db);
    const rev=Number(meta&&meta.legacyRevision||0);
    if(rev>cloudRevision)cloudRevision=rev;
@@ -3987,184 +3539,6 @@ const epcClientId_=(()=>{
 })();
 let epcLastPersistSnapshot_=cloneCloud_(db);
 try{window.epcFieldChanges=JSON.parse(localStorage.getItem('epcFieldChangesV1')||'[]');if(!Array.isArray(window.epcFieldChanges))window.epcFieldChanges=[];}catch(_){window.epcFieldChanges=[];}
-function epcRecoverSyncState_(){
- const ledger=window.epcFieldChanges||[];
- const unpublished=ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).length;
- const conflicts=ledger.filter(ch=>ch&&ch.conflict).length;
- const hasWork=unpublished>0||conflicts>0;
- if(hasWork){
-   localDirty=true;cloudPending=true;
-   localStorage.setItem('epcLocalDirty','1');
- }else if(localStorage.getItem('epcLocalDirty')!=='1'){
-   localDirty=false;
- }
- window.epcRecoveredSyncState={unpublished,conflicts,hasWork,recoveredAt:Date.now()};
- return window.epcRecoveredSyncState;
-}
-window.epcRecoverSyncState_=epcRecoverSyncState_;
-function epcCompactFieldLedger_(){
- const ledger=Array.isArray(window.epcFieldChanges)?window.epcFieldChanges:[];
- const protectedPaths=new Set(ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict)).map(ch=>String(ch.path||'')));
- const publishedProtected=[],publishedSafe=[];
- for(const ch of ledger){
-  if(!ch||!ch.publishedAt||ch.conflict)continue;
-  (protectedPaths.has(String(ch.path||''))?publishedProtected:publishedSafe).push(ch);
- }
- // Keep all unfinished/conflicted work, all published history for paths that
- // still have unfinished chains, and only a bounded tail of fully settled history.
- const unfinished=ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict));
- const settledTail=publishedSafe.slice(-300);
- const keepSet=new Set([...unfinished,...publishedProtected,...settledTail]);
- const compacted=ledger.filter(ch=>keepSet.has(ch));
- if(compacted.length!==ledger.length){
-   window.epcFieldChanges=compacted;
-   localStorage.setItem('epcFieldChangesV1',JSON.stringify(compacted));
- }
- return {before:ledger.length,after:compacted.length,unfinished:unfinished.length,protectedPublished:publishedProtected.length,settledTail:settledTail.length};
-}
-window.epcCompactFieldLedger_=epcCompactFieldLedger_;
-epcCompactFieldLedger_();
-epcRecoverSyncState_();
-function epcSyncOutstanding_(){
- const ledger=window.epcFieldChanges||[];
- return {
-  unpublished:ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).length,
-  conflicts:ledger.filter(ch=>ch&&ch.conflict).length,
-  activeConflict:!!window.epcFirebaseFieldConflict,
-  pendingRemote:!!window.epcFirebasePending
- };
-}
-function epcCanMarkSyncComplete_(){
- const s=epcSyncOutstanding_();
- return !s.unpublished&&!s.conflicts&&!s.activeConflict&&!s.pendingRemote;
-}
-function epcMarkSyncCompleteIfSafe_(){
- if(!epcCanMarkSyncComplete_()){
-   localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
-   return false;
- }
- localDirty=false;cloudPending=false;localStorage.removeItem('epcLocalDirty');
- return true;
-}
-window.epcSyncOutstanding_=epcSyncOutstanding_;
-window.epcCanMarkSyncComplete_=epcCanMarkSyncComplete_;
-window.epcMarkSyncCompleteIfSafe_=epcMarkSyncCompleteIfSafe_;
-function epcRecoverySelfTest_(){
- const tests=[];
- const check=(name,ok,detail='')=>tests.push({name,ok:!!ok,detail});
- // Pure-memory replicas of the queue/ledger invariants. Never touch db,
- // localStorage, Firebase or Apps Script.
- const outstanding=ledger=>({
-  unpublished:ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).length,
-  conflicts:ledger.filter(ch=>ch&&ch.conflict).length
- });
- const canComplete=ledger=>{const s=outstanding(ledger);return !s.unpublished&&!s.conflicts;};
- const compact=ledger=>{
-  const protectedPaths=new Set(ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict)).map(ch=>String(ch.path||'')));
-  const publishedProtected=ledger.filter(ch=>ch&&ch.publishedAt&&!ch.conflict&&protectedPaths.has(String(ch.path||'')));
-  const publishedSafe=ledger.filter(ch=>ch&&ch.publishedAt&&!ch.conflict&&!protectedPaths.has(String(ch.path||'')));
-  const unfinished=ledger.filter(ch=>ch&&(!ch.publishedAt||ch.conflict));
-  const keep=new Set([...unfinished,...publishedProtected,...publishedSafe.slice(-300)]);
-  return ledger.filter(ch=>keep.has(ch));
- };
- const selectBatch=ledger=>{
-  const pending=ledger.filter(x=>!x.publishedAt&&!x.conflict);
-  const blocked=new Set(ledger.filter(x=>x&&x.conflict).map(x=>String(x.path||'')));
-  const seen=new Set(),out=[];
-  for(const x of pending){const p=String(x.path||'');if(blocked.has(p)||seen.has(p))continue;seen.add(p);out.push(x);}
-  return out;
- };
- const a={path:'X',publishedAt:1},b={path:'X'},d={path:'Y',conflict:true},e={path:'Z'};
- check('pending prevents completion',!canComplete([b]));
- check('conflict prevents completion',!canComplete([d]));
- check('settled ledger can complete',canComplete([a]));
- const compacted=compact([a,b,d,e]);
- check('compaction keeps pending',compacted.includes(b)&&compacted.includes(e));
- check('compaction keeps conflict',compacted.includes(d));
- check('compaction keeps published predecessor on active path',compacted.includes(a));
- const batch=selectBatch([{path:'X',id:'v3'},{path:'X',id:'v4'},{path:'Y',id:'y1'}]);
- check('same path sends oldest only',batch.some(x=>x.id==='v3')&&!batch.some(x=>x.id==='v4'));
- check('different path continues',batch.some(x=>x.id==='y1'));
- const blocked=selectBatch([{path:'X',conflict:true,id:'cx'},{path:'X',id:'v4'},{path:'Y',id:'y1'}]);
- check('conflict blocks later same path',!blocked.some(x=>x.path==='X')&&blocked.some(x=>x.path==='Y'));
- const passed=tests.filter(x=>x.ok).length;
- return {ok:passed===tests.length,passed,total:tests.length,tests,ranAt:new Date().toISOString(),mode:'memory-only'};
-}
-window.epcRecoverySelfTest_=epcRecoverySelfTest_;
-window.epcRecoverySelfTestResult=epcRecoverySelfTest_();
-function epcSingleDeviceValidation_(){
- const tests=[],check=(name,ok,state)=>tests.push({name,ok:!!ok,state:state||null});
- const ledger=[];
- const add=(id,path,before,after)=>{const ch={changeId:id,path,before,after,changedAt:ledger.length+1};ledger.push(ch);return ch;};
- const pending=()=>ledger.filter(x=>!x.publishedAt&&!x.conflict);
- const select=()=>{
-  const blocked=new Set(ledger.filter(x=>x.conflict).map(x=>x.path)),seen=new Set(),out=[];
-  for(const x of pending()){if(blocked.has(x.path)||seen.has(x.path))continue;seen.add(x.path);out.push(x);}return out;
- };
- const ack=(ch,version)=>{
-  ch.publishedAt=1000+version;ch.publishedVersion=version;ch.baseVersion=version;
-  const i=ledger.indexOf(ch),next=ledger.slice(i+1).find(x=>!x.publishedAt&&!x.conflict&&x.path===ch.path);
-  if(next){next.before=ch.after;next.baseVersion=version;}
- };
- const x3=add('x3','X','x2','x3'),y1=add('y1','Y','y0','y1');
- check('edit creates pending queue',pending().length===2,{pending:pending().map(x=>x.changeId)});
- let batch=select();
- check('first publish includes independent fields',batch.includes(x3)&&batch.includes(y1),{batch:batch.map(x=>x.changeId)});
- const x4=add('x4','X','x3','x4');
- ack(x3,3);
- check('ACK keeps newer same-path edit pending',!x4.publishedAt&&pending().includes(x4),{x4});
- check('ACK rebases next same-path version',x4.before==='x3'&&x4.baseVersion===3,{before:x4.before,baseVersion:x4.baseVersion});
- ack(y1,1);
- check('system remains dirty while x4 pending',pending().length===1&&pending()[0]===x4,{pending:pending().map(x=>x.changeId)});
- batch=select();
- check('next batch advances to x4',batch.length===1&&batch[0]===x4,{batch:batch.map(x=>x.changeId)});
- ack(x4,4);
- check('all ACKed becomes clean candidate',pending().length===0&&!ledger.some(x=>x.conflict),{pending:pending().length});
- const x5=add('x5','X','x4','x5'),z1=add('z1','Z','z0','z1');
- x5.conflict=true;
- batch=select();
- check('conflict isolates path while other path flows',!batch.includes(x5)&&batch.includes(z1),{batch:batch.map(x=>x.changeId)});
- const sent={changeId:'s1',path:'S',after:'v1',changedAt:10},live={...sent};
- const token={id:sent.changeId,changedAt:sent.changedAt,after:JSON.stringify(sent.after)};
- live.after='v2';live.changedAt=11;
- const stale=live.changeId!==token.id||live.changedAt!==token.changedAt||JSON.stringify(live.after)!==token.after;
- check('stale ACK identity mismatch detected',stale,{sent:token,live:{id:live.changeId,changedAt:live.changedAt,after:live.after}});
- const passed=tests.filter(x=>x.ok).length;
- return {ok:passed===tests.length,passed,total:tests.length,tests,mode:'isolated-memory-lifecycle',ranAt:new Date().toISOString()};
-}
-window.epcSingleDeviceValidation_=epcSingleDeviceValidation_;
-window.epcSingleDeviceValidationResult=epcSingleDeviceValidation_();
-function epcSyncDiagnostics_(){
- const ledger=Array.isArray(window.epcFieldChanges)?window.epcFieldChanges:[];
- const outstanding=typeof epcSyncOutstanding_==='function'?epcSyncOutstanding_():{};
- const self=window.epcRecoverySelfTestResult||null;
- const pendingPaths=[...new Set(ledger.filter(ch=>ch&&!ch.publishedAt&&!ch.conflict).map(ch=>String(ch.path||'')))];
- const conflictPaths=[...new Set(ledger.filter(ch=>ch&&ch.conflict).map(ch=>String(ch.path||'')))];
- return {
-  version:'V1.51.35',
-  capturedAt:new Date().toISOString(),
-  readOnly:true,
-  local:{dirty:!!localDirty,cloudPending:!!cloudPending,cloudReady:!!cloudReady,cloudSaving:!!cloudSaving,revision:Number(cloudRevision||0)},
-  firebase:{
-   fieldConflictActive:!!window.epcFirebaseFieldConflict,
-   remotePending:!!window.epcFirebasePending,
-   verifiedMeta:window.epcFirebaseVerifiedMeta&&typeof window.epcFirebaseVerifiedMeta==='function'?cloneCloud_(window.epcFirebaseVerifiedMeta()):null
-  },
-  ledger:{
-   total:ledger.length,
-   unpublished:Number(outstanding.unpublished||0),
-   conflicts:Number(outstanding.conflicts||0),
-   pendingPaths:pendingPaths.slice(0,50),
-   conflictPaths:conflictPaths.slice(0,50)
-  },
-  completion:{safe:typeof epcCanMarkSyncComplete_==='function'?epcCanMarkSyncComplete_():false},
-  selfTest:self?{ok:!!self.ok,passed:Number(self.passed||0),total:Number(self.total||0),mode:self.mode||''}:null,
-  singleDeviceValidation:window.epcSingleDeviceValidationResult?cloneCloud_(window.epcSingleDeviceValidationResult):null,
-  liveFirebaseValidation:window.epcFirebaseLiveValidationResult?cloneCloud_(window.epcFirebaseLiveValidationResult):null
- };
-}
-window.epcSyncDiagnostics_=epcSyncDiagnostics_;
-window.epcGetSyncDiagnostics=()=>cloneCloud_(epcSyncDiagnostics_());
 function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(out.length>5000)return out;
  const eq=(a,b)=>{try{return JSON.stringify(a)===JSON.stringify(b)}catch(_){return a===b}};
@@ -4180,7 +3554,7 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
    for(const k of new Set([...Object.keys(before),...Object.keys(after)]))epcCollectFieldChanges_(before[k],after[k],path?path+'.'+k:k,out);
    return out;
  }
- out.push({path:path||'(root)',before:cloneCloud_(before),after:cloneCloud_(after),clientId:epcClientId_,changedAt:Date.now(),changeId:'chg_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10)});
+ out.push({path:path||'(root)',before:cloneCloud_(before),after:cloneCloud_(after),clientId:epcClientId_,changedAt:Date.now()});
  return out;
 }
 window.epcGetFieldChanges=()=>cloneCloud_(window.epcFieldChanges||[]);
@@ -4191,66 +3565,17 @@ function epcSetPathValue_(root,path,value){
   const k=parts[i],next=parts[i+1];
   if(Array.isArray(cur)){
    let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===k);
-   if(idx<0){
-    // V55.1: realtime field paths may refer to a newly-created keyed array record
-    // (most importantly events[...].players[memberId]). Create the missing record
-    // instead of dropping the remote field update.
-    const rec={};
-    // Infer the stable identity from the parent collection.
-    const parent=String(parts[i-1]||'');
-    if(parent==='players')rec.memberId=k;
-    else if(parent==='events')rec.id=k;
-    else if(parent==='members')rec.id=k;
-    else rec.id=k;
-    cur.push(rec);idx=cur.length-1;
-   }
-   cur=cur[idx];
-  }else{
-   if(cur[k]==null){
-    // Create only the structural container required by the incoming verified path.
-    cur[k]=(/^\d+$/.test(next)?[]:{});
-   }
-   cur=cur[k];
-  }
+   if(idx<0)return false;cur=cur[idx];
+  }else{if(cur[k]==null)return false;cur=cur[k];}
  }
  if(!parts.length)return false;
  const last=parts[parts.length-1];
  if(Array.isArray(cur)){
-  let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
-  // V1.51.56: a missing keyed record is a real deletion, not an empty record.
-  // Field diff encodes array removal as value === undefined. Apply it with splice
-  // so deleted players/events/members cannot be resurrected on another device.
-  if(value===undefined){
-   if(idx>=0)cur.splice(idx,1);
-   return true;
-  }
-  if(idx<0){
-   const parent=String(parts[parts.length-2]||'');
-   const rec=(value&&typeof value==='object'&&!Array.isArray(value))?cloneCloud_(value):{};
-   if(parent==='players'&&rec.memberId==null)rec.memberId=last;
-   else if((parent==='events'||parent==='members')&&rec.id==null)rec.id=last;
-   else if(rec.id==null)rec.id=last;
-   cur.push(rec);idx=cur.length-1;
-  }else cur[idx]=cloneCloud_(value);
- }else{
-  if(value===undefined)delete cur[last];
-  else cur[last]=cloneCloud_(value);
- }
+  const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
+  if(idx<0)return false;cur[idx]=cloneCloud_(value);
+ }else cur[last]=cloneCloud_(value);
  return true;
 }
-window.epcNextFieldConflict_=function(){
- if(window.epcFirebaseFieldConflict)return window.epcFirebaseFieldConflict;
- const ch=(window.epcFieldChanges||[]).find(x=>x&&x.conflict);
- if(!ch)return null;
- const x={path:String(ch.path||''),local:cloneCloud_(ch.after),remote:cloneCloud_(ch.remoteValue),before:cloneCloud_(ch.before),remoteVersion:Number(ch.remoteVersion||0)};
- window.epcFirebaseFieldConflict=x;
- return x;
-};
-window.epcShowNextFieldConflict_=function(){
- const x=window.epcNextFieldConflict_();
- if(x&&typeof window.epcShowFieldConflict==='function')window.epcShowFieldConflict(x);
- return x;
-};
 window.epcShowFieldConflict=function(x){
  const m=document.getElementById('epcFieldConflictModal');if(!m)return;
  document.getElementById('epcFieldConflictPath').textContent=x.path;
@@ -4299,22 +3624,17 @@ window.epcResolveFieldConflict=async function(choice){
      window.epcFirebaseFieldConflict=null;
      if(cloudReady)await saveCloudNow(true);
      if(typeof window.epcFirebaseMirrorForce==='function')await window.epcFirebaseMirrorForce();
-     epcMarkSyncCompleteIfSafe_();
+     localDirty=false;cloudPending=false;localStorage.removeItem('epcLocalDirty');
    }
   }
  }
  if(!window.epcFirebaseFieldConflict || window.epcFirebaseFieldConflict===x)window.epcFirebaseFieldConflict=null;
  const m=document.getElementById('epcFieldConflictModal');if(m)m.style.display='none';
- // V1.51.22: resolving one field must immediately surface the next quarantined
- // conflict instead of leaving it hidden in the local ledger.
- setTimeout(()=>window.epcShowNextFieldConflict_&&window.epcShowNextFieldConflict_(),0);
 };
 setTimeout(()=>{
  const r=document.getElementById('epcConflictUseRemote'),l=document.getElementById('epcConflictKeepLocal');
  if(r)r.onclick=()=>window.epcResolveFieldConflict('remote');
  if(l)l.onclick=()=>window.epcResolveFieldConflict('local');
- // Recover unresolved conflicts persisted before refresh/crash/offline restart.
- if((window.epcFieldChanges||[]).some(ch=>ch&&ch.conflict))window.epcShowNextFieldConflict_();
 },0);
 
 let epcFieldPublishTimer_=0;
@@ -4324,14 +3644,14 @@ function epcScheduleFieldPublish_(){
   if(typeof window.epcFirebasePublishFieldChanges!=='function')return;
   try{
    const ok=await window.epcFirebasePublishFieldChanges(window.epcFieldChanges||[]);
-   const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt&&!ch.conflict);
-   const isolatedConflicts=(window.epcFieldChanges||[]).some(ch=>ch.conflict);
-   if(ok&&!unresolved&&!isolatedConflicts&&!window.epcFirebaseFieldConflict){
-     epcMarkSyncCompleteIfSafe_();
+   const unresolved=(window.epcFieldChanges||[]).some(ch=>!ch.publishedAt||ch.conflict);
+   if(ok&&!unresolved&&!window.epcFirebaseFieldConflict){
+     localDirty=false;cloudPending=false;
+     localStorage.removeItem('epcLocalDirty');
      // Pending whole-db snapshots are intentionally not auto-applied.
    }
   }catch(e){console.warn('Field publish deferred',e);}
- },150);
+ },700);
 }
 window.epcFirebaseConflicts=[];
 window.epcFirebaseResolveConflicts=function(choice='local'){
@@ -4340,7 +3660,7 @@ window.epcFirebaseResolveConflicts=function(choice='local'){
  // Resolution is intentionally explicit; automatic overwrite is forbidden.
  // For now keep the operator's local value or reload the verified remote snapshot.
  if(choice==='remote'&&window.epcFirebasePending){
-   epcMarkSyncCompleteIfSafe_();
+   localDirty=false;cloudPending=false;localStorage.removeItem('epcLocalDirty');
    const ok=window.epcFirebaseApplyRemote(window.epcFirebasePending.data,window.epcFirebasePending.meta);
    if(ok){window.epcFirebaseConflicts=[];window.epcFirebasePending=null;}
    return ok;
@@ -4374,35 +3694,15 @@ function scheduleFirebaseConflictDrain_(){
        const localNow=cloneCloud_(db);
        const conflicts=epcDetectConflicts_(base,localNow,remote);
        if(conflicts.length){
-         // V1.51.21: quarantine only the paths that actually conflict. First
-         // consume every non-conflicting remote field into the live working db.
-         // The conflicting paths are restored to the local values and remain
-         // explicitly unresolved for the operator.
-         const conflictPaths=new Set(conflicts.map(x=>String(x.path||'')));
-         let partial=mergeCloud3_(base,localNow,remote);
-         for(const x of conflicts)epcSetPathValue_(partial,x.path,x.local);
-         partial=epcProtectAppliedRealtimeFields_(partial,localNow);
-         partial=preserveManualDiscountEdits_(localNow,partial);
-         partial=preserveActivityEdits_(localNow,partial);
-         partial=preserveEventEdits_(localNow,partial);
-         partial=preserveMembers_(localNow,partial);
-         db=partial;
-         epcLastPersistSnapshot_=cloneCloud_(db);
-         localStorage.setItem('epcV1',JSON.stringify(db));
          window.epcFirebaseConflicts=conflicts;
-         // The snapshot's safe fields have already been consumed. Keep only
-         // conflict metadata; do not let this whole snapshot block later updates.
-         window.epcFirebasePending=null;
-         localDirty=true;cloudPending=true;localStorage.setItem('epcLocalDirty','1');
+         window.epcFirebasePending=p;
          const first=conflicts[0].path;
          const el=document.getElementById('firebaseMirrorState');
-         if(el){el.textContent='Firebase：⚠ 已同步其他欄位｜待處理同欄位衝突 '+conflicts.length+' 處｜'+first;el.style.color='#ffb74d';}
-         console.warn('Firebase isolated same-field conflicts',Array.from(conflictPaths),conflicts);
-         if(!epcEditLocked_())render();
-         return; // Only conflicting paths remain quarantined.
+         if(el){el.textContent='Firebase：⚠ 同欄位衝突 '+conflicts.length+' 處｜未覆蓋｜'+first;el.style.color='#ffb74d';}
+         console.warn('Firebase same-field conflicts',conflicts);
+         return; // Never silently choose a winner.
        }
        db=mergeCloud3_(base,localNow,remote);
-       db=epcProtectAppliedRealtimeFields_(db,localNow);
        db=preserveManualDiscountEdits_(localNow,db);
        db=preserveActivityEdits_(localNow,db);
        db=preserveEventEdits_(localNow,db);
@@ -4428,58 +3728,13 @@ function scheduleFirebaseConflictDrain_(){
  },1200);
 }
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
- // V55: a verified remote generation must enter the guarded merge/apply pipeline.
- // The observer already stores differing snapshots in epcFirebasePending.
- // Drain only through the existing edit-lock / conflict-safe scheduler so another
- // computer's newly added player appears automatically without whole-db overwrite.
- if(e&&e.detail&&e.detail.sameAsLocal)return;
- if(window.epcFirebasePending)scheduleFirebaseConflictDrain_();
+ // Diagnostic mode intentionally observes only; no automatic merge/write.
 });
-
-function showProductionCanary_(){document.getElementById('epcProductionCanaryModal').style.display='flex';}
-async function runProductionCanary_(action){
- const code=document.getElementById('epcProductionCanarySession').value,out=document.getElementById('epcProductionCanaryResult');out.textContent='執行中…';
- const r=await window.epcProductionCanary(action,code);out.textContent=JSON.stringify(r,null,2);
-}
-window.showProductionCanary_=showProductionCanary_;window.runProductionCanary_=runProductionCanary_;
-
-function showTwoDeviceValidation_(){document.getElementById('epcTwoDeviceModal').style.display='flex';}
-async function runTwoDeviceAction_(action){
- const code=document.getElementById('epcTwoDeviceSession').value;
- const out=document.getElementById('epcTwoDeviceResult');out.textContent='執行中…';
- const r=await window.epcTwoDeviceValidation(action,code);
- out.textContent=JSON.stringify(r,null,2);
-}
-window.showTwoDeviceValidation_=showTwoDeviceValidation_;
-window.runTwoDeviceAction_=runTwoDeviceAction_;
-
-async function runLiveFirebaseValidation_(){
- const btn=event&&event.currentTarget?event.currentTarget:null,old=btn?btn.textContent:'';
- if(btn){btn.disabled=true;btn.textContent='Firebase 實測中…';}
- try{
-  const r=await window.epcFirebaseLiveValidation();
-  if(r.needsLogin)alert('請先按 Firebase 登入，再執行實測。');
-  else alert(r.ok?'Firebase Live Validation：全部通過 ('+r.passed+'/'+r.total+')':'Firebase Live Validation：未通過，請開啟「同步診斷」查看結果。');
- }catch(e){alert('Firebase 實測失敗：'+String(e&&e.message||e));}
- finally{if(btn){btn.disabled=false;btn.textContent=old;}}
-}
-window.runLiveFirebaseValidation_=runLiveFirebaseValidation_;
-
-function showSyncDiagnostics_(){
- const m=document.getElementById('epcSyncDiagnosticsModal'),t=document.getElementById('epcSyncDiagnosticsText');
- if(!m||!t)return;
- try{t.textContent=JSON.stringify(window.epcGetSyncDiagnostics?window.epcGetSyncDiagnostics():{error:'diagnostics unavailable'},null,2);}
- catch(e){t.textContent='診斷讀取失敗：'+String(e&&e.message||e);}
- m.style.display='flex';
-}
-window.showSyncDiagnostics_=showSyncDiagnostics_;
 
 function persist(){
  const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
  if(changes.length)window.epcFieldChanges.push(...changes);
- // Never truncate by raw array position: that could delete an old-but-still
- // pending/conflicted predecessor. Compact only records proven safe to discard.
- epcCompactFieldLedger_();
+ if(window.epcFieldChanges.length>10000)window.epcFieldChanges=window.epcFieldChanges.slice(-10000);
  epcLastPersistSnapshot_=cloneCloud_(db);
  localStorage.setItem('epcFieldChangesV1',JSON.stringify(window.epcFieldChanges));
  epcScheduleFieldPublish_();
@@ -4488,7 +3743,6 @@ function persist(){
  localStorage.setItem('epcLocalDirty','1');
  scheduleCloudSave();
  if(typeof window.epcFirebaseMirrorSchedule==='function')window.epcFirebaseMirrorSchedule();
- if(typeof window.epcPublishLiveRoster_==='function')window.epcPublishLiveRoster_();
 }
 document.querySelectorAll('#nav button[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const target=$(b.dataset.page);if(target)target.classList.add('active');render()});
 async function addMember(){
@@ -4571,34 +3825,26 @@ function editMember(id){
 }
 async function saveMemberEdit(){
  let m=db.members.find(x=>x.id===editingMemberId); if(!m)return cancelMemberEdit();
- const name=$('mName').value.trim(); if(!name)return alert('請輸入會員名稱');
- const memberId=String(m.id||'').trim();
+ let name=$('mName').value.trim(); if(!name)return alert('請輸入會員名稱');
  m.name=name;
  m.group=$('mGroup').value.trim();
  m.note=$('mNote').value.trim();
-
- // 先交給標準 persist 流程：本機保存 + Firebase 欄位同步。
- persist();
+ // 先把 EPC 專屬欄位（結帳群組/備註）寫入本機，再立即寫入 EPC_DATA。
+ localStorage.setItem('epcV1',JSON.stringify(db));
  cancelMemberEdit();
  renderMemberRows();
  render();
  actionMsg(`會員「${m.name}」資料已修改`);
-
  if(cloudReady){
    try{
-     // 先同步 Google Sheet；成功後才更新 EPC_DATA 並重新讀取會員表。
-     // 避免 Sheet 更新失敗時，舊姓名被 refresh 覆蓋回來。
-     const res=await cloudPost({action:'updateMember',member:{id:memberId,name:name}});
-     if(!res || res.ok===false || res.updated===false){
-       throw new Error((res&&res.error)||'MEMBER_UPDATE_FAILED');
-     }
      await saveCloudNow();
+     // 雲端快照完成後才重新抓 Form Responses 1。
+     // mergeFormMembers 會保留 EPC_DATA 的 group / note / history。
      await refreshFormMembers(false);
      renderMemberRows();
-     setCloudState('☁ 會員資料已同步');
    }catch(err){
      console.error('member edit cloud save failed',err);
-     setCloudState('☁ 修改已存 Firebase｜Google Sheet 同步失敗',true);
+     setCloudState('☁ 修改已存本機｜雲端同步失敗',true);
    }
  }else{
    setCloudState('☁ 修改已存本機｜等待雲端連線');
@@ -4643,9 +3889,7 @@ function saveEvent(){
  e.jp=+$('eJP').value;
  e.jpRound=+$('eJPRound').value;
  e.payout=$('ePayout').value;
- epcUnsavedEventDraft_=false;
  persist();render();
- setTimeout(()=>{if(typeof window.epcFirebaseDrainRemoteFields==='function')window.epcFirebaseDrainRemoteFields();},0);
  alert('賽事設定已儲存');
 }
 function filterAddPlayerMembers(keyword){
@@ -4684,7 +3928,6 @@ function addPlayer(){
  if(currentEvent().players.some(p=>p.memberId===id))return alert('此會員已加入本場');
  let m=db.members.find(x=>x.id===id);
  currentEvent().players.push({memberId:id,buyin:1,rebuy:0,addon:0,manualDiscount:0,stack:0,nickname:m.nickname||'',group:$('addPlayerGroup').value.trim()||m.group||'',prize:0});
- touchEvent_(currentEvent());
  $('addPlayerGroup').value='';
  if($('addPlayerSearch'))$('addPlayerSearch').value='';
  persist();render();
@@ -4709,7 +3952,7 @@ function removePlayerSafe(memberId){
  if(idx<0)return alert('找不到這位玩家');
  const m=db.members.find(x=>x.id===memberId);
  if(!window.confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
- e.players.splice(idx,1);touchEvent_(e);persist();render();alert('玩家已移除');
+ e.players.splice(idx,1);persist();render();alert('玩家已移除');
 }
 
 function delP(i){
@@ -4718,7 +3961,7 @@ function delP(i){
  let p=e.players[i],m=db.members.find(x=>x.id===p?.memberId);
  if(!p)return;
  if(!confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
- e.players.splice(i,1);touchEvent_(e);persist();render();
+ e.players.splice(i,1);persist();render();
 }
 function calcPlayer(p){
  let e=currentEvent(); if(!e)return {groups:0,auto:0,paid:0,pool:0};
@@ -4763,15 +4006,11 @@ function setReportColumn(k,v){ensureReportColumns();db.reportColumns[k]=!!v;pers
 function visibleReportCols(){ensureReportColumns();return REPORT_COLUMNS.filter(([k])=>db.reportColumns[k]);}
 function saveEndTime(v){let e=currentEvent();if(!e)return;e.endTime=v||'';persist();}
 function goICM(){
- const e=requireEvent();if(!e)return;
- // Settlement must always open from the live local event object. Never wait for,
- // or reload from, cloud here: a just-added player is already authoritative locally.
- setCurrentEventDevice_(e.id);
- localStorage.setItem('epcV1',JSON.stringify(db));
+ if(!requireEvent())return;
  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
  $('settle').classList.add('active');
  document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
- render();window.scrollTo(0,0);startPhoneStackAutoSync_();
+ render();window.scrollTo(0,0);
 }
 function pricingDiscountFor(c,e){
  return (e.pricingMode||'standard')==='custom' ? 0 : (+c.auto||0);
@@ -4784,18 +4023,6 @@ function chipGrowthFor(p,e){
  return ((+p.stack||0)-invested)/original;
 }
 
-function refreshSettlementActionState_(){
- const e=currentEvent();if(!e)return;
- const calcBtn=$('btnCalcICM'),confirmBtn=$('btnConfirmSettlement');
- const totalGroups=(e.players||[]).reduce((sum,p)=>sum+calcPlayerForEvent(p,e).groups,0);
- const expected=totalGroups*(+e.chips||0);
- const actual=(e.players||[]).reduce((sum,p)=>sum+(+p.stack||0),0);
- const chipOk=(actual-expected)===0 && actual>0 && e.status!=='已結算';
- if(calcBtn){calcBtn.disabled=!chipOk;calcBtn.style.opacity=calcBtn.disabled?'.45':'1';calcBtn.style.pointerEvents=calcBtn.disabled?'none':'auto';}
- const prizeCheck=manualPrizeValidation(e);
- const confirmOk=chipOk&&prizeCheck.ok;
- if(confirmBtn){confirmBtn.disabled=!confirmOk;confirmBtn.style.opacity=confirmBtn.disabled?'.45':'1';confirmBtn.style.pointerEvents=confirmBtn.disabled?'none':'auto';}
-}
 function manualPrizeValidation(e=currentEvent()){
  if(!e)return {ok:false,total:0,target:0,diff:0,message:'找不到目前賽事'};
  const info=poolInfo(e);
@@ -4971,7 +4198,7 @@ function removePlayerByIndex(index){
  const p=e.players[index];if(!p){actionMsg('找不到這位玩家',true);return;}
  const m=db.members.find(x=>String(x.id)===String(p.memberId));
  const name=m?.name||'此玩家';
- e.players.splice(index,1);touchEvent_(e);persist();render();actionMsg(`已從本場移除：${name}`);
+ e.players.splice(index,1);persist();render();actionMsg(`已從本場移除：${name}`);
 }
 
 function deleteEventSafe(id){
@@ -5006,10 +4233,7 @@ function isIndependentAccountingEvent(e){
  return !!accountingGroupForEvent(e);
 }
 function accountingEventsForDate(date){
- // Formal EPC accounting only recognizes settled events.
- // In-progress events remain visible in the event detail table, but must not
- // affect official revenue / discount / JP / period totals before settlement.
- return accountingAllEventsForDate(date).filter(e=>!isIndependentAccountingEvent(e) && e.status==='已結算');
+ return accountingAllEventsForDate(date).filter(e=>!isIndependentAccountingEvent(e));
 }
 function setEventAccountingGroup(eventId,value){
  const e=(db.events||[]).find(x=>x.id===eventId);
@@ -5019,22 +4243,18 @@ function setEventAccountingGroup(eventId,value){
  renderDailyAccountingDetail();
 }
 function accountingTotalsForEvents(events){
- // Accounting must use the accounting-specific discount fields. In custom pricing,
- // the player-facing overbuy discount may show only the extra price reduction
- // (e.g. 400/group), while accounting must expense the full waived original admin
- // (e.g. 800/group). Using the display fields here understated expenses/profit.
+ // Use exactly the same per-event accounting figures shown in the top event-detail table.
+ // This prevents the summary KPIs from drifting to a second/legacy discount formula.
  let gross=0,auto=0,manual=0,netAdmin=0,jp=0,groups=0,rebuyDiscount=0,groupDiscount=0;
  (events||[]).forEach(e=>{
    (Array.isArray(e.players)?e.players:[]).forEach(p=>{
      const x=calcPlayerForEvent(p,e);
-     const rb=x.accountingRebuyDiscount??(x.rebuyDiscount||0);
-     const gd=x.accountingGroupDiscount??(x.overbuyDiscount||0);
      groups+=x.groups||0;
      gross+=x.grossAdmin||0;
+     auto+=x.auto||0;
      manual+=x.manual||0;
-     rebuyDiscount+=rb;
-     groupDiscount+=gd;
-     auto+=rb+gd;
+     rebuyDiscount+=x.rebuyDiscount||0;
+     groupDiscount+=x.overbuyDiscount||0;
    });
    jp+=eventOwnJP(e);
  });
@@ -5153,8 +4373,6 @@ function safeDomId(s){return String(s||'').replace(/[^a-zA-Z0-9_\u4e00-\u9fff-]/
 function accountingIndependentGroups(date){
  const map={};
  accountingAllEventsForDate(date).forEach(e=>{
-   // Independent ledgers follow the same recognition rule as EPC's main ledger.
-   if(e.status!=='已結算')return;
    const g=accountingGroupForEvent(e); if(!g)return;
    (map[g]||(map[g]=[])).push(e);
  });
@@ -5330,34 +4548,27 @@ function renderIndependentAccountingSummary(){
  if(!tbody)return;
  const from=$('accountingDateFrom')?.value||'',to=$('accountingDateTo')?.value||'';
  const map=new Map();
-
- // Build the period summary from the SAME per-day independent ledger function used
- // by the daily detail. This includes both settled event accounting items and
- // independent group-level manual items (membership / income / expense).
- const dates=new Set();
  (db.events||[]).forEach(e=>{
-   if(e.status!=='已結算')return;
-   const date=businessDateForEvent(e),group=accountingGroupForEvent(e);
+   const date=businessDateForEvent(e);
+   const group=accountingGroupForEvent(e);
    if(!group||!date||from&&date<from||to&&date>to)return;
-   dates.add(date);
+   const key=group;
+   if(!map.has(key))map.set(key,{name:group,events:[],dates:new Set()});
+   const g=map.get(key);g.events.push(e);g.dates.add(date);
  });
- Object.keys(db.independentAccounting||{}).forEach(key=>{
-   const split=String(key).split('::'),date=split.shift(),name=split.join('::');
-   if(!date||!name||from&&date<from||to&&date>to)return;
-   dates.add(date);
- });
-
- [...dates].sort().forEach(date=>{
-   accountingIndependentGroups(date).forEach(day=>{
-     if(!map.has(day.name))map.set(day.name,{name:day.name,events:[],dates:new Set(),groups:0,gross:0,discountExpense:0,netAdmin:0,membershipIncome:0,otherIncome:0,otherExpense:0,net:0,jp:0});
-     const g=map.get(day.name);
-     g.events.push(...day.events);g.dates.add(date);g.groups+=day.groups;g.gross+=day.gross;
-     g.discountExpense+=day.discountExpense;g.netAdmin+=day.netAdmin;g.membershipIncome+=day.membershipIncome;
-     g.otherIncome+=day.otherIncome;g.otherExpense+=day.otherExpense;g.net+=day.net;g.jp+=day.jp;
+ const groups=[...map.values()].map(g=>{
+   const base=accountingTotalsForEvents(g.events);
+   let membershipIncome=0,otherIncome=0,otherExpense=0;
+   g.events.forEach(e=>{
+     const ai=eventAccountingInfo(e);
+     membershipIncome+=+ai.membershipIncome||0;
+     otherIncome+=+ai.otherIncome||0;
+     otherExpense+=+ai.otherExpense||0;
    });
- });
-
- const groups=[...map.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-Hant'));
+   const revenue=base.gross+membershipIncome+otherIncome;
+   const expense=base.discountExpense+otherExpense;
+   return {...g,...base,membershipIncome,otherIncome,otherExpense,revenue,expense,net:revenue-expense};
+ }).sort((a,b)=>a.name.localeCompare(b.name,'zh-Hant'));
  tbody.innerHTML=groups.map(g=>`<tr>
    <td><b>${g.name}</b><div class="small">${[...g.dates].sort().join('、')}</div></td>
    <td>${g.events.length}</td><td>${g.groups}</td><td>${money(g.gross)}</td><td>${money(g.discountExpense)}</td>
@@ -5591,13 +4802,8 @@ function validateSettlement(){
  if(prizes!==info.avail)return {ok:false,msg:`獎金尚未完成或不平：應發 ${money(info.avail)}，目前 ICM 合計 ${money(prizes)}`};
  return {ok:true};
 }
-async function confirmSettlement(){
+function confirmSettlement(){
  let e=requireEvent();if(!e){actionMsg('尚未選擇賽事',true);return;}
- // Pull the latest phone stacks once more at the settlement boundary.
- // The normal 1.5s auto poll remains active, but formal settlement must validate
- // the newest PHONE_STACKS snapshot rather than whichever poll happened last.
- if(!__phoneStackSyncBusy)await syncPhoneStacksOnly({auto:true});
- e=requireEvent();if(!e)return;
  const prizeCheck=manualPrizeValidation(e);
  if(!prizeCheck.ok)return alert('無法正式結算：\n'+prizeCheck.message);
  
@@ -5616,22 +4822,14 @@ async function confirmSettlement(){
 function closeSettlementConfirm(){
  $('settlementConfirmModal').style.display='none';
 }
-let __formalSettlementBusy=false;
 async function executeFormalSettlement(){
- if(__formalSettlementBusy)return;
  let e=requireEvent();if(!e)return;
- __formalSettlementBusy=true;
- try{
-   // Revalidate at the exact commit boundary. Phone auto-sync or another local edit
-   // may have changed stacks/prizes after the confirmation modal was opened.
-   const prizeCheck=manualPrizeValidation(e);
-   if(!prizeCheck.ok){closeSettlementConfirm();actionMsg('正式結算已取消：'+prizeCheck.message,true);return;}
-   let v=validateSettlement();
-   if(!v.ok){closeSettlementConfirm();actionMsg('正式結算已取消：'+v.msg,true);return;}
-   if(!e.endTime){closeSettlementConfirm();actionMsg('正式結算已取消：請先輸入實際結束時間。',true);return;}
-   db.members.forEach(m=>m.history=(m.history||[]).filter(h=>String(h.eventId)!==String(e.id)));
+ 
+ let v=validateSettlement();
+ if(!v.ok){closeSettlementConfirm();actionMsg(v.msg,true);return;}
+ db.members.forEach(m=>m.history=(m.history||[]).filter(h=>h.eventId!==e.id));
  e.players.forEach(p=>{
-   let m=db.members.find(x=>String(x.id)===String(p.memberId));if(!m)return;
+   let m=db.members.find(x=>x.id===p.memberId);if(!m)return;
    let c=calcPlayerForEvent(p,e);
    m.history=m.history||[];
    m.history.push({eventId:e.id,date:e.date,eventSeq:e.seq,level:e.level,groups:c.groups,paid:c.paid,prize:+p.prize||0,net:(+p.prize||0)-c.paid,group:p.group||m.name});
@@ -5640,7 +4838,6 @@ async function executeFormalSettlement(){
  e.finalJP=poolInfo(e).jp;
  e.finalAccounting={...acc};
  e.status='已結算';
- e.settledAt=Date.now();
  touchEvent_(e);
  persist();
  closeSettlementConfirm();
@@ -5648,9 +4845,6 @@ async function executeFormalSettlement(){
  if(cloudReady)await saveCloudNow(false);
  showPage('events');
  actionMsg('正式結算完成，可在該場操作欄直接列印報表。');
- }finally{
-   __formalSettlementBusy=false;
- }
 }
 
 async function unlockSettledEvent(id){
@@ -5853,9 +5047,7 @@ function reportingLedgerEntries(){
  // Event-level items are included only for normal/general-ledger events.
  // Events assigned to an independent accounting group stay outside the main ledger and reports.
  (db.events||[]).forEach(e=>{
-   // Dashboard/reporting is a formal ledger view: event-level income/expense
-   // becomes reportable only after that event is formally settled.
-   if(e.status!=='已結算'||isIndependentAccountingEvent(e))return;
+   if(isIndependentAccountingEvent(e))return;
    const date=businessDateForEvent(e);
    (Array.isArray(e.accountingItems)?e.accountingItems:[]).forEach(item=>{
      pushItem(date,item,`第${e.seq||1}場｜${Number(e.level||0).toLocaleString()} 賽事`);
@@ -6000,8 +5192,7 @@ function renderDashboardSummary(){
  if($('kNewMembers'))$('kNewMembers').textContent=newMembers;
  if($('kProfit')){$('kProfit').textContent=money(allLedger.net);$('kProfit').className='v '+(allLedger.net>=0?'pos':'neg');}
  if($('kMonthProfit')){$('kMonthProfit').textContent=money(rangeLedger.net);$('kMonthProfit').className='v '+(rangeLedger.net>=0?'pos':'neg');}
- if($('kJP'))$('kJP').textContent=money(allLedger.jp);
- if($('kRangeJP'))$('kRangeJP').textContent=money(rangeLedger.jp);
+ if($('kJP'))$('kJP').textContent=money(rangeLedger.jp);
  if($('kMonthExpense'))$('kMonthExpense').textContent=money(rangeLedger.expense);
  if($('kMonthEvents'))$('kMonthEvents').textContent=`${rangeLedger.events} 場`;
  if($('ledgerDateFrom') && !$('ledgerDateFrom').value)$('ledgerDateFrom').value=from;
@@ -6077,7 +5268,7 @@ function ensureActDb_(){
  if(B.huntGroupStep==null)B.huntGroupStep=8;if(B.huntGroupAmount==null)B.huntGroupAmount=200;if(B.huntGroupIgnore==null)B.huntGroupIgnore=0;
  if(B.huntPersonEnabled==null)B.huntPersonEnabled=false;if(B.activityFrom==null)B.activityFrom='';if(B.activityTo==null)B.activityTo='';B.excludedEventIds=Array.isArray(B.excludedEventIds)?B.excludedEventIds:[];
  if(B.attackEnabled==null)B.attackEnabled=false;if(B.attackThreshold==null||+B.attackThreshold===14000)B.attackThreshold=10000;
- B.bosses=Array.isArray(B.bosses)?B.bosses:[];if(!B.bosses.length)B.bosses.push({id:'BOSS1',name:'魔王 1',initialHp:+B.initialHp||250,attacks:Array.isArray(B.attacks)?B.attacks:[],killed:false,attackEnabled:false,huntStartedAt:''});if(!B.activeBossId)B.activeBossId=B.bosses[0].id;B.bosses.forEach(x=>{if(x.attackEnabled==null)x.attackEnabled=false;if(x.huntStartedAt==null)x.huntStartedAt='';});
+ B.bosses=Array.isArray(B.bosses)?B.bosses:[];if(!B.bosses.length)B.bosses.push({id:'BOSS1',name:'魔王 1',initialHp:+B.initialHp||250,attacks:Array.isArray(B.attacks)?B.attacks:[],killed:false});if(!B.activeBossId)B.activeBossId=B.bosses[0].id;
  if(B.initialHp==null)B.initialHp=250;if(+B.initialHp===200)B.initialHp=250;const _ab=(B.bosses||[]).find(x=>x.id===B.activeBossId);if(_ab&&+_ab.initialHp===200&&(_ab.attacks||[]).length<=1){const dealt=(_ab.attacks||[]).reduce((n,x)=>n+(+x.damage||0),0);_ab.initialHp=250;}
  B.attacks=Array.isArray(B.attacks)?B.attacks:[];
 }
@@ -6100,38 +5291,9 @@ function actRangeEditor_(kind){
  const names={weekly:'每週任務卡',pioneer:'開桌先鋒',rank:'週排行榜',hunter:'獵人排行榜',umbrella:'保護傘',boss:'雙十狩主'},r=actActivityRange_(kind);
  return `<div class="card" style="margin-bottom:12px;border-color:#9b7a35"><h3>${names[kind]||'活動'}｜活動區間</h3><div class="small" style="margin-bottom:8px">此區間決定本活動實際計算資料；上方「查詢開始日／查詢結束日」只用於歷史查詢，不會改變活動計算。</div><div class="formgrid" style="grid-template-columns:1fr 1fr"><div><label>活動開始日</label><input type="date" value="${r.from}" onchange="actSetActivityRange_('${kind}','from',this.value)"></div><div><label>活動結束日</label><input type="date" value="${r.to}" onchange="actSetActivityRange_('${kind}','to',this.value)"></div></div></div>`;
 }
-function actToday_(){
- // Activities use the exact same EPC business-day boundary as event/accounting.
- // Example with businessEnd 07:00: 2026-10-06 06:59 still belongs to 2026-10-05.
- const d=new Date();
- const end=hmMinutes(db.settings?.businessEnd||'07:00','07:00');
- const mins=d.getHours()*60+d.getMinutes();
- if(mins<end)d.setDate(d.getDate()-1);
- return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function actIsActive_(kind,date=actToday_()){
- const {from,to}=actActivityRange_(kind),d=String(date||'');
- if(!from&&!to)return true;
- return (!from||d>=from)&&(!to||d<=to);
-}
 function actEvents_(kind=actTab_){
  const {from,to}=actActivityRange_(kind);
- return (db.events||[]).filter(e=>{
-  const d=businessDateForEvent(e)||String(e.date||'');
-  if(from&&d<from)return false;
-  if(to&&d>to)return false;
-  // Weekly ranking is derived from final chip net-win, so a live/unsettled event
-  // must never award ranking points. Other activities remain usable during play.
-  if(kind==='rank'){
-   // Ranking must follow the same settlement truth used by official accounting.
-   // Some synced/legacy records can transiently lose the display status while
-   // retaining the immutable settlement snapshot/history.
-   const settled=String(e.status||'')==='已結算'||!!e.finalAccounting||e.finalJP!=null||
-     (db.members||[]).some(m=>(m.history||[]).some(h=>String(h.eventId)===String(e.id)));
-   if(!settled)return false;
-  }
-  return true;
- });
+ return (db.events||[]).filter(e=>(!from||String(e.date||'')>=from)&&(!to||String(e.date||'')<=to));
 }
 function actMember_(id){return (db.members||[]).find(m=>String(m.id)===String(id))||{}}
 
@@ -6170,12 +5332,7 @@ function actAdj_(kind,id,field,v){
  ensureActDb_();const A=db.activityManagement;
  if(kind==='weekly'){A.weeklyAdjust[id]=A.weeklyAdjust[id]||{};A.weeklyAdjust[id][field]=Number(v)||0}
  if(kind==='pioneerQual'){A.pioneerQualify[id]=!!v}
- if(kind==='rank'){
-  const r=actActivityRange_('rank'),key=(r.from||'')+'_'+(r.to||'');
-  A.rankAdjustByPeriod=A.rankAdjustByPeriod||{};
-  A.rankAdjustByPeriod[key]=A.rankAdjustByPeriod[key]||{};
-  A.rankAdjustByPeriod[key][id]=Number(v)||0;
- }
+ if(kind==='rank'){A.rankAdjust[id]=Number(v)||0}
  persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
 function actWeeklyClaim_(id,v){ensureActDb_();const r=actActivityRange_('weekly'),key=(r.from||'')+'_'+(r.to||'')+'_'+id;db.activityManagement.weeklyClaims[key]=!!v;persist();renderActivities()}
@@ -6336,23 +5493,15 @@ function delRankRecurringRule_(id){
  persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
 function eventTopScores_(e){
- const arr=(e.players||[]).map((p,index)=>({
-  id:String(p.memberId),name:actMember_(p.memberId).name||p.memberId,
-  net:chipGrowthFor(p,e),stack:+p.stack||0,index
- })).sort((a,b)=>b.net-a.net||b.stack-a.stack||a.index-b.index).slice(0,3);
- const mult=rankMultiplier_(e);
- return arr.map((x,i)=>{
-  const rank=i+1,base=rank===1?3:rank===2?2:1;
-  return {...x,rank,base,score:base*mult,mult};
- });
+ const arr=(e.players||[]).map(p=>({id:String(p.memberId),name:actMember_(p.memberId).name||p.memberId,net:chipGrowthFor(p,e),stack:+p.stack||0})).sort((a,b)=>b.net-a.net||b.stack-a.stack);
+ let last=null,rank=0,seen=0;const mult=rankMultiplier_(e),out=[];
+ for(const x of arr){seen++;const key=`${x.net}|${x.stack}`;if(key!==last){rank=seen;last=key}if(rank>3)break;out.push({...x,rank,base:rank===1?3:rank===2?2:1,score:(rank===1?3:rank===2?2:1)*mult,mult})}
+ return out;
 }
 function actRank_(){
  const A=db.activityManagement,tot={},dayNames=['日','一','二','三','四','五','六'];
- const rr=actActivityRange_('rank'),rankPeriodKey=(rr.from||'')+'_'+(rr.to||'');
- A.rankAdjustByPeriod=A.rankAdjustByPeriod||{};
- const rankAdjust=A.rankAdjustByPeriod[rankPeriodKey]||{};
  const detail=actEvents_('rank').map(e=>{const top=eventTopScores_(e);top.forEach(x=>tot[x.id]=(tot[x.id]||0)+x.score);return `<div class="card" style="margin-top:10px"><b>${actEventLabel_(e)}</b> <span class="small">當日第 ${rankEventSeqOfDay_(e)} 場｜倍率 ×${rankMultiplier_(e)}</span><table><thead><tr><th>名次</th><th>會員</th><th>籌碼淨勝值</th><th>下桌籌碼</th><th>得分</th></tr></thead><tbody>${top.map(x=>`<tr><td>${x.rank}</td><td>${x.name}</td><td>${x.net.toFixed(1)}</td><td>${(+x.stack).toLocaleString()}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="5">無資料</td></tr>'}</tbody></table></div>`}).join('');
- const ranking=Object.entries(tot).map(([id,auto])=>({id,name:actMember_(id).name||id,auto,adj:+rankAdjust[id]||0})).map(x=>({...x,total:x.auto+x.adj})).sort((a,b)=>b.total-a.total);
+ const ranking=Object.entries(tot).map(([id,auto])=>({id,name:actMember_(id).name||id,auto,adj:+A.rankAdjust[id]||0})).map(x=>({...x,total:x.auto+x.adj})).sort((a,b)=>b.total-a.total);
  const rules=(A.rankRecurringRules||[]).map(r=>`<div class="card" style="margin-top:8px;padding:12px">
    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <label><input type="checkbox" ${r.enabled?'checked':''} onchange="editRankRecurringRule_('${r.id}','enabled',this.checked)"> 啟用</label>
@@ -6419,79 +5568,21 @@ function actHunter_(){
 }
 function umbrellaRule_(k,v){db.activityManagement.umbrellaRules[k]=+v||0;persist();renderActivities()}
 function umbrellaTypeChanged_(){const k=$('umbrellaType').value;$('umbrellaCoupons').value=db.activityManagement.umbrellaRules[k]??0}
-async function addUmbrella_(){
- ensureActDb_();
- const id=actResolveMember_('umbrellaMember'),k=$('umbrellaType')?.value||'';
- if(!id)return actionMsg('請選會員',true);
- if(!k)return actionMsg('請選被超車牌型',true);
- const rec=stampActivityRecord_({id:'U'+Date.now(),date:$('umbrellaDate')?.value||actToday_(),memberId:id,type:k,coupons:+$('umbrellaCoupons')?.value||0,note:$('umbrellaNote')?.value||''});
- db.activityManagement.umbrella.unshift(rec);
- persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
- if(cloudReady)await saveCloudNow(false);
- actionMsg('保護傘已登記');
-}
-async function umbrellaEdit_(id,v){
- const x=db.activityManagement.umbrella.find(z=>z.id===id);
- if(x){x.coupons=+v||0;stampActivityRecord_(x);persist();renderActivities();setTimeout(enhanceSearchCombos_,0);if(cloudReady)await saveCloudNow(false);}
-}
-async function umbrellaDel_(id){
- db.activityManagement.umbrella=db.activityManagement.umbrella.filter(x=>x.id!==id);
- persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
- if(cloudReady)await saveCloudNow(false);
-}
+function addUmbrella_(){const id=actResolveMember_('umbrellaMember'),k=$('umbrellaType').value;if(!id)return actionMsg('請選會員',true);db.activityManagement.umbrella.unshift({id:'U'+Date.now(),date:$('umbrellaDate').value||new Date().toISOString().slice(0,10),memberId:id,type:k,coupons:+$('umbrellaCoupons').value||0,note:$('umbrellaNote').value||''});persist();renderActivities()}
+function umbrellaEdit_(id,v){const x=db.activityManagement.umbrella.find(z=>z.id===id);if(x){x.coupons=+v||0;persist();renderActivities()}}
+function umbrellaDel_(id){db.activityManagement.umbrella=db.activityManagement.umbrella.filter(x=>x.id!==id);persist();renderActivities()}
 function actUmbrella_(){
- const A=db.activityManagement,{from,to}=actActivityRange_('umbrella'),allRows=(A.umbrella||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||Number(b._updatedAt||0)-Number(a._updatedAt||0)),rows=allRows,tot={};rows.forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
+ const A=db.activityManagement,{from,to}=actActivityRange_('umbrella'),rows=A.umbrella.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
  const rules=Object.entries(A.umbrellaRules);
  return `<div class="card"><h3>保護傘｜牌型券數設定</h3><div class="formgrid" style="grid-template-columns:repeat(${rules.length},1fr)">${rules.map(([k,v])=>`<div><label>${k}</label><input type="number" value="${v}" onchange="umbrellaRule_('${k}',this.value)"></div>`).join('')}</div>
  <h3 style="margin-top:14px">登記保護傘</h3><div class="formgrid" style="grid-template-columns:.9fr 1.2fr 1.2fr .6fr 1.2fr auto"><div><label>日期</label><input type="date" id="umbrellaDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>會員</label><input id="umbrellaMember" list="umbrellaMemberList" autocomplete="off" placeholder="輸入姓名 / 會員ID"><datalist id="umbrellaMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>被超車牌型</label><select id="umbrellaType" onchange="umbrellaTypeChanged_()">${rules.map(([k])=>`<option>${k}</option>`).join('')}</select></div><div><label>券數</label><input type="number" id="umbrellaCoupons" value="${rules[0]?.[1]||0}"></div><div><label>備註</label><input id="umbrellaNote"></div><div style="align-self:end"><button onclick="addUmbrella_()">登記</button></div></div>
  <h3 style="margin-top:14px">排行榜</h3><table><thead><tr><th>排名</th><th>會員</th><th>券數</th></tr></thead><tbody>${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="3">尚無資料</td></tr>'}</tbody></table>
- <h3 style="margin-top:14px">明細（全部登記紀錄）</h3>${(from||to)?'<div class="small" style="margin-bottom:8px">活動起訖控制保護傘的活動顯示期間；排行榜與明細依實際登記紀錄累計。</div>':''}<table><thead><tr><th>日期</th><th>會員</th><th>牌型</th><th>券數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${allRows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.type}</td><td><input type="number" style="width:90px" value="${x.coupons}" onchange="umbrellaEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="umbrellaDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無資料</td></tr>'}</tbody></table></div>`;
+ <h3 style="margin-top:14px">明細</h3><table><thead><tr><th>日期</th><th>會員</th><th>牌型</th><th>券數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.type}</td><td><input type="number" style="width:90px" value="${x.coupons}" onchange="umbrellaEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="umbrellaDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無資料</td></tr>'}</tbody></table></div>`;
 }
 function bossSet_(k,v,type='num'){const B=db.activityManagement.boss;B[k]=type==='bool'?!!v:Number(v)||0;persist();renderActivities()}
 
-function bossEvents_(){
- const B=db.activityManagement.boss,b=activeBoss_();
- // Compatibility repair for a boss that was created before per-boss round cutoffs
- // existed (e.g. the currently displayed fresh 250/250 boss). If a previous boss
- // has already been killed, inherit its frozen cutoff so old activity totals cannot
- // leak into the new boss.
- if(b&&!b.roundAfterEventKey){
-  const bosses=B.bosses||[],idx=bosses.findIndex(x=>String(x.id)===String(b.id));
-  const prev=idx>0?bosses.slice(0,idx).reverse().find(x=>x&&x.killed):null;
-  if(prev){
-   b.roundAfterEventKey=prev.killedAfterEventKey||'';
-   if(!b.roundAfterEventKey){
-    const legacy=(db.events||[]).filter(e=>{
-     const d=businessDateForEvent(e)||String(e.date||'');
-     return (!B.activityFrom||d>=B.activityFrom)&&(!B.activityTo||d<=B.activityTo)&&!(B.excludedEventIds||[]).includes(String(e.id));
-    }).sort((a,z)=>bossEventKey_(a).localeCompare(bossEventKey_(z)));
-    b.roundAfterEventKey=legacy.length?bossEventKey_(legacy[legacy.length-1]):'';
-   }
-   B.attackEnabled=false;B.huntStartedAt='';
-  }
- }
- const roundAfter=String(b?.roundAfterEventKey||'');
- return (db.events||[]).filter(e=>{
-  const d=businessDateForEvent(e)||String(e.date||'');
-  if(B.activityFrom&&d<B.activityFrom)return false;
-  if(B.activityTo&&d>B.activityTo)return false;
-  if((B.excludedEventIds||[]).includes(String(e.id)))return false;
-  // Every boss owns an independent prize-pool round. For a newly spawned boss,
-  // the kill event and all earlier events belong to the previous boss.
-  if(roundAfter&&bossEventKey_(e)<=roundAfter)return false;
-  return true;
- })
-}
+function bossEvents_(){const B=db.activityManagement.boss;return (db.events||[]).filter(e=>(!B.activityFrom||e.date>=B.activityFrom)&&(!B.activityTo||e.date<=B.activityTo)&&!(B.excludedEventIds||[]).includes(String(e.id)))}
 function bossBonus_(n,step,amt,ignore){return Math.floor(Math.max(0,(+n||0)-Math.max(0,+ignore||0))/Math.max(1,+step||1))*(+amt||0)}
-function bossEventKey_(e){return String(businessDateForEvent(e)||e?.date||'')+'T'+String(e?.startTime||'00:00')+'|'+String(e?.id||'')}
-function bossLatestEventKey_(){
- const B=db.activityManagement.boss;
- const ev=(db.events||[]).filter(e=>{
-  const d=businessDateForEvent(e)||String(e.date||'');
-  return (!B.activityFrom||d>=B.activityFrom)&&(!B.activityTo||d<=B.activityTo)&&!(B.excludedEventIds||[]).includes(String(e.id));
- }).sort((a,b)=>bossEventKey_(a).localeCompare(bossEventKey_(b)));
- return ev.length?bossEventKey_(ev[ev.length-1]):'';
-}
 function bossStats_(){
  const B=db.activityManagement.boss;
  const ev=bossEvents_().slice().sort((a,b)=>{
@@ -6566,40 +5657,17 @@ function bossSet_(k,v,t){const B=db.activityManagement.boss;B[k]=t==='bool'?!!v:
 function bossExclude_(id,on){const B=db.activityManagement.boss;B.excludedEventIds=B.excludedEventIds||[];if(on&&!B.excludedEventIds.includes(String(id)))B.excludedEventIds.push(String(id));if(!on)B.excludedEventIds=B.excludedEventIds.filter(x=>x!==String(id));persist();renderActivities()}
 function bossAddExclude_(){const id=$('bossExcludeSelect')?.value;if(id)bossExclude_(id,true)}
 function bossRemoveExclude_(id){bossExclude_(id,false)}
-function bossToggleAttack_(on){const b=activeBoss_();if(!b)return;b.attackEnabled=!!on;b.manualAttackSetAt=Date.now();if(on)b.huntStartedAt=new Date().toISOString().slice(0,16);else b.huntStartedAt='';persist();renderActivities()}
-function addNewBoss_(){
- const B=db.activityManagement.boss,id='BOSS'+Date.now(),prev=activeBoss_();
- // A new boss always starts a fresh round at startPrize. Freeze the previous
- // round at the latest event already present so that event cannot be counted twice.
- const cutoff=prev&&prev.killed?(prev.killedAfterEventKey||bossLatestEventKey_()):bossLatestEventKey_();
- B.bosses.push({id,name:'魔王 '+((B.bosses||[]).length+1),initialHp:+B.initialHp||250,attacks:[],killed:false,roundAfterEventKey:cutoff,attackEnabled:false,huntStartedAt:'',createdAt:Date.now()});
- B.activeBossId=id;
- // Clear legacy global flags as cleanup only; runtime logic no longer trusts them.
- B.attackEnabled=false;
- B.huntStartedAt='';
- persist();renderActivities()
-}
+function bossToggleAttack_(on){const B=db.activityManagement.boss;B.attackEnabled=!!on;const S=bossStats_();if(S.active&&!B.huntStartedAt)B.huntStartedAt=new Date().toISOString().slice(0,16);if(!S.active)B.huntStartedAt='';persist();renderActivities()}
+function addNewBoss_(){const B=db.activityManagement.boss,id='BOSS'+Date.now();B.bosses.push({id,name:'魔王 '+((B.bosses||[]).length+1),initialHp:+B.initialHp||250,attacks:[],killed:false});B.activeBossId=id;persist();renderActivities()}
 function bossRename_(id,v){const B=db.activityManagement.boss,x=(B.bosses||[]).find(y=>String(y.id)===String(id));if(!x)return;x.name=String(v||'').trim()||'未命名魔王';persist();renderActivities()}
 function deleteBoss_(id){const B=db.activityManagement.boss;if(!confirm('確定刪除此魔王？'))return;B.bosses=B.bosses.filter(x=>x.id!==id);B.activeBossId=B.bosses.at(-1)?.id||'';persist();renderActivities()}
 function selectBoss_(id){db.activityManagement.boss.activeBossId=id;persist();renderActivities()}
-function addBossAttack_(){const B=db.activityManagement.boss,b=activeBoss_(),id=actResolveMember_('bossMember');if(!b)return actionMsg('請先新增魔王',true);if(!id)return actionMsg('請選攻擊玩家',true);const S=bossStats_(),success=!!$('bossSuccess').checked,table=Math.max(1,+$('bossTableCount').value||1),pool=Math.min(+B.cap||Infinity,S.pool);let dmg=Math.max(0,+$('bossDamage').value||0),killer=0,other=0;if(success){dmg=Math.max(dmg,bossCurrentHp_());b.killed=true;b.killedAt=Date.now();b.killedAfterEventKey=bossLatestEventKey_();b.finalPool=pool;const others=Math.max(0,table-1);if(others){other=Math.floor((pool*.5/others)/100)*100;killer=pool-other*others}else killer=pool}b.attacks=b.attacks||[];b.attacks.unshift({id:'B'+Date.now(),date:$('bossDate').value,memberId:id,method:$('bossMethod').value,damage:dmg,execute:+$('bossExecute').value||0,success,note:$('bossNote').value||'',poolAtKill:success?pool:0,tableCount:success?table:0,killerPrize:killer,otherPrize:other});persist();renderActivities()}
+function addBossAttack_(){const B=db.activityManagement.boss,b=activeBoss_(),id=actResolveMember_('bossMember');if(!b)return actionMsg('請先新增魔王',true);if(!id)return actionMsg('請選攻擊玩家',true);const S=bossStats_(),success=!!$('bossSuccess').checked,table=Math.max(1,+$('bossTableCount').value||1),pool=Math.min(+B.cap||Infinity,S.pool);let dmg=Math.max(0,+$('bossDamage').value||0),killer=0,other=0;if(success){dmg=Math.max(dmg,bossCurrentHp_());b.killed=true;const others=Math.max(0,table-1);if(others){other=Math.floor((pool*.5/others)/100)*100;killer=pool-other*others}else killer=pool}b.attacks=b.attacks||[];b.attacks.unshift({id:'B'+Date.now(),date:$('bossDate').value,memberId:id,method:$('bossMethod').value,damage:dmg,execute:+$('bossExecute').value||0,success,note:$('bossNote').value||'',poolAtKill:success?pool:0,tableCount:success?table:0,killerPrize:killer,otherPrize:other});persist();renderActivities()}
 function bossAttackDel_(id){const b=activeBoss_();if(!b)return;b.attacks=(b.attacks||[]).filter(x=>x.id!==id);b.killed=b.attacks.some(x=>x.success);persist();renderActivities()}
-function actBoss_(){const B=db.activityManagement.boss,S=bossStats_(),b=activeBoss_(),hp=bossCurrentHp_(),range=(db.events||[]).filter(e=>(!B.activityFrom||e.date>=B.activityFrom)&&(!B.activityTo||e.date<=B.activityTo));const stage=(name,p,people,groups)=>`<div class="card"><h3>${name}</h3><div class="formgrid" style="grid-template-columns:repeat(3,1fr)"><div><label>人數加碼｜多少人</label><input type="number" value="${B[p+'PersonStep']}" onchange="bossSet_('${p}PersonStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'PersonAmount']}" onchange="bossSet_('${p}PersonAmount',this.value)"></div><div><label>忽略不計人數</label><input type="number" value="${B[p+'PersonIgnore']}" onchange="bossSet_('${p}PersonIgnore',this.value)"></div><div><label>組數加碼｜多少組</label><input type="number" value="${B[p+'GroupStep']}" onchange="bossSet_('${p}GroupStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'GroupAmount']}" onchange="bossSet_('${p}GroupAmount',this.value)"></div><div><label>忽略不計組數</label><input type="number" value="${B[p+'GroupIgnore']}" onchange="bossSet_('${p}GroupIgnore',this.value)"></div></div><div class="small">此階段目前 ${people} 人／${groups} 組</div></div>`;return `<div class="card"><h3>雙十狩主｜活動區間與規則</h3><div class="formgrid" style="grid-template-columns:repeat(4,1fr)"><div><label>活動開始日</label><input type="date" value="${B.activityFrom}" onchange="bossSet_('activityFrom',this.value)"></div><div><label>活動結束日</label><input type="date" value="${B.activityTo}" onchange="bossSet_('activityTo',this.value)"></div><div><label>起始獎金</label><input type="number" value="${B.startPrize}" onchange="bossSet_('startPrize',this.value)"></div><div><label>封頂</label><input type="number" value="${B.cap}" onchange="bossSet_('cap',this.value)"></div><div><label>自動啟動標準線</label><input type="number" value="${B.attackThreshold}" onchange="bossSet_('attackThreshold',this.value)"></div><div><label>魔王預設HP</label><input type="number" value="${B.initialHp}" onchange="bossSet_('initialHp',this.value)"></div><div><label>手動開啟攻擊階段</label><input type="checkbox" ${b?.attackEnabled?'checked':''} onchange="bossToggleAttack_(this.checked)"><div class="small">未達自動門檻時可強制開啟；取消後若仍未達門檻，會回到未啟用。</div></div></div><h3>不計算場次</h3><div class="formgrid" style="grid-template-columns:1fr auto;align-items:end"><div><label>選擇場次</label><select id="bossExcludeSelect"><option value="">選擇要排除的場次</option>${range.filter(e=>!(B.excludedEventIds||[]).includes(String(e.id))).map(e=>`<option value="${e.id}">${actEventLabel_(e)}</option>`).join('')}</select></div><div><button onclick="bossAddExclude_()">＋新增</button></div></div><div style="margin-top:8px">${(B.excludedEventIds||[]).map(id=>{const e=(db.events||[]).find(x=>String(x.id)===String(id));return e?`<span style="display:inline-flex;align-items:center;gap:6px;margin:3px;padding:6px 8px;border:1px solid #33495b;border-radius:8px">${actEventLabel_(e)} <button class="danger" style="padding:2px 6px" onclick="bossRemoveExclude_('${id}')">×</button></span>`:''}).join('')||'<span class="small">目前沒有不計算場次</span>'}</div></div><div class="card" style="margin-top:12px"><h3>魔王管理｜目前狀態</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${(B.bosses||[]).map(x=>`<button onclick="selectBoss_('${x.id}')">${x.name}${x.killed?'（已擊殺）':''}</button>`).join('')}<button onclick="addNewBoss_()">＋新增魔王</button>${b?`<button class="danger" onclick="deleteBoss_('${b.id}')">刪除目前魔王</button>`:''}</div>${b?`<div class="formgrid" style="grid-template-columns:2fr 1fr;align-items:end;margin-top:12px"><div><label>目前魔王名稱</label><input type="text" value="${String(b.name||'').replace(/\"/g,'&quot;')}" onchange="bossRename_('${b.id}',this.value)" placeholder="例如：赤焰白虎王"></div><div><label>HP 狀態</label><div style="padding:10px 0">初始 ${b.initialHp}｜剩餘 <b>${hp}</b></div></div></div><div class="small">修改名稱後會立即儲存；重新套用 DISPLAY 後，電視畫面會同步顯示新名稱。</div>`:''}</div><div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">${stage('一般模式','normal',S.np,S.ng)}${stage('狩王模式','hunt',S.hp,S.hg)}</div><div class="card" style="margin-top:12px"><h3>區間統計</h3><table><thead><tr><th>模式</th><th>人數</th><th>人數加碼</th><th>累積總組數</th><th>符合組數加碼場次</th><th>組數加碼</th></tr></thead><tbody><tr><td>一般模式</td><td>${S.np}</td><td>${money(S.npb)}</td><td>${S.ng}</td><td>${S.normalQualifyingEvents}</td><td>${money(S.ngb)}</td></tr><tr><td>攻擊模式</td><td>${S.hp}</td><td>${money(S.hpb)}</td><td>${S.hg}</td><td>${S.huntQualifyingEvents}</td><td>${money(S.hgb)}</td></tr></tbody></table><div class="small" style="margin-top:9px">組數加碼採「每場獨立計算」，不同場次的組數不合併湊級距；累積總組數僅顯示活動期間實際總組數。</div><h3>目前累積 ${money(S.pool)}｜攻擊模式：${S.active?'已啟用':'未啟用'}</h3></div>${b&&S.active&&!b.killed?`<div class="card" style="margin-top:12px"><h3>攻擊登記</h3><div class="formgrid" style="grid-template-columns:repeat(8,1fr)"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><input id="bossMember" list="bossMemberList" placeholder="姓名 / ID"><datalist id="bossMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>擊殺魔王</label><input type="checkbox" id="bossSuccess"></div><div><label>桌上總人數（含擊殺者）</label><input type="number" id="bossTableCount" value="2" min="1"></div><div><label>備註</label><input id="bossNote"></div></div><button onclick="addBossAttack_()">登記攻擊</button></div>`:''}${b?`<div class="card" style="margin-top:12px"><h3>攻擊／分配紀錄</h3><table><thead><tr><th>日期</th><th>會員</th><th>形式</th><th>傷害</th><th>擊殺</th><th>當下獎池</th><th>擊殺者</th><th>其他每人</th><th>桌上人數</th><th></th></tr></thead><tbody>${(b.attacks||[]).map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.method}</td><td>${x.damage}</td><td>${x.success?'是':'否'}</td><td>${x.success?money(x.poolAtKill):'-'}</td><td>${x.success?money(x.killerPrize):'-'}</td><td>${x.success?money(x.otherPrize):'-'}</td><td>${x.success?x.tableCount:'-'}</td><td><button class="danger" onclick="bossAttackDel_('${x.id}')">刪除</button></td></tr>`).join('')}</tbody></table></div>`:''}`}
+function actBoss_(){const B=db.activityManagement.boss,S=bossStats_(),b=activeBoss_(),hp=bossCurrentHp_(),range=(db.events||[]).filter(e=>(!B.activityFrom||e.date>=B.activityFrom)&&(!B.activityTo||e.date<=B.activityTo));const stage=(name,p,people,groups)=>`<div class="card"><h3>${name}</h3><div class="formgrid" style="grid-template-columns:repeat(3,1fr)"><div><label>人數加碼｜多少人</label><input type="number" value="${B[p+'PersonStep']}" onchange="bossSet_('${p}PersonStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'PersonAmount']}" onchange="bossSet_('${p}PersonAmount',this.value)"></div><div><label>忽略不計人數</label><input type="number" value="${B[p+'PersonIgnore']}" onchange="bossSet_('${p}PersonIgnore',this.value)"></div><div><label>組數加碼｜多少組</label><input type="number" value="${B[p+'GroupStep']}" onchange="bossSet_('${p}GroupStep',this.value)"></div><div><label>+多少錢</label><input type="number" value="${B[p+'GroupAmount']}" onchange="bossSet_('${p}GroupAmount',this.value)"></div><div><label>忽略不計組數</label><input type="number" value="${B[p+'GroupIgnore']}" onchange="bossSet_('${p}GroupIgnore',this.value)"></div></div><div class="small">此階段目前 ${people} 人／${groups} 組</div></div>`;return `<div class="card"><h3>雙十狩主｜活動區間與規則</h3><div class="formgrid" style="grid-template-columns:repeat(4,1fr)"><div><label>活動開始日</label><input type="date" value="${B.activityFrom}" onchange="bossSet_('activityFrom',this.value)"></div><div><label>活動結束日</label><input type="date" value="${B.activityTo}" onchange="bossSet_('activityTo',this.value)"></div><div><label>起始獎金</label><input type="number" value="${B.startPrize}" onchange="bossSet_('startPrize',this.value)"></div><div><label>封頂</label><input type="number" value="${B.cap}" onchange="bossSet_('cap',this.value)"></div><div><label>自動啟動標準線</label><input type="number" value="${B.attackThreshold}" onchange="bossSet_('attackThreshold',this.value)"></div><div><label>魔王預設HP</label><input type="number" value="${B.initialHp}" onchange="bossSet_('initialHp',this.value)"></div><div><label>手動開啟攻擊階段</label><input type="checkbox" ${B.attackEnabled?'checked':''} onchange="bossToggleAttack_(this.checked)"><div class="small">未達自動門檻時可強制開啟；取消後若仍未達門檻，會回到未啟用。</div></div></div><h3>不計算場次</h3><div class="formgrid" style="grid-template-columns:1fr auto;align-items:end"><div><label>選擇場次</label><select id="bossExcludeSelect"><option value="">選擇要排除的場次</option>${range.filter(e=>!(B.excludedEventIds||[]).includes(String(e.id))).map(e=>`<option value="${e.id}">${actEventLabel_(e)}</option>`).join('')}</select></div><div><button onclick="bossAddExclude_()">＋新增</button></div></div><div style="margin-top:8px">${(B.excludedEventIds||[]).map(id=>{const e=(db.events||[]).find(x=>String(x.id)===String(id));return e?`<span style="display:inline-flex;align-items:center;gap:6px;margin:3px;padding:6px 8px;border:1px solid #33495b;border-radius:8px">${actEventLabel_(e)} <button class="danger" style="padding:2px 6px" onclick="bossRemoveExclude_('${id}')">×</button></span>`:''}).join('')||'<span class="small">目前沒有不計算場次</span>'}</div></div><div class="card" style="margin-top:12px"><h3>魔王管理｜目前狀態</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${(B.bosses||[]).map(x=>`<button onclick="selectBoss_('${x.id}')">${x.name}${x.killed?'（已擊殺）':''}</button>`).join('')}<button onclick="addNewBoss_()">＋新增魔王</button>${b?`<button class="danger" onclick="deleteBoss_('${b.id}')">刪除目前魔王</button>`:''}</div>${b?`<div class="formgrid" style="grid-template-columns:2fr 1fr;align-items:end;margin-top:12px"><div><label>目前魔王名稱</label><input type="text" value="${String(b.name||'').replace(/\"/g,'&quot;')}" onchange="bossRename_('${b.id}',this.value)" placeholder="例如：赤焰白虎王"></div><div><label>HP 狀態</label><div style="padding:10px 0">初始 ${b.initialHp}｜剩餘 <b>${hp}</b></div></div></div><div class="small">修改名稱後會立即儲存；重新套用 DISPLAY 後，電視畫面會同步顯示新名稱。</div>`:''}</div><div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">${stage('一般模式','normal',S.np,S.ng)}${stage('狩王模式','hunt',S.hp,S.hg)}</div><div class="card" style="margin-top:12px"><h3>區間統計</h3><table><thead><tr><th>模式</th><th>人數</th><th>人數加碼</th><th>累積總組數</th><th>符合組數加碼場次</th><th>組數加碼</th></tr></thead><tbody><tr><td>一般模式</td><td>${S.np}</td><td>${money(S.npb)}</td><td>${S.ng}</td><td>${S.normalQualifyingEvents}</td><td>${money(S.ngb)}</td></tr><tr><td>攻擊模式</td><td>${S.hp}</td><td>${money(S.hpb)}</td><td>${S.hg}</td><td>${S.huntQualifyingEvents}</td><td>${money(S.hgb)}</td></tr></tbody></table><div class="small" style="margin-top:9px">組數加碼採「每場獨立計算」，不同場次的組數不合併湊級距；累積總組數僅顯示活動期間實際總組數。</div><h3>目前累積 ${money(S.pool)}｜攻擊模式：${S.active?'已啟用':'未啟用'}</h3></div>${b&&S.active&&!b.killed?`<div class="card" style="margin-top:12px"><h3>攻擊登記</h3><div class="formgrid" style="grid-template-columns:repeat(8,1fr)"><div><label>日期</label><input type="date" id="bossDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>攻擊玩家</label><input id="bossMember" list="bossMemberList" placeholder="姓名 / ID"><datalist id="bossMemberList">${actMemberSearchOptions_()}</datalist></div><div><label>形式</label><select id="bossMethod"><option>10Xo</option><option>TT</option><option>斬殺</option><option>其他</option></select></div><div><label>傷害</label><input type="number" id="bossDamage" value="10"></div><div><label>第幾次斬殺</label><input type="number" id="bossExecute" value="0"></div><div><label>擊殺魔王</label><input type="checkbox" id="bossSuccess"></div><div><label>桌上總人數（含擊殺者）</label><input type="number" id="bossTableCount" value="2" min="1"></div><div><label>備註</label><input id="bossNote"></div></div><button onclick="addBossAttack_()">登記攻擊</button></div>`:''}${b?`<div class="card" style="margin-top:12px"><h3>攻擊／分配紀錄</h3><table><thead><tr><th>日期</th><th>會員</th><th>形式</th><th>傷害</th><th>擊殺</th><th>當下獎池</th><th>擊殺者</th><th>其他每人</th><th>桌上人數</th><th></th></tr></thead><tbody>${(b.attacks||[]).map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.method}</td><td>${x.damage}</td><td>${x.success?'是':'否'}</td><td>${x.success?money(x.poolAtKill):'-'}</td><td>${x.success?money(x.killerPrize):'-'}</td><td>${x.success?money(x.otherPrize):'-'}</td><td>${x.success?x.tableCount:'-'}</td><td><button class="danger" onclick="bossAttackDel_('${x.id}')">刪除</button></td></tr>`).join('')}</tbody></table></div>`:''}`}
 function enhanceSearchCombos_(){document.querySelectorAll('input[list]').forEach(inp=>{if(inp.dataset.comboDone)return;inp.dataset.comboDone='1';const dl=document.getElementById(inp.getAttribute('list'));if(!dl)return;const wrap=document.createElement('div');wrap.className='searchCombo';inp.parentNode.insertBefore(wrap,inp);wrap.appendChild(inp);const menu=document.createElement('div');menu.className='searchComboMenu';wrap.appendChild(menu);const draw=()=>{const q=(inp.value||'').toLowerCase();const a=[...dl.querySelectorAll('option')].filter(o=>!q||o.value.toLowerCase().includes(q)).slice(0,150);menu.innerHTML=a.map(o=>'<div class="searchComboItem" data-v="'+o.value.replace(/"/g,'&quot;')+'">'+o.value+'</div>').join('');menu.classList.toggle('open',a.length>0&&document.activeElement===inp)};inp.addEventListener('input',draw);inp.addEventListener('focus',draw);menu.addEventListener('mousedown',e=>{const x=e.target.closest('.searchComboItem');if(!x)return;e.preventDefault();inp.value=x.dataset.v;menu.classList.remove('open');inp.dispatchEvent(new Event('change',{bubbles:true}))});inp.addEventListener('blur',()=>setTimeout(()=>menu.classList.remove('open'),100))})}
 function renderActivities(){
  if(!$('activities'))return;ensureActDb_();
- const kinds=['weekly','pioneer','rank','hunter','umbrella','boss'];
- const buttons=[...document.querySelectorAll('#activities button[onclick^="setActTab_"]')];
- // Management tabs must always remain accessible, even when an activity is
- // outside its live activity period. The period controls calculation/display
- // eligibility; it must never make historical settings or records disappear.
- buttons.forEach((b,i)=>{
-   const k=kinds[i];if(!k)return;
-   b.style.display='';
-   const active=actIsActive_(k);
-   b.style.opacity=active?'1':'.68';
-   b.title=active?'活動期間內':'目前不在活動期間；仍可查看／管理歷史資料';
- });
  if($('actActivityRangeTop'))$('actActivityRangeTop').innerHTML=actRangeEditor_(actTab_);
  const panes={weekly:'actWeekly',pioneer:'actPioneer',rank:'actRank',hunter:'actHunter',umbrella:'actUmbrella',boss:'actBoss'};
  document.querySelectorAll('.act-pane').forEach(x=>x.style.display='none');
@@ -7270,34 +6338,12 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoRefres
 const DISPLAY_API_KEY='epcDisplayApiUrlV1';
 const DISPLAY_PREFS_KEY='epcDisplayDevicePrefsV1';
 let displayDevicesCache=[];
-function displayPrefsAll_(){
- // Firebase-synced DB is authoritative; localStorage remains a startup/offline fallback.
- const cloud=(db&&db.systemSettings&&db.systemSettings.displayDevicePrefs);
- if(cloud&&typeof cloud==='object'&&!Array.isArray(cloud))return cloud;
- try{return JSON.parse(localStorage.getItem(DISPLAY_PREFS_KEY)||'{}')||{}}catch(_){return {}}
-}
+function displayPrefsAll_(){try{return JSON.parse(localStorage.getItem(DISPLAY_PREFS_KEY)||'{}')||{}}catch(_){return {}}}
 function displayPref_(id){return displayPrefsAll_()[id]||{}}
-function saveDisplayPrefsAll_(all){
- const safe=all&&typeof all==='object'?all:{};
- localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(safe));
- db.systemSettings=db.systemSettings||{};
- db.systemSettings.displayDevicePrefs=safe;
- persist();
-}
-function saveDisplayPref_(id,pref){const all=Object.assign({},displayPrefsAll_());all[id]=pref;saveDisplayPrefsAll_(all)}
-function removeDisplayPref_(id){const all=Object.assign({},displayPrefsAll_());delete all[id];saveDisplayPrefsAll_(all)}
+function saveDisplayPref_(id,pref){const all=displayPrefsAll_();all[id]=pref;localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(all))}
+function removeDisplayPref_(id){const all=displayPrefsAll_();delete all[id];localStorage.setItem(DISPLAY_PREFS_KEY,JSON.stringify(all))}
 
-function displayApi_(){
- const cloud=String((db&&db.systemSettings&&db.systemSettings.displayApiUrl)||'').trim();
- return cloud||String(localStorage.getItem(DISPLAY_API_KEY)||'').trim();
-}
-function saveDisplayApiUrl_(v){
- const url=String(v||'').trim();
- localStorage.setItem(DISPLAY_API_KEY,url);
- db.systemSettings=db.systemSettings||{};
- db.systemSettings.displayApiUrl=url;
- persist();
-}
+function displayApi_(){return String(localStorage.getItem(DISPLAY_API_KEY)||'').trim()}
 function displayApiSetInput_(){const el=$('displayApiUrl');if(el&&!el.value)el.value=displayApi_()}
 async function displayFetch_(params={},post=false){
  const base=displayApi_();if(!base)throw new Error('請先設定 Display API URL');
@@ -7312,7 +6358,7 @@ async function displayFetch_(params={},post=false){
 }
 async function saveDisplayApi_(){
  const v=String($('displayApiUrl')?.value||'').trim();if(!v)return actionMsg('請貼上 Display API URL',true);
- saveDisplayApiUrl_(v);
+ localStorage.setItem(DISPLAY_API_KEY,v);
  try{const r=await displayFetch_({action:'ping'});$('displayApiStatus').textContent='✓ 已連線｜'+(r.version||'Display API');await loadDisplays_();actionMsg('Display API 已連線')}
  catch(e){$('displayApiStatus').textContent='連線失敗：'+e.message;actionMsg('Display API 連線失敗：'+e.message,true)}
 }
@@ -7366,27 +6412,25 @@ async function loadDisplays_(){
 async function removeDisplay_(id){if(!confirm('確定解除這台顯示器？'))return;try{await displayFetch_({action:'remove',deviceId:id},true);removeDisplayPref_(id);await loadDisplays_()}catch(e){actionMsg(e.message,true)}}
 
 function displayLeaderboard_(kind){
- ensureActDb_();const A=db.activityManagement||{},tot={},range=actActivityRange_(kind);
- const inRange=d=>{d=String(d||'');return (!range.from||d>=range.from)&&(!range.to||d<=range.to)};
+ ensureActDb_();const A=db.activityManagement||{},tot={};
  if(kind==='pioneer'){
-  Object.values(A.pioneer||{}).forEach(P=>{
-   if(P.confirmed===false)return;
-   const e=(db.events||[]).find(x=>String(x.id)===String(P.eventId));
-   const d=e?businessDateForEvent(e):'';
-   if(!inRange(d))return;
-   Object.entries(P.scores||{}).forEach(([id,v])=>tot[id]=(tot[id]||0)+(+v||0));
-  });
+  Object.values(A.pioneer||{}).forEach(P=>{if(P.confirmed===false)return;Object.entries(P.scores||{}).forEach(([id,v])=>tot[id]=(tot[id]||0)+(+v||0))});
  }else if(kind==='hunter'){
-  (A.hunter||[]).filter(x=>inRange(x.date)).forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));
+  (A.hunter||[]).forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));
  }else if(kind==='umbrella'){
-  (A.umbrella||[]).filter(x=>inRange(x.date)).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
+  (A.umbrella||[]).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
  }else if(kind==='rank'){
-  actEvents_('rank').forEach(e=>eventTopScores_(e).forEach(x=>tot[x.id]=(tot[x.id]||0)+(+x.score||0)));
-  const key=(range.from||'')+'_'+(range.to||''),adj=(A.rankAdjustByPeriod||{})[key]||{};
-  const ids=new Set([...Object.keys(tot),...Object.keys(adj)]);
-  return [...ids].map(id=>({id,memberId:id,name:actMember_(id).name||id,auto:+tot[id]||0,adj:+adj[id]||0,score:(+tot[id]||0)+(+adj[id]||0)}))
-   .filter(x=>x.score!==0||x.auto!==0||x.adj!==0)
-   .sort((a,b)=>b.score-a.score||b.auto-a.auto||String(a.name).localeCompare(String(b.name),'zh-Hant')).slice(0,20);
+  // Use the exact same calculation as 活動管理 → 週排行榜.
+  actEvents_().forEach(e=>{
+   eventTopScores_(e).forEach(x=>tot[x.id]=(tot[x.id]||0)+(+x.score||0));
+  });
+  const ids=new Set([...Object.keys(tot),...Object.keys(A.rankAdjust||{})]);
+  return [...ids].map(id=>{
+   const auto=+tot[id]||0,adj=+(A.rankAdjust||{})[id]||0;
+   return {id,memberId:id,name:actMember_(id).name||id,auto,adj,score:auto+adj};
+  }).filter(x=>x.score!==0||x.auto!==0||x.adj!==0)
+    .sort((a,b)=>b.score-a.score||b.auto-a.auto||String(a.name).localeCompare(String(b.name),'zh-Hant'))
+    .slice(0,20);
  }
  return Object.entries(tot).map(([id,score])=>({id,memberId:id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score).slice(0,20);
 }
@@ -7414,7 +6458,7 @@ async function publishDisplay_(deviceId,silent=false){
  const ui={kind:type,limit:Math.max(3,+($('displayLimit_'+deviceId)?.value||10)),layout:$('displayLayout_'+deviceId)?.value||'classic',showRank:$('displayShowRank_'+deviceId)?.checked!==false,showName:$('displayShowName_'+deviceId)?.checked!==false,showMemberId:!!$('displayShowMemberId_'+deviceId)?.checked,showScore:$('displayShowScore_'+deviceId)?.checked!==false,rankFontScale:Math.min(160,Math.max(80,+($('displayRankFontScale_'+deviceId)?.value||100)))};
  if(type==='rotate'){const acts=['weekly','pioneer','rank','hunter','umbrella','boss'];ui.rotateItems=acts.filter(t=>$('displayRotate_'+deviceId+'_'+t)?.checked);ui.rotateSeconds={};acts.forEach(t=>ui.rotateSeconds[t]=Math.max(5,+($('displayRotateSec_'+deviceId+'_'+t)?.value||15)));}
  const payload=displayPayload_(type);payload.ui=ui;
- if(type==='rotate'){payload.slides=(ui.rotateItems||[]).filter(t=>actIsActive_(t)).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
+ if(type==='rotate'){payload.slides=(ui.rotateItems||[]).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
  if(Array.isArray(payload.rows))payload.rows=payload.rows.slice(0,ui.limit);
  try{await displayFetch_({action:'publish',deviceId,contentType:type,rotateSeconds:sec,payload},true);saveDisplayPref_(deviceId,{type,sec,ui});if(!silent){actionMsg('已套用 '+(payload.title||'活動')+' 專屬顯示版型');await loadDisplays_()}}
  catch(e){if(!silent)actionMsg('顯示器更新失敗：'+e.message,true)}
@@ -7429,7 +6473,7 @@ async function publishAllDisplays_(){
    const ui=Object.assign({kind:type,limit:10,layout:'classic',showRank:true,showName:true,showMemberId:false,showScore:true,rankFontScale:100},pref.ui||{});
    ui.kind=type;
    const payload=displayPayload_(type);payload.ui=ui;
-   if(type==='rotate'){payload.slides=(ui.rotateItems||[]).filter(t=>actIsActive_(t)).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
+   if(type==='rotate'){payload.slides=(ui.rotateItems||[]).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
    if(Array.isArray(payload.rows))payload.rows=payload.rows.slice(0,ui.limit);
    await displayFetch_({action:'publish',deviceId:d.deviceId,contentType:type,rotateSeconds:sec,payload},true);
   }catch(_){}
@@ -7439,19 +6483,7 @@ const _renderActivitiesDisplayBase=typeof renderActivities==='function'?renderAc
 if(_renderActivitiesDisplayBase){
  renderActivities=function(){const r=_renderActivitiesDisplayBase.apply(this,arguments);setTimeout(()=>publishAllDisplays_(),250);return r}
 }
-let epcDisplayReconnectBusy_=false;
-async function reconnectDisplays_(republish=false){
- if(epcDisplayReconnectBusy_||!displayApi_())return;
- epcDisplayReconnectBusy_=true;
- try{
-  await loadDisplays_();
-  if(republish&&displayDevicesCache.length)await publishAllDisplays_();
- }finally{epcDisplayReconnectBusy_=false}
-}
-setTimeout(()=>{displayApiSetInput_();reconnectDisplays_(true)},1200);
-window.addEventListener('online',()=>setTimeout(()=>reconnectDisplays_(true),800));
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(()=>reconnectDisplays_(false),300)});
-setInterval(()=>{if(!document.hidden&&displayApi_())reconnectDisplays_(false)},30000);
+setTimeout(()=>{displayApiSetInput_();if(displayApi_())loadDisplays_()},1200);
 
 
 
@@ -7576,15 +6608,5 @@ document.addEventListener('focusout',function(e){
  },800);
 },true);
 
-
-(function(){
- const settle=document.getElementById('settle');
- if(!settle)return;
- const obs=new MutationObserver(()=>{
-   if(settle.classList.contains('active'))startPhoneStackAutoSync_();
-   else stopPhoneStackAutoSync_();
- });
- obs.observe(settle,{attributes:true,attributeFilter:['class']});
-})();
 </script>
 </body></html>
