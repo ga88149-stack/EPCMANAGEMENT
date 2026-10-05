@@ -2196,6 +2196,13 @@ window.epcFirebaseStartRealtimeObserver=startRealtimeObserver_;
    blindly replaces the live EPC database. */
 let fieldRealtimeUnsub=null,fieldRealtimeReady=false;
 const epcRemoteFieldQueue_=new Map(),epcAppliedRemoteVersions_=new Map();
+try{
+ const saved=JSON.parse(localStorage.getItem('epcAppliedRemoteVersionsV2')||'[]');
+ if(Array.isArray(saved))for(const x of saved){if(Array.isArray(x)&&x.length===2)epcAppliedRemoteVersions_.set(String(x[0]),Number(x[1])||0);}
+}catch(_){}
+function epcPersistAppliedVersions_(){
+ try{localStorage.setItem('epcAppliedRemoteVersionsV2',JSON.stringify([...epcAppliedRemoteVersions_.entries()].slice(-1000)));}catch(_){}
+}
 function epcHasLocalPathWork_(path){
  return (window.epcFieldChanges||[]).some(ch=>ch&&String(ch.path||'')===String(path||'')&&(!ch.publishedAt||ch.conflict));
 }
@@ -2223,7 +2230,7 @@ function epcApplyRemoteField_(d){
   localStorage.setItem('epcV1',JSON.stringify(db));
   if(cloudBase)try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(_){}
   if(!epcEditLocked_()){render();setTimeout(()=>{try{refreshSettlementActionState_();}catch(_){}},0);}
-  if(remoteVersion)epcAppliedRemoteVersions_.set(path,remoteVersion);
+  if(remoteVersion){epcAppliedRemoteVersions_.set(path,remoteVersion);epcPersistAppliedVersions_();}
   window.epcLastRemoteFieldApply={path,version:remoteVersion,clientId:String(d.clientId||''),appliedAt:Date.now()};
   return {ok:true,path,version:remoteVersion};
  }catch(e){
@@ -2260,15 +2267,20 @@ function epcDrainRemoteFieldQueue_(){
 function startFieldRealtimeObserver_(){
  if(fieldRealtimeUnsub)fieldRealtimeUnsub();
  fieldRealtimeReady=false;
- const q=query(collection(fs,'epcFieldVersionsV2'),orderBy('updatedAt','desc'),limit(250));
+ // 1000 latest field documents are small and allow a reloaded/stale terminal to
+ // catch up to the current per-field authority instead of waiting for a future edit.
+ const q=query(collection(fs,'epcFieldVersionsV2'),orderBy('updatedAt','desc'),limit(1000));
  fieldRealtimeUnsub=onSnapshot(q,snap=>{
-  // Firestore's first snapshot is historical state, not a remote event for this
-  // browser. Skip it; subsequent document changes are live field deliveries.
-  if(!fieldRealtimeReady){fieldRealtimeReady=true;return;}
+  const first=!fieldRealtimeReady; fieldRealtimeReady=true;
   for(const chg of snap.docChanges()){
    if(chg.type!=='added'&&chg.type!=='modified')continue;
    const d=chg.doc.data()||{},path=String(d.path||'');
    if(!path||path.startsWith('__syncCanary.'))continue;
+   // On first hydration, consume current authoritative EVENT fields too. This is
+   // what repairs a B terminal whose whole snapshot says 6/0 while A already
+   // published player buyin/rebuy fields representing 8/10.
+   const applied=Number(epcAppliedRemoteVersions_.get(path)||0);
+   if(first&&Number(d.version||0)<=applied)continue;
    const r=epcApplyRemoteField_(d);
    if(r.deferred)epcQueueRemoteField_(d);
   }
@@ -2336,7 +2348,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.88 RC · Event Anti-Rollback Floor</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.89 RC · Field Version Hydration</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
