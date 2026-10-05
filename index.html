@@ -2041,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.94 RECOVERY · Umbrella Registration Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.95 RECOVERY · Umbrella Cloud Commit Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -2851,9 +2851,16 @@ function preserveActivityEdits_(local,merged){
    if(Array.isArray(la[k]))ma[k]=mergeActivityRecords_(la[k],ma[k]);
  }
  ma.hunterDeleted={...(ma.hunterDeleted||{}),...(la.hunterDeleted||{})};
+ ma.umbrellaDeleted={...(ma.umbrellaDeleted||{}),...(la.umbrellaDeleted||{})};
  if(Array.isArray(ma.hunter)){
    ma.hunter=ma.hunter.filter(x=>{
      const deletedAt=Number(ma.hunterDeleted&&ma.hunterDeleted[String(x.id)]||0);
+     return !deletedAt || activityStamp_(x)>deletedAt;
+   });
+ }
+ if(Array.isArray(ma.umbrella)){
+   ma.umbrella=ma.umbrella.filter(x=>{
+     const deletedAt=Number(ma.umbrellaDeleted&&ma.umbrellaDeleted[String(x.id)]||0);
      return !deletedAt || activityStamp_(x)>deletedAt;
    });
  }
@@ -5250,7 +5257,7 @@ function ensureActDb_(){
   {id:'RR_MIDNIGHT',name:'每日 00:00 場',enabled:true,days:[1,2,3,4,5,6,0],mode:'time',from:'00:00',to:'00:00',mult:2}
  ];
  A.hunter=Array.isArray(A.hunter)?A.hunter:[];
- A.umbrella=Array.isArray(A.umbrella)?A.umbrella:[];
+ A.umbrella=Array.isArray(A.umbrella)?A.umbrella:[];A.umbrellaDeleted=A.umbrellaDeleted||{};
  A.umbrellaRules=A.umbrellaRules||{'88以上對子':1,'兩對 / 三條':3,'順子 / 同花':5,'葫蘆以上':10};
  A.boss=A.boss||{};
  const B=A.boss;
@@ -5590,13 +5597,12 @@ function actHunter_(){
 }
 function umbrellaRule_(k,v){db.activityManagement.umbrellaRules[k]=+v||0;persist();renderActivities()}
 function umbrellaTypeChanged_(){const k=$('umbrellaType').value;$('umbrellaCoupons').value=db.activityManagement.umbrellaRules[k]??0}
-function addUmbrella_(){
+async function addUmbrella_(){
  ensureActDb_();
  const memberInput=$('umbrellaMember'),typeInput=$('umbrellaType'),dateInput=$('umbrellaDate'),couponInput=$('umbrellaCoupons'),noteInput=$('umbrellaNote');
  if(!memberInput||!typeInput)return actionMsg('保護傘表單尚未載入，請重新整理後再試',true);
  const raw=String(memberInput.value||'').trim();
  let id=actResolveMember_('umbrellaMember');
- // Accept exact ID, exact name, or the datalist "姓名 (ID)" format.
  if(!id&&raw){
    const hit=(db.members||[]).find(m=>String(m.id||'').trim()===raw||String(m.name||'').trim()===raw);
    if(hit)id=String(hit.id||'');
@@ -5604,15 +5610,17 @@ function addUmbrella_(){
  if(!id)return actionMsg('找不到此會員，請從會員搜尋結果選擇',true);
  const k=String(typeInput.value||'').trim();
  if(!k)return actionMsg('請選擇被超車牌型',true);
- const row={id:'U'+Date.now(),date:dateInput?.value||new Date().toISOString().slice(0,10),memberId:id,type:k,coupons:Number(couponInput?.value||0),note:noteInput?.value||'',_updatedAt:Date.now()};
+ const rec=stampActivityRecord_({id:'U'+Date.now(),date:dateInput?.value||new Date().toISOString().slice(0,10),memberId:id,type:k,coupons:Number(couponInput?.value||0),note:noteInput?.value||''});
  db.activityManagement.umbrella=Array.isArray(db.activityManagement.umbrella)?db.activityManagement.umbrella:[];
- db.activityManagement.umbrella.unshift(row);
- persist();
+ db.activityManagement.umbrella.unshift(rec);
+ persist();renderActivities();
  actionMsg('保護傘已登記');
- renderActivities();
+ // Match the proven hunter flow: immediately commit activity changes to cloud
+ // instead of leaving the record vulnerable to the next incoming cloud snapshot.
+ if(cloudReady)await saveCloudNow(false);
 }
-function umbrellaEdit_(id,v){const x=db.activityManagement.umbrella.find(z=>z.id===id);if(x){x.coupons=+v||0;persist();renderActivities()}}
-function umbrellaDel_(id){db.activityManagement.umbrella=db.activityManagement.umbrella.filter(x=>x.id!==id);persist();renderActivities()}
+async function umbrellaEdit_(id,v){const x=db.activityManagement.umbrella.find(z=>z.id===id);if(x){x.coupons=+v||0;stampActivityRecord_(x);persist();renderActivities();if(cloudReady)await saveCloudNow(false);}}
+async function umbrellaDel_(id){const x=db.activityManagement.umbrella.find(z=>z.id===id);db.activityManagement.umbrella=db.activityManagement.umbrella.filter(x=>x.id!==id);db.activityManagement.umbrellaDeleted=db.activityManagement.umbrellaDeleted||{};db.activityManagement.umbrellaDeleted[String(id)]=Date.now();persist();renderActivities();if(cloudReady)await saveCloudNow(false);}
 function actUmbrella_(){
  const A=db.activityManagement,{from,to}=actActivityRange_('umbrella'),rows=A.umbrella.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),tot={};rows.forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
  const rules=Object.entries(A.umbrellaRules);
