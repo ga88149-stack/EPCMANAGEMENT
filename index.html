@@ -2293,7 +2293,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.57 DEV · Live Phone Roster</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.58 DEV · Activity Period Logic</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6001,12 +6001,19 @@ function actRangeEditor_(kind){
  const names={weekly:'每週任務卡',pioneer:'開桌先鋒',rank:'週排行榜',hunter:'獵人排行榜',umbrella:'保護傘',boss:'雙十狩主'},r=actActivityRange_(kind);
  return `<div class="card" style="margin-bottom:12px;border-color:#9b7a35"><h3>${names[kind]||'活動'}｜活動區間</h3><div class="small" style="margin-bottom:8px">此區間決定本活動實際計算資料；上方「查詢開始日／查詢結束日」只用於歷史查詢，不會改變活動計算。</div><div class="formgrid" style="grid-template-columns:1fr 1fr"><div><label>活動開始日</label><input type="date" value="${r.from}" onchange="actSetActivityRange_('${kind}','from',this.value)"></div><div><label>活動結束日</label><input type="date" value="${r.to}" onchange="actSetActivityRange_('${kind}','to',this.value)"></div></div></div>`;
 }
+function actToday_(){
+ const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function actIsActive_(kind,date=actToday_()){
+ const {from,to}=actActivityRange_(kind),d=String(date||'');
+ if(!from&&!to)return true;
+ return (!from||d>=from)&&(!to||d<=to);
+}
 function actEvents_(kind=actTab_){
  const {from,to}=actActivityRange_(kind);
- // Activity progress is earned only by formally settled events. This prevents
- // a player from receiving mission days/games/ranking progress from a live event
- // that may still be edited, cancelled, or later unlocked.
- return (db.events||[]).filter(e=>e.status==='已結算'&&(!from||String(e.date||'')>=from)&&(!to||String(e.date||'')<=to));
+ // Activities are period-based, not settlement-status based. A live event inside
+ // the configured activity period must be available for registration immediately.
+ return (db.events||[]).filter(e=>(!from||String(e.date||'')>=from)&&(!to||String(e.date||'')<=to));
 }
 function actMember_(id){return (db.members||[]).find(m=>String(m.id)===String(id))||{}}
 
@@ -6381,6 +6388,13 @@ function actBoss_(){const B=db.activityManagement.boss,S=bossStats_(),b=activeBo
 function enhanceSearchCombos_(){document.querySelectorAll('input[list]').forEach(inp=>{if(inp.dataset.comboDone)return;inp.dataset.comboDone='1';const dl=document.getElementById(inp.getAttribute('list'));if(!dl)return;const wrap=document.createElement('div');wrap.className='searchCombo';inp.parentNode.insertBefore(wrap,inp);wrap.appendChild(inp);const menu=document.createElement('div');menu.className='searchComboMenu';wrap.appendChild(menu);const draw=()=>{const q=(inp.value||'').toLowerCase();const a=[...dl.querySelectorAll('option')].filter(o=>!q||o.value.toLowerCase().includes(q)).slice(0,150);menu.innerHTML=a.map(o=>'<div class="searchComboItem" data-v="'+o.value.replace(/"/g,'&quot;')+'">'+o.value+'</div>').join('');menu.classList.toggle('open',a.length>0&&document.activeElement===inp)};inp.addEventListener('input',draw);inp.addEventListener('focus',draw);menu.addEventListener('mousedown',e=>{const x=e.target.closest('.searchComboItem');if(!x)return;e.preventDefault();inp.value=x.dataset.v;menu.classList.remove('open');inp.dispatchEvent(new Event('change',{bubbles:true}))});inp.addEventListener('blur',()=>setTimeout(()=>menu.classList.remove('open'),100))})}
 function renderActivities(){
  if(!$('activities'))return;ensureActDb_();
+ const kinds=['weekly','pioneer','rank','hunter','umbrella','boss'];
+ const buttons=[...document.querySelectorAll('#activities button[onclick^="setActTab_"]')];
+ buttons.forEach((b,i)=>{const k=kinds[i];if(k)b.style.display=actIsActive_(k)?'':'none';});
+ if(!actIsActive_(actTab_)){
+  const first=kinds.find(k=>actIsActive_(k));
+  if(first)actTab_=first;
+ }
  if($('actActivityRangeTop'))$('actActivityRangeTop').innerHTML=actRangeEditor_(actTab_);
  const panes={weekly:'actWeekly',pioneer:'actPioneer',rank:'actRank',hunter:'actHunter',umbrella:'actUmbrella',boss:'actBoss'};
  document.querySelectorAll('.act-pane').forEach(x=>x.style.display='none');
