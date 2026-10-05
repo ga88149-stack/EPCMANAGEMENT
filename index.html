@@ -2044,7 +2044,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.01 · Boss Live Pool</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.02 · Boss Running Event Baseline Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5746,9 +5746,11 @@ function activeBoss_(){const B=db.activityManagement.boss;return (B.bosses||[]).
 function ensureBossCycle_(){
  const B=db.activityManagement?.boss;if(!B||!Array.isArray(B.bosses))return;
  const b=(B.bosses||[]).find(x=>String(x.id)===String(B.activeBossId));if(!b)return;
- const idx=B.bosses.findIndex(x=>String(x.id)===String(b.id));
- if(idx>0&&!Array.isArray(b.baselineEventIds)&&(b.attacks||[]).length===0){
-   b.baselineEventIds=(db.events||[]).map(e=>String(e.id));b.attackEnabled=false;b.huntStartedAt='';b.startedAt=Date.now();
+ // V1.52.02: never exclude an entire event from a live boss cycle merely because
+ // the event already existed when the boss was created. Running-event players
+ // and groups must remain countable immediately.
+ if(Array.isArray(b.baselineEventIds)&&b.baselineEventIds.length){
+   b.baselineEventIds=[];
    localStorage.setItem('epcV1',JSON.stringify(db));
  }
 }
@@ -5758,7 +5760,7 @@ function bossExclude_(id,on){const B=db.activityManagement.boss;B.excludedEventI
 function bossAddExclude_(){const id=$('bossExcludeSelect')?.value;if(id)bossExclude_(id,true)}
 function bossRemoveExclude_(id){bossExclude_(id,false)}
 function bossToggleAttack_(on){const B=db.activityManagement.boss,b=activeBoss_();if(!b)return;b.attackEnabled=!!on;const S=bossStats_();if(S.active&&!b.huntStartedAt)b.huntStartedAt=new Date().toISOString().slice(0,16);if(!S.active)b.huntStartedAt='';persist();renderActivities()}
-function addNewBoss_(){const B=db.activityManagement.boss,id='BOSS'+Date.now();B.bosses.push({id,name:'魔王 '+((B.bosses||[]).length+1),initialHp:+B.initialHp||250,attacks:[],killed:false,attackEnabled:false,huntStartedAt:'',startedAt:Date.now(),baselineEventIds:(db.events||[]).map(e=>String(e.id))});B.activeBossId=id;B.attackEnabled=false;B.huntStartedAt='';persist();renderActivities()}
+function addNewBoss_(){const B=db.activityManagement.boss,id='BOSS'+Date.now();B.bosses.push({id,name:'魔王 '+((B.bosses||[]).length+1),initialHp:+B.initialHp||250,attacks:[],killed:false,attackEnabled:false,huntStartedAt:'',startedAt:Date.now(),baselineEventIds:[]});B.activeBossId=id;B.attackEnabled=false;B.huntStartedAt='';persist();renderActivities()}
 function bossRename_(id,v){const B=db.activityManagement.boss,x=(B.bosses||[]).find(y=>String(y.id)===String(id));if(!x)return;x.name=String(v||'').trim()||'未命名魔王';persist();renderActivities()}
 function deleteBoss_(id){const B=db.activityManagement.boss;if(!confirm('確定刪除此魔王？'))return;B.bosses=B.bosses.filter(x=>x.id!==id);B.activeBossId=B.bosses.at(-1)?.id||'';persist();renderActivities()}
 function selectBoss_(id){db.activityManagement.boss.activeBossId=id;persist();renderActivities()}
