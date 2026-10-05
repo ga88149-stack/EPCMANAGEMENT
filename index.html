@@ -2063,7 +2063,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.12 · Firestore Event Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.13 · Recovered Event Reporting</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5216,7 +5216,13 @@ function renderDashboardSummary(){
  if($('dashboardDateFrom')&&!$('dashboardDateFrom').value)$('dashboardDateFrom').value=from;
  if($('dashboardDateTo')&&!$('dashboardDateTo').value)$('dashboardDateTo').value=to;
 
- const settled=(db.events||[]).filter(e=>e.status==='已結算');
+ // V1.52.13: recovered Firestore events use more than one historical
+ // settlement label. Treat the same explicit settled statuses used by the
+ // activity/ranking system as completed events for dashboard reporting.
+ const settled=(db.events||[]).filter(e=>{
+   const status=String(e&&e.status||'').trim();
+   return status==='已結算'||status==='已結束'||status==='結算完成';
+ });
  const inRange=settled.filter(e=>{
    const d=businessDateForEvent(e);
    return (!from||d>=from)&&(!to||d<=to);
