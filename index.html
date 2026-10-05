@@ -2293,7 +2293,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.58 DEV · Activity Period Logic</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.59 DEV · Strict Top 3 Ranking</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6213,10 +6213,15 @@ function delRankRecurringRule_(id){
  persist();renderActivities();setTimeout(enhanceSearchCombos_,0);
 }
 function eventTopScores_(e){
- const arr=(e.players||[]).map(p=>({id:String(p.memberId),name:actMember_(p.memberId).name||p.memberId,net:chipGrowthFor(p,e),stack:+p.stack||0})).sort((a,b)=>b.net-a.net||b.stack-a.stack);
- let last=null,rank=0,seen=0;const mult=rankMultiplier_(e),out=[];
- for(const x of arr){seen++;const key=`${x.net}|${x.stack}`;if(key!==last){rank=seen;last=key}if(rank>3)break;out.push({...x,rank,base:rank===1?3:rank===2?2:1,score:(rank===1?3:rank===2?2:1)*mult,mult})}
- return out;
+ const arr=(e.players||[]).map((p,index)=>({
+  id:String(p.memberId),name:actMember_(p.memberId).name||p.memberId,
+  net:chipGrowthFor(p,e),stack:+p.stack||0,index
+ })).sort((a,b)=>b.net-a.net||b.stack-a.stack||a.index-b.index).slice(0,3);
+ const mult=rankMultiplier_(e);
+ return arr.map((x,i)=>{
+  const rank=i+1,base=rank===1?3:rank===2?2:1;
+  return {...x,rank,base,score:base*mult,mult};
+ });
 }
 function actRank_(){
  const A=db.activityManagement,tot={},dayNames=['日','一','二','三','四','五','六'];
