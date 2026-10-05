@@ -2184,7 +2184,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.33 · Direct Recovery Preview</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcAuditFirebaseBtn" class="secondary" style="padding:7px 10px;border-color:#ff9f43;color:#ffbd73" onclick="openFirebaseRecoveryPreviewV15228_()">預覽 10/4～10/6 復原</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.34 · Recovery Navigation Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcAuditFirebaseBtn" class="secondary" style="padding:7px 10px;border-color:#ff9f43;color:#ffbd73" onclick="openFirebaseRecoveryPreviewV15228_()">預覽 10/4～10/6 復原</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3570,6 +3570,23 @@ async function openFirebaseRecoveryPreviewV15228_(){
   // Do not open a second blocking alert here: the operator must be able to
   // navigate the recovered preview immediately after confirming it.
   try{const b=document.getElementById('saveCloudBtn');if(b){b.disabled=true;b.title='復原預覽模式禁止儲存';}}catch(_){}
+  // Rebind navigation explicitly after preview render. Some recovery records can
+  // make render() return early before legacy navigation state is usable.
+  document.querySelectorAll('#nav button[data-page]').forEach(b=>{
+    b.disabled=false;
+    b.style.pointerEvents='auto';
+    b.onclick=(ev)=>{
+      if(ev){ev.preventDefault();ev.stopPropagation();}
+      const id=b.dataset.page;
+      document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.toggle('active',x===b));
+      document.querySelectorAll('.page').forEach(pg=>pg.classList.toggle('active',pg.id===id));
+      try{render();}catch(err){console.warn('[EPC] preview page render',id,err);}
+      return false;
+    };
+  });
+  // Remove any stale full-screen modal/backdrop left by the recovery action.
+  document.querySelectorAll('dialog[open]').forEach(d=>{try{d.close()}catch(_){d.removeAttribute('open')}});
+  document.body.style.pointerEvents='auto';
  }catch(err){console.error(err);alert('建立復原預覽失敗：'+String(err&&err.message||err));}
 }
 
