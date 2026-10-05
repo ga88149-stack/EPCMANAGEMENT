@@ -2364,7 +2364,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.83 DEV · Boss State Invariant</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.84 DEV · Boss Manual Control Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6571,9 +6571,12 @@ function bossStats_(){
  // flags incapable of turning a fresh boss on, even if an old field-version
  // record is replayed from Firebase.
  const pristineRound=!!currentBoss&&ev.length===0&&(currentBoss.attacks||[]).length===0&&pool===start;
- if(pristineRound&&currentBoss.attackEnabled)currentBoss.attackEnabled=false;
- const manualActive=!pristineRound&&!!(currentBoss&&currentBoss.attackEnabled);
- const active=pristineRound?false:!!(hunt||manualActive||pool>=threshold);
+ // Fresh boss defaults OFF. An explicit manual action on THIS boss is allowed.
+ // Old/stale attackEnabled=true without a per-boss manual timestamp is ignored.
+ const explicitManual=!!(currentBoss&&currentBoss.manualAttackSetAt&&currentBoss.attackEnabled);
+ if(pristineRound&&currentBoss.attackEnabled&&!explicitManual)currentBoss.attackEnabled=false;
+ const manualActive=!!(currentBoss&&currentBoss.attackEnabled&&(explicitManual||!pristineRound));
+ const active=!!(hunt||manualActive||pool>=threshold);
  if(currentBoss){
    if(active&&!currentBoss.huntStartedAt)currentBoss.huntStartedAt=(manualActive?new Date().toISOString().slice(0,16):'AUTO_THRESHOLD');
    if(!active&&currentBoss.huntStartedAt==='AUTO_THRESHOLD')currentBoss.huntStartedAt='';
@@ -6587,7 +6590,7 @@ function bossSet_(k,v,t){const B=db.activityManagement.boss;B[k]=t==='bool'?!!v:
 function bossExclude_(id,on){const B=db.activityManagement.boss;B.excludedEventIds=B.excludedEventIds||[];if(on&&!B.excludedEventIds.includes(String(id)))B.excludedEventIds.push(String(id));if(!on)B.excludedEventIds=B.excludedEventIds.filter(x=>x!==String(id));persist();renderActivities()}
 function bossAddExclude_(){const id=$('bossExcludeSelect')?.value;if(id)bossExclude_(id,true)}
 function bossRemoveExclude_(id){bossExclude_(id,false)}
-function bossToggleAttack_(on){const b=activeBoss_();if(!b)return;const S=bossStats_();const pristine=(bossEvents_().length===0&&(b.attacks||[]).length===0&&S.pool===(+db.activityManagement.boss.startPrize||0));if(on&&pristine){b.attackEnabled=false;b.huntStartedAt='';actionMsg('新王尚未開始累積，攻擊階段維持未啟用',true);persist();renderActivities();return;}b.attackEnabled=!!on;if(on&&!b.huntStartedAt)b.huntStartedAt=new Date().toISOString().slice(0,16);if(!on&&b.huntStartedAt!=='AUTO_THRESHOLD')b.huntStartedAt='';persist();renderActivities()}
+function bossToggleAttack_(on){const b=activeBoss_();if(!b)return;b.attackEnabled=!!on;b.manualAttackSetAt=Date.now();if(on)b.huntStartedAt=new Date().toISOString().slice(0,16);else b.huntStartedAt='';persist();renderActivities()}
 function bossLatestEventKey_(){
  const B=db.activityManagement.boss;
  const ev=(db.events||[]).filter(e=>{
