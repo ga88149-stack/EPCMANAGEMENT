@@ -2346,7 +2346,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.75 DEV · Global Anti-Rollback</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.76 DEV · Legacy Write Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3455,8 +3455,10 @@ async function initializeCloud(){
    if(remote){
      if(localDirty){
        backupLocal('startup-three-way-merge-v2');
-       db=mergeCloud3_(cloudBase||remote,db,remote);
-       db=preserveManualDiscountEdits_(db,db);
+       const startupLiveBeforeMerge=cloneCloud_(db);
+       db=mergeCloud3_(cloudBase||remote,startupLiveBeforeMerge,remote);
+       db=epcProtectAppliedRealtimeFields_(db,startupLiveBeforeMerge);
+       db=preserveManualDiscountEdits_(startupLiveBeforeMerge,db);
      db=preserveActivityEdits_(db,db);
      db=preserveEventEdits_(db,db);
        db=preserveMembers_(db,db,res.members);
@@ -3472,6 +3474,8 @@ async function initializeCloud(){
        return;
      }else{
        backupLocal('startup-cloud-load-v2');
+       const startupLiveBeforeLoad=cloneCloud_(db);
+       remote=epcProtectAppliedRealtimeFields_(remote,startupLiveBeforeLoad);
        db=remote;
        cloudRevision=serverRevision;
        setCloudBase_(remote);
@@ -4942,10 +4946,12 @@ async function performDeleteEventByIndex(index){
    const nextId=db.events[0]?.id||null;
    setCurrentEventDevice_(nextId);
  }
- localStorage.setItem('epcV1',JSON.stringify(db));
+ // Deletion must enter the same versioned field ledger as every other edit.
+ // Direct whole-db save could let another machine resurrect the deleted event.
+ persist();
  render();
  actionMsg(`已刪除：${label}；分帳報表已同步更新`);
- // 不等待 900ms 排程，避免刪除後立刻關閉頁面造成雲端仍保留舊賽事。
+ // Field transaction is queued by persist(); whole-db save remains secondary.
  if(cloudReady) await saveCloudNow();
 }
 function removePlayerByIndex(index){
