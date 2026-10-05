@@ -2044,7 +2044,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.08 · Pioneer Rank Data Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.09 · Display Leaderboard Range Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6478,14 +6478,18 @@ async function removeDisplay_(id){if(!confirm('確定解除這台顯示器？'))
 function displayLeaderboard_(kind){
  ensureActDb_();const A=db.activityManagement||{},tot={};
  if(kind==='pioneer'){
-  Object.values(A.pioneer||{}).forEach(P=>{if(P.confirmed===false)return;Object.entries(P.scores||{}).forEach(([id,v])=>tot[id]=(tot[id]||0)+(+v||0))});
+  const validIds=new Set(actEvents_('pioneer').map(e=>String(e.id)));
+  Object.values(A.pioneer||{}).forEach(P=>{
+   if(!P.confirmed||!validIds.has(String(P.eventId)))return;
+   Object.entries(P.scores||{}).forEach(([id,v])=>tot[id]=(tot[id]||0)+(+v||0));
+  });
  }else if(kind==='hunter'){
   (A.hunter||[]).forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));
  }else if(kind==='umbrella'){
   (A.umbrella||[]).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
  }else if(kind==='rank'){
-  // Use the exact same calculation as 活動管理 → 週排行榜.
-  actEvents_().forEach(e=>{
+  // Use the exact same rank activity range/data source as 活動管理 → 週排行榜.
+  actEvents_('rank').forEach(e=>{
    eventTopScores_(e).forEach(x=>tot[x.id]=(tot[x.id]||0)+(+x.score||0));
   });
   const ids=new Set([...Object.keys(tot),...Object.keys(A.rankAdjust||{})]);
