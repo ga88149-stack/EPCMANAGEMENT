@@ -2041,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.91 RECOVERY · Activity Business-Day Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.92 RECOVERY · Hunter Event Source Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5327,7 +5327,17 @@ function actResolveMember_(inputId){
  return m?String(m.id):'';
 }
 
-function actEventOptions_(){return actEvents_(actTab_).map(e=>`<option value="${e.id}">${e.date||''}｜${eventDisplayName_(e)}｜${e.level||''}</option>`).join('')}
+function actEventOptions_(){
+ // Registration must not be trapped by an activity-range filter. The operator may
+ // register a kill for any event that exists in the synchronized event database;
+ // the activity range only controls ranking/statistics display.
+ const events=(actTab_==='hunter')?(db.events||[]):actEvents_(actTab_);
+ return events.slice().sort((a,b)=>{
+  const da=businessDateForEvent(a)||String(a.date||''),dbb=businessDateForEvent(b)||String(b.date||'');
+  if(da!==dbb)return dbb.localeCompare(da);
+  return Number(b.seq||0)-Number(a.seq||0);
+ }).map(e=>`<option value="${e.id}">${businessDateForEvent(e)||e.date||''}｜${eventDisplayName_(e)}｜${e.level||''}</option>`).join('');
+}
 function actEventLabel_(e){return `${e.date||''} ${eventDisplayName_(e)} ${e.level||''}`}
 function actGroups_(p,e){try{return +calcPlayerForEvent(p,e).groups||0}catch(_){return (+p.buyin||0)+(+p.rebuy||0)+(+p.addon||0)}}
 function actPlayerStats_(kind=actTab_){
