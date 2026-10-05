@@ -2293,7 +2293,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.59 DEV · Strict Top 3 Ranking</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.60 DEV · Display Activity Period Sync</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -7174,8 +7174,9 @@ function displayLeaderboard_(kind){
  }else if(kind==='umbrella'){
   (A.umbrella||[]).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
  }else if(kind==='rank'){
-  // Use the exact same calculation as 活動管理 → 週排行榜.
-  actEvents_().forEach(e=>{
+  // Display ranking must always use the rank activity's own configured period,
+  // never whichever activity tab happens to be open in Management.
+  actEvents_('rank').forEach(e=>{
    eventTopScores_(e).forEach(x=>tot[x.id]=(tot[x.id]||0)+(+x.score||0));
   });
   const ids=new Set([...Object.keys(tot),...Object.keys(A.rankAdjust||{})]);
@@ -7212,7 +7213,7 @@ async function publishDisplay_(deviceId,silent=false){
  const ui={kind:type,limit:Math.max(3,+($('displayLimit_'+deviceId)?.value||10)),layout:$('displayLayout_'+deviceId)?.value||'classic',showRank:$('displayShowRank_'+deviceId)?.checked!==false,showName:$('displayShowName_'+deviceId)?.checked!==false,showMemberId:!!$('displayShowMemberId_'+deviceId)?.checked,showScore:$('displayShowScore_'+deviceId)?.checked!==false,rankFontScale:Math.min(160,Math.max(80,+($('displayRankFontScale_'+deviceId)?.value||100)))};
  if(type==='rotate'){const acts=['weekly','pioneer','rank','hunter','umbrella','boss'];ui.rotateItems=acts.filter(t=>$('displayRotate_'+deviceId+'_'+t)?.checked);ui.rotateSeconds={};acts.forEach(t=>ui.rotateSeconds[t]=Math.max(5,+($('displayRotateSec_'+deviceId+'_'+t)?.value||15)));}
  const payload=displayPayload_(type);payload.ui=ui;
- if(type==='rotate'){payload.slides=(ui.rotateItems||[]).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
+ if(type==='rotate'){payload.slides=(ui.rotateItems||[]).filter(t=>actIsActive_(t)).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
  if(Array.isArray(payload.rows))payload.rows=payload.rows.slice(0,ui.limit);
  try{await displayFetch_({action:'publish',deviceId,contentType:type,rotateSeconds:sec,payload},true);saveDisplayPref_(deviceId,{type,sec,ui});if(!silent){actionMsg('已套用 '+(payload.title||'活動')+' 專屬顯示版型');await loadDisplays_()}}
  catch(e){if(!silent)actionMsg('顯示器更新失敗：'+e.message,true)}
@@ -7227,7 +7228,7 @@ async function publishAllDisplays_(){
    const ui=Object.assign({kind:type,limit:10,layout:'classic',showRank:true,showName:true,showMemberId:false,showScore:true,rankFontScale:100},pref.ui||{});
    ui.kind=type;
    const payload=displayPayload_(type);payload.ui=ui;
-   if(type==='rotate'){payload.slides=(ui.rotateItems||[]).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
+   if(type==='rotate'){payload.slides=(ui.rotateItems||[]).filter(t=>actIsActive_(t)).map(t=>{const s=displayPayload_(t);s.ui=Object.assign({},ui,{kind:t});s.duration=Math.max(5,+(ui.rotateSeconds||{})[t]||15);return s})}
    if(Array.isArray(payload.rows))payload.rows=payload.rows.slice(0,ui.limit);
    await displayFetch_({action:'publish',deviceId:d.deviceId,contentType:type,rotateSeconds:sec,payload},true);
   }catch(_){}
