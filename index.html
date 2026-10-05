@@ -2044,7 +2044,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.02 · Boss Running Event Baseline Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.03 · Boss Stage Accounting Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5668,92 +5668,44 @@ function bossBonus_(n,step,amt,ignore){return Math.floor(Math.max(0,(+n||0)-Math
 function bossStats_(){
  const B=db.activityManagement.boss;
  const activeBoss=(B.bosses||[]).find(x=>String(x.id)===String(B.activeBossId))||null;
- // Each boss is a separate prize/attack cycle. Events that already existed when
- // this boss was created belong to the previous boss and must not carry its
- // threshold/attack state into the new boss.
- const baseline=new Set(Array.isArray(activeBoss?.baselineEventIds)?activeBoss.baselineEventIds.map(String):[]);
- const ev=bossEvents_().filter(e=>!baseline.has(String(e.id))).slice().sort((a,b)=>{
-   const ka=String(a.date||'')+'T'+String(a.startTime||'00:00'),kb=String(b.date||'')+'T'+String(b.startTime||'00:00');
-   return ka.localeCompare(kb)||String(a.id||'').localeCompare(String(b.id||''));
+ const ev=bossEvents_().slice().sort((a,b)=>{
+  const ka=String(a.date||'')+'T'+String(a.startTime||'00:00'),kb=String(b.date||'')+'T'+String(b.startTime||'00:00');
+  return ka.localeCompare(kb)||String(a.id||'').localeCompare(String(b.id||''));
  });
  const threshold=Math.max(0,+B.attackThreshold||10000),cap=+B.cap||0,start=+B.startPrize||0;
  let np=0,ng=0,hp=0,hg=0,npb=0,ngb=0,hpb=0,hgb=0,pool=start;
  let normalPeople=0,huntPeople=0,normalQualifyingEvents=0,huntQualifyingEvents=0;
- let hunt=false,crossedThisEvent=false;
-
- for(const e of ev){
-   const people=(e.players||[]).length;
-   let groups=0;(e.players||[]).forEach(p=>groups+=actGroups_(p,e));
-
-   if(!hunt){
-     np+=people;ng+=groups;normalPeople+=people;
-     const nextPeopleBonus=bossBonus_(normalPeople,B.normalPersonStep,B.normalPersonAmount,B.normalPersonIgnore);
-     const personDelta=Math.max(0,nextPeopleBonus-npb);
-     npb+=personDelta;pool+=personDelta;
-
-     const normalGroupBonus=bossBonus_(groups,B.normalGroupStep,B.normalGroupAmount,B.normalGroupIgnore);
-     if(normalGroupBonus>0)normalQualifyingEvents++;
-
-     if(pool>=threshold){
-       hunt=true;crossedThisEvent=true;
-       /* Threshold was reached before this event's group bonus:
-          this event's group bonus belongs to hunt mode. */
-       const huntGroupBonus=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
-       if(huntGroupBonus>0){hgb+=huntGroupBonus;huntQualifyingEvents++;pool+=huntGroupBonus}
-     }else if(pool+normalGroupBonus>=threshold){
-       /* The group bonus itself crosses the threshold.
-          Count only enough in normal mode to reach threshold;
-          any remaining increment belongs to hunt mode. */
-       const toThreshold=Math.max(0,threshold-pool);
-       const normalPart=Math.min(normalGroupBonus,toThreshold);
-       ngb+=normalPart;pool+=normalPart;
-       hunt=true;crossedThisEvent=true;
-       const huntPart=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
-       if(huntPart>0){hgb+=huntPart;huntQualifyingEvents++;pool+=huntPart}
-     }else{
-       ngb+=normalGroupBonus;pool+=normalGroupBonus;
-     }
-
-     if(crossedThisEvent){
-       /* People/groups shown in the hunt column start with the triggering event,
-          but hunt people do not add money unless explicitly enabled. */
-       hp+=people;hg+=groups;huntPeople+=people;
-       np-=people;ng-=groups;
-       /* The triggering event's hunt bonus was already assigned above.
-          Do not award the same groups a second time here. */
-       crossedThisEvent=false;
-     }
-   }else{
-     hp+=people;hg+=groups;huntPeople+=people;
-     if(B.huntPersonEnabled){
-       const next=bossBonus_(huntPeople,B.huntPersonStep,B.huntPersonAmount,B.huntPersonIgnore);
-       const delta=Math.max(0,next-hpb);hpb+=delta;pool+=delta;
-     }
-     const gb=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
-     if(gb>0){hgb+=gb;huntQualifyingEvents++;pool+=gb}
+ let hunt=false;
+ for(const x of ev){
+  const people=(x.players||[]).length;
+  let groups=0;(x.players||[]).forEach(p=>groups+=actGroups_(p,x));
+  // One event belongs to exactly one stage. Once prior events have reached the
+  // threshold, subsequent/live events use hunt-stage rules.
+  if(!hunt){
+   np+=people;ng+=groups;normalPeople+=people;
+   const next=bossBonus_(normalPeople,B.normalPersonStep,B.normalPersonAmount,B.normalPersonIgnore);
+   const pd=Math.max(0,next-npb);npb+=pd;pool+=pd;
+   const gb=bossBonus_(groups,B.normalGroupStep,B.normalGroupAmount,B.normalGroupIgnore);
+   if(gb>0){ngb+=gb;normalQualifyingEvents++;pool+=gb}
+   if(pool>=threshold)hunt=true;
+  }else{
+   hp+=people;hg+=groups;huntPeople+=people;
+   if(B.huntPersonEnabled){
+    const next=bossBonus_(huntPeople,B.huntPersonStep,B.huntPersonAmount,B.huntPersonIgnore);
+    const pd=Math.max(0,next-hpb);hpb+=pd;pool+=pd;
    }
+   const gb=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
+   if(gb>0){hgb+=gb;huntQualifyingEvents++;pool+=gb}
+  }
  }
  const manualAttack=activeBoss&&activeBoss.attackEnabled!=null?!!activeBoss.attackEnabled:!!B.attackEnabled;
  const active=hunt||manualAttack||pool>=threshold;
- if(activeBoss){
-   if(active&&!activeBoss.huntStartedAt)activeBoss.huntStartedAt='AUTO_THRESHOLD';
-   if(!active)activeBoss.huntStartedAt='';
- }
+ if(activeBoss){if(active&&!activeBoss.huntStartedAt)activeBoss.huntStartedAt='AUTO_THRESHOLD';if(!active)activeBoss.huntStartedAt='';}
  if(cap>0)pool=Math.min(pool,cap);
  return {np,ng,hp,hg,npb,ngb,hpb,hgb,pool,active,normalQualifyingEvents,huntQualifyingEvents}
 }
 function activeBoss_(){const B=db.activityManagement.boss;return (B.bosses||[]).find(x=>x.id===B.activeBossId)||null}
-function ensureBossCycle_(){
- const B=db.activityManagement?.boss;if(!B||!Array.isArray(B.bosses))return;
- const b=(B.bosses||[]).find(x=>String(x.id)===String(B.activeBossId));if(!b)return;
- // V1.52.02: never exclude an entire event from a live boss cycle merely because
- // the event already existed when the boss was created. Running-event players
- // and groups must remain countable immediately.
- if(Array.isArray(b.baselineEventIds)&&b.baselineEventIds.length){
-   b.baselineEventIds=[];
-   localStorage.setItem('epcV1',JSON.stringify(db));
- }
-}
+function ensureBossCycle_(){ /* V1.52.03: activity range is the source of truth; no whole-event baseline exclusion. */ }
 function bossCurrentHp_(){const b=activeBoss_();if(!b||b.killed)return 0;return Math.max(0,(+b.initialHp||0)-(b.attacks||[]).reduce((n,x)=>n+(+x.damage||0),0))}
 function bossSet_(k,v,t){const B=db.activityManagement.boss;B[k]=t==='bool'?!!v:(['activityFrom','activityTo'].includes(k)?String(v||''):(+v||0));persist();renderActivities()}
 function bossExclude_(id,on){const B=db.activityManagement.boss;B.excludedEventIds=B.excludedEventIds||[];if(on&&!B.excludedEventIds.includes(String(id)))B.excludedEventIds.push(String(id));if(!on)B.excludedEventIds=B.excludedEventIds.filter(x=>x!==String(id));persist();renderActivities()}
