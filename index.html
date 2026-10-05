@@ -2232,12 +2232,14 @@ function epcApplyRemoteField_(d){
  }
 }
 function epcProtectAppliedRealtimeFields_(candidate,liveDb){
- // A verified whole-db snapshot can lag behind field-version delivery.
- // Once this browser has consumed a newer realtime field, never let the older
- // snapshot/legacy merge roll that exact path back.
+ // Global anti-rollback guard: field-version delivery is authoritative for EVERY
+ // persisted EPC module (members, events, accounting, JP, activities, settings,
+ // display preferences, etc.), not only events. A lagging whole-db snapshot may
+ // fill untouched paths, but it may never overwrite a path whose newer verified
+ // field version this browser has already consumed.
  if(!candidate||!liveDb)return candidate;
  for(const [path,version] of epcAppliedRemoteVersions_.entries()){
-  if(!version||!String(path).startsWith('events['))continue;
+  if(!version||String(path).startsWith('__syncCanary.'))continue;
   const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
   let cur=liveDb,ok=true;
   for(const k of parts){
@@ -2281,14 +2283,21 @@ window.epcFirebaseDrainRemoteFields=epcDrainRemoteFieldQueue_;
 function epcRealtimeRollbackSelfTest_(){
  const tests=[],check=(name,ok,detail)=>tests.push({name,ok:!!ok,detail:detail||null});
  const path='events[EV_RACE].players[M_RACE].stack';
- const stale={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:100}]}]};
- const live={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:900}]}]};
+ const activityPath='activityManagement.rankAdjustByPeriod[2026-10-05_2026-10-11][M_RACE]';
+ const accountingPath='accounting[ACC_RACE].amount';
+ const stale={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:100}]}],activityManagement:{rankAdjustByPeriod:{'2026-10-05_2026-10-11':{M_RACE:1}}},accounting:[{id:'ACC_RACE',amount:100}]};
+ const live={events:[{id:'EV_RACE',players:[{memberId:'M_RACE',stack:900}]}],activityManagement:{rankAdjustByPeriod:{'2026-10-05_2026-10-11':{M_RACE:3}}},accounting:[{id:'ACC_RACE',amount:900}]};
  const oldVersions=new Map(epcAppliedRemoteVersions_);
  try{
-  epcAppliedRemoteVersions_.clear();epcAppliedRemoteVersions_.set(path,7);
+  epcAppliedRemoteVersions_.clear();
+  epcAppliedRemoteVersions_.set(path,7);
+  epcAppliedRemoteVersions_.set(activityPath,4);
+  epcAppliedRemoteVersions_.set(accountingPath,5);
   const guarded=epcProtectAppliedRealtimeFields_(cloneCloud_(stale),live);
   const got=guarded.events[0].players[0].stack;
   check('stale whole snapshot cannot roll back newer realtime stack',got===900,{expected:900,actual:got});
+  check('stale whole snapshot cannot roll back activity/ranking data',guarded.activityManagement.rankAdjustByPeriod['2026-10-05_2026-10-11'].M_RACE===3);
+  check('stale whole snapshot cannot roll back accounting data',guarded.accounting[0].amount===900);
   const unguarded=cloneCloud_(stale);
   check('fixture proves stale snapshot differs from live value',unguarded.events[0].players[0].stack!==live.events[0].players[0].stack);
  }finally{
@@ -2337,7 +2346,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.74 DEV · Display Sync Consistency</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.75 DEV · Global Anti-Rollback</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3396,6 +3405,7 @@ function startLiveSync_(){
 
      if(!localDirty){
        backupLocal('before-live-remote-apply-v2');
+       remote=epcProtectAppliedRealtimeFields_(remote,db);
        db=remote;
        epcLastPersistSnapshot_=cloneCloud_(db);
        cloudRevision=loadedRev;
@@ -3412,6 +3422,7 @@ function startLiveSync_(){
      backupLocal('before-live-merge-v3');
      const localBeforeMerge=cloneCloud_(db);
      let merged=mergeCloud3_(cloudBase||remote,localBeforeMerge,remote);
+     merged=epcProtectAppliedRealtimeFields_(merged,localBeforeMerge);
      merged=preserveManualDiscountEdits_(localBeforeMerge,merged);
      merged=preserveActivityEdits_(localBeforeMerge,merged);
      merged=preserveEventEdits_(localBeforeMerge,merged);
@@ -3772,8 +3783,9 @@ async function manualCloudLoad(){
    backupLocal('before-manual-cloud-load');
    const res=await cloudGet('load');
    if(!res.data || typeof res.data!=='object')throw new Error('CLOUD_EMPTY');
-   db=res.data;
-   db=preserveMembers_(db,db,res.members);
+   const liveBeforeManualLoad=cloneCloud_(db);
+   db=epcProtectAppliedRealtimeFields_(cloneCloud_(res.data),liveBeforeManualLoad);
+   db=preserveMembers_(liveBeforeManualLoad,db,res.members);
    cloudRevision=Number(res.revision||0);
    setCloudBase_(db);
    localStorage.setItem('epcV1',JSON.stringify(db));
