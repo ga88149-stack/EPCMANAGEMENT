@@ -1984,11 +1984,24 @@ window.epcFirebaseReadEventIndex=async()=>{
  if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
  const q=await getDocs(collection(fs,"events"));
  const out=[];
- q.forEach(d=>{
+ // V1.52.14: players are stored as an events/{eventId}/players subcollection.
+ // Rebuild each event with its complete player array before recovery merge.
+ for(const d of q.docs){
   const x=clean(d.data()||{});
   if(!x.id)x.id=d.id;
+  try{
+   const pq=await getDocs(collection(fs,"events",d.id,"players"));
+   x.players=pq.docs.map(p=>{
+    const v=clean(p.data()||{});
+    if(!v.id)v.id=p.id;
+    return v;
+   });
+  }catch(e){
+   console.warn("Firestore players recovery skipped",d.id,e);
+   if(!Array.isArray(x.players))x.players=[];
+  }
   out.push(x);
- });
+ }
  return out;
 };
 
@@ -2063,7 +2076,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.13 · Recovered Event Reporting</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.14 · Full Event Player Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
