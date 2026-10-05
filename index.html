@@ -2044,7 +2044,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.05 · Boss Start End Events</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.06 · Boss Per Event Group Tiers</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5687,8 +5687,10 @@ function bossStats_(){
    np+=people;ng+=groups;normalPeople+=people;
    const next=bossBonus_(normalPeople,B.normalPersonStep,B.normalPersonAmount,B.normalPersonIgnore);
    const pd=Math.max(0,next-npb);npb+=pd;pool+=pd;
+   // Group bonus is calculated independently per event and can hit multiple tiers.
+   // Example normal rule: ignore first 8; 16=+200, 24=+400, 32=+600...
    const gb=bossBonus_(groups,B.normalGroupStep,B.normalGroupAmount,B.normalGroupIgnore);
-   if(gb>0){ngb+=gb;normalQualifyingEvents++;pool+=gb}
+   if(gb>0){ngb+=gb;normalQualifyingEvents+=Math.max(1,Math.floor(gb/Math.max(1,+B.normalGroupAmount||1)));pool+=gb}
    if(pool>=threshold)hunt=true;
   }else{
    hp+=people;hg+=groups;huntPeople+=people;
@@ -5696,8 +5698,8 @@ function bossStats_(){
     const next=bossBonus_(huntPeople,B.huntPersonStep,B.huntPersonAmount,B.huntPersonIgnore);
     const pd=Math.max(0,next-hpb);hpb+=pd;pool+=pd;
    }
-   const gb=(groups>=(Math.max(0,+B.huntGroupIgnore||0)+Math.max(1,+B.huntGroupStep||1)))?(+B.huntGroupAmount||0):0;
-   if(gb>0){hgb+=gb;huntQualifyingEvents++;pool+=gb}
+   const gb=bossBonus_(groups,B.huntGroupStep,B.huntGroupAmount,B.huntGroupIgnore);
+   if(gb>0){hgb+=gb;huntQualifyingEvents+=Math.max(1,Math.floor(gb/Math.max(1,+B.huntGroupAmount||1)));pool+=gb}
   }
  }
  const manualAttack=activeBoss&&activeBoss.attackEnabled!=null?!!activeBoss.attackEnabled:!!B.attackEnabled;
