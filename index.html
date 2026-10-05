@@ -2346,7 +2346,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.78 DEV · Boss Round Reset</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.79 DEV · Boss Legacy Round Repair</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6448,7 +6448,27 @@ function bossSet_(k,v,type='num'){const B=db.activityManagement.boss;B[k]=type==
 
 function bossEventKey_(e){return String(businessDateForEvent(e)||e?.date||'')+'T'+String(e?.startTime||'00:00')+'|'+String(e?.id||'')}
 function bossEvents_(){
- const B=db.activityManagement.boss,b=activeBoss_(),roundAfter=String(b?.roundAfterEventKey||'');
+ const B=db.activityManagement.boss,b=activeBoss_();
+ // Compatibility repair for a boss that was created before per-boss round cutoffs
+ // existed (e.g. the currently displayed fresh 250/250 boss). If a previous boss
+ // has already been killed, inherit its frozen cutoff so old activity totals cannot
+ // leak into the new boss.
+ if(b&&!b.roundAfterEventKey){
+  const bosses=B.bosses||[],idx=bosses.findIndex(x=>String(x.id)===String(b.id));
+  const prev=idx>0?bosses.slice(0,idx).reverse().find(x=>x&&x.killed):null;
+  if(prev){
+   b.roundAfterEventKey=prev.killedAfterEventKey||'';
+   if(!b.roundAfterEventKey){
+    const legacy=(db.events||[]).filter(e=>{
+     const d=businessDateForEvent(e)||String(e.date||'');
+     return (!B.activityFrom||d>=B.activityFrom)&&(!B.activityTo||d<=B.activityTo)&&!(B.excludedEventIds||[]).includes(String(e.id));
+    }).sort((a,z)=>bossEventKey_(a).localeCompare(bossEventKey_(z)));
+    b.roundAfterEventKey=legacy.length?bossEventKey_(legacy[legacy.length-1]):'';
+   }
+   B.attackEnabled=false;B.huntStartedAt='';
+  }
+ }
+ const roundAfter=String(b?.roundAfterEventKey||'');
  return (db.events||[]).filter(e=>{
   const d=businessDateForEvent(e)||String(e.date||'');
   if(B.activityFrom&&d<B.activityFrom)return false;
