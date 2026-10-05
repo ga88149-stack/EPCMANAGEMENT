@@ -2134,7 +2134,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.23 · Firebase Merge Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.24 · Firebase Date Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3348,78 +3348,81 @@ async function syncPhoneStacksOnly(){
 async function recoverFullBackupV15221_(){
  const btn=$('epcRecoverFullBackupBtn');
  const oldText=btn?btn.textContent:'完整合併復原';
+ function recoveryDate_(e){
+   const direct=String(e&&e.date||'').trim();
+   if(/^2026-\d{2}-\d{2}$/.test(direct))return direct;
+   const vals=[e&&e.businessDate,e&&e.eventDate,e&&e.createdAt,e&&e.startDateTime,e&&e.updatedAt,e&&e.modifiedAt,e&&e.timestamp];
+   for(const v of vals){
+     if(v==null||v==='')continue;
+     let d=null;
+     if(typeof v==='number')d=new Date(v<1e12?v*1000:v);
+     else if(typeof v==='string'){
+       const m=v.match(/(2026-\d{2}-\d{2})/);if(m)return m[1];
+       const n=Number(v);d=Number.isFinite(n)&&n>0?new Date(n<1e12?n*1000:n):new Date(v);
+     }else if(typeof v==='object'){
+       if(Number.isFinite(v.seconds))d=new Date(v.seconds*1000);
+       else if(typeof v.toDate==='function')try{d=v.toDate()}catch(_){}
+     }
+     if(d&&!isNaN(d)){
+       const z=new Date(d.getTime()+8*3600000);
+       if(z.getUTCHours()<7)z.setUTCDate(z.getUTCDate()-1);
+       return z.toISOString().slice(0,10);
+     }
+   }
+   return '';
+ }
  try{
-   if(btn){btn.disabled=true;btn.textContent='讀取 Sheet + Firebase…';}
-   setCloudState('☁ 正在唯讀檢查 Google Sheet 與 Firebase…');
+   if(btn){btn.disabled=true;btn.textContent='掃描 Firebase 日期…';}
+   setCloudState('☁ 正在唯讀掃描 Google Sheet + Firebase 全部賽事日期…');
    if(typeof window.epcFirebaseReadEventIndex!=='function')throw new Error('FIREBASE_READER_NOT_READY');
-
-   const [res,indexed]=await Promise.all([
-     cloudGet('load'),
-     window.epcFirebaseReadEventIndex()
-   ]);
+   const [res,indexed]=await Promise.all([cloudGet('load'),window.epcFirebaseReadEventIndex()]);
    const snap=res&&res.data;
    if(!snap||typeof snap!=='object')throw new Error('EPC_DATA_BACKUP_EMPTY');
    if(!Array.isArray(indexed))throw new Error('FIREBASE_EVENT_INDEX_EMPTY');
 
-   const rev=Number(res.revision||0);
-   const sheetEvents=Array.isArray(snap.events)?snap.events:[];
-   const fsEvents=indexed.filter(e=>e&&e.id);
+   const rev=Number(res.revision||0),sheetEvents=Array.isArray(snap.events)?snap.events:[],fsEvents=indexed.filter(e=>e&&e.id);
    const byId=new Map(sheetEvents.map(e=>[String(e.id||''),cloneCloud_(e)]));
    let fsPlayers=0;
-   for(const fe of fsEvents){
-     const id=String(fe.id),old=byId.get(id)||{};
-     const merged={...cloneCloud_(old),...cloneCloud_(fe)};
-     if(Array.isArray(fe.players)){merged.players=cloneCloud_(fe.players);fsPlayers+=fe.players.length;}
+   const fsAudit=[];
+   for(const fe0 of fsEvents){
+     const fe=cloneCloud_(fe0),id=String(fe.id),derived=recoveryDate_(fe);
+     if(derived&&!/^2026-\d{2}-\d{2}$/.test(String(fe.date||'')))fe.date=derived;
+     fsPlayers+=Array.isArray(fe.players)?fe.players.length:0;
+     fsAudit.push({id,date:derived||String(fe.date||''),players:Array.isArray(fe.players)?fe.players.length:0,status:String(fe.status||'')});
+     const old=byId.get(id)||{},merged={...cloneCloud_(old),...fe};
+     if(Array.isArray(fe.players))merged.players=cloneCloud_(fe.players);
      byId.set(id,merged);
    }
    const mergedEvents=[...byId.values()];
-   const oct=mergedEvents.filter(e=>String(e.date||'')>='2026-10-01'&&String(e.date||'')<='2026-10-31')
+   const oct=mergedEvents.filter(e=>{const d=recoveryDate_(e);return d>='2026-10-01'&&d<='2026-10-31';})
+     .map(e=>{const x=cloneCloud_(e);x.date=recoveryDate_(e)||x.date;return x;})
      .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||(+a.seq||0)-(+b.seq||0));
    const dayMap={};
    oct.forEach(e=>{const d=String(e.date||'未知');if(!dayMap[d])dayMap[d]={events:0,players:0};dayMap[d].events++;dayMap[d].players+=Array.isArray(e.players)?e.players.length:0;});
    const daySummary=Object.entries(dayMap).map(([d,x])=>d+'：'+x.events+' 場｜'+x.players+' 位玩家').join('\n');
-   const am=snap.activityManagement&&typeof snap.activityManagement==='object'?snap.activityManagement:{};
-   const activityKeys=Object.keys(am);
-   const sheetOct=sheetEvents.filter(e=>String(e.date||'')>='2026-10-01'&&String(e.date||'')<='2026-10-31').length;
+   const unresolved=fsAudit.filter(x=>!/^2026-\d{2}-\d{2}$/.test(x.date));
+   const fsList=fsAudit.sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(x=>(x.date||'日期未知')+'｜'+x.id+'｜'+x.players+' 位').join('\n');
+   const activityKeys=Object.keys(snap.activityManagement&&typeof snap.activityManagement==='object'?snap.activityManagement:{});
+   const summary='Google Sheet Revision：'+rev+'\nFirebase events：'+fsEvents.length+' 場｜玩家 '+fsPlayers+' 筆\n合併後 10 月賽事：'+oct.length+' 場\n\n'+(daySummary||'沒有找到 10 月賽事')+'\n\nFirebase 逐場日期：\n'+fsList+'\n\n日期仍無法判定：'+unresolved.length+' 場\n活動資料區：'+activityKeys.length+' 組';
 
-   const summary=[
-     'Google Sheet Revision：'+rev,
-     'Sheet 10 月賽事：'+sheetOct+' 場',
-     'Firebase events：'+fsEvents.length+' 場｜玩家子資料 '+fsPlayers+' 筆',
-     '合併後 10 月賽事：'+oct.length+' 場',
-     '',
-     daySummary||'沒有找到 10 月賽事',
-     '',
-     '活動資料區：'+activityKeys.length+' 組'
-   ].join('\n');
+   const ok=confirm('Firebase 日期掃描完成：\n\n'+summary+'\n\n先核對 10/4、10/5、10/6。\n按「確定」才會套用；取消則完全不修改資料。\n此步驟不會寫回任何雲端。');
+   if(!ok){setCloudState('☁ 日期掃描已取消｜未修改資料');return;}
 
-   const ok=confirm('唯讀檢查完成：\n\n'+summary+'\n\n按「確定」才會套用到目前畫面。\n會保留 Google Sheet 的帳務／活動，並用 Firebase events + players 補齊賽事。\n\n此步驟不會寫回 Google Sheet 或 Firebase。');
-   if(!ok){setCloudState('☁ 合併復原已取消｜未修改資料');return;}
-
-   backupLocal('before-firebase-merge-recovery-v15223');
+   backupLocal('before-firebase-date-recovery-v15224');
    let recovered=cloneCloud_(snap);
    recovered=preserveMembers_(db,recovered,res.members);
-   recovered.events=mergedEvents;
-   db=recovered;
-   epcLastPersistSnapshot_=cloneCloud_(db);
-   cloudRevision=rev;
-   setCloudBase_(db);
-   localDirty=false;
-   localStorage.setItem('epcV1',JSON.stringify(db));
-   localStorage.setItem('epcCloudRevision',String(rev));
-   localStorage.removeItem('epcLocalDirty');
-   localStorage.setItem('epcFullRecoveryV15223',JSON.stringify({at:Date.now(),revision:rev,firestoreEvents:fsEvents.length,firestorePlayers:fsPlayers,days:dayMap}));
+   recovered.events=mergedEvents.map(e=>{const x=cloneCloud_(e),d=recoveryDate_(x);if(d)x.date=d;return x;});
+   db=recovered;epcLastPersistSnapshot_=cloneCloud_(db);cloudRevision=rev;setCloudBase_(db);localDirty=false;
+   localStorage.setItem('epcV1',JSON.stringify(db));localStorage.setItem('epcCloudRevision',String(rev));localStorage.removeItem('epcLocalDirty');
+   localStorage.setItem('epcFullRecoveryV15224',JSON.stringify({at:Date.now(),revision:rev,firestoreEvents:fsEvents.length,firestorePlayers:fsPlayers,days:dayMap}));
    render();
-   setCloudState('☁ 合併復原完成｜Sheet '+rev+' + Firebase '+fsEvents.length+' 場｜尚未寫回雲端');
-   alert('合併復原已套用到目前畫面。\n\n'+summary+'\n\n先檢查 10/4、10/5、10/6 賽事與帳務。\n目前尚未寫回任何雲端。');
+   setCloudState('☁ 日期合併復原完成｜尚未寫回雲端');
+   alert('已套用到目前畫面。\n\n'+daySummary+'\n\n目前尚未寫回任何雲端。');
  }catch(err){
-   console.error('V1.52.23 merge recovery failed',err);
-   const msg=String(err&&err.message||err);
-   setCloudState('⚠ 合併復原失敗｜'+msg,true);
-   alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」，登入 ga88149@gmail.com 後再按「完整合併復原」。':'合併復原失敗：'+msg);
- }finally{
-   if(btn){btn.disabled=false;btn.textContent=oldText;}
- }
+   console.error('V1.52.24 recovery failed',err);
+   const msg=String(err&&err.message||err);setCloudState('⚠ 日期掃描失敗｜'+msg,true);
+   alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」後再試。':'掃描失敗：'+msg);
+ }finally{if(btn){btn.disabled=false;btn.textContent=oldText;}}
 }
 
 async function manualCloudLoad(){
