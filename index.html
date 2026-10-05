@@ -2041,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.96 RECOVERY · Umbrella Deterministic Registration</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.97 · Umbrella Keyword Search</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5595,15 +5595,42 @@ function actHunter_(){
  <h3 style="margin-top:14px">排行榜</h3><table><thead><tr><th>排名</th><th>會員</th><th>總分</th></tr></thead><tbody>${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="3">尚無資料</td></tr>'}</tbody></table>
  <h3 style="margin-top:14px">登記紀錄</h3><table><thead><tr><th>日期</th><th>場次</th><th>擊殺者</th><th>分數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actEventLabel_((db.events||[]).find(e=>e.id===x.eventId)||{})}</td><td>${actMember_(x.killer).name||x.killer}</td><td><input type="number" style="width:90px" value="${x.points}" onchange="hunterEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="hunterDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無登記</td></tr>'}</tbody></table></div>`;
 }
+function umbrellaMemberSearch_(el){
+ const box=$('umbrellaMemberResults');if(!el||!box)return;
+ el.dataset.memberId='';
+ const q=String(el.value||'').trim().toLowerCase();
+ if(!q){box.style.display='none';box.innerHTML='';return;}
+ const rows=(db.members||[]).filter(m=>{
+  const id=String(m.id||m.memberId||'').toLowerCase(),name=String(m.name||'').toLowerCase();
+  return name.includes(q)||id.includes(q);
+ }).slice(0,30);
+ box.innerHTML=rows.length?rows.map(m=>{
+  const id=String(m.id||m.memberId||''),name=String(m.name||id);
+  const safeId=id.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const safeName=name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return '<button type="button" data-mid="'+safeId+'" data-mname="'+safeName+'" onclick="umbrellaPickMember_(this)" style="display:block;width:100%;text-align:left;padding:10px 12px;border:0;border-bottom:1px solid #343d46;border-radius:0;background:transparent;color:inherit;cursor:pointer">'+safeName+' <span class="small">（'+safeId+'）</span></button>';
+ }).join(''):'<div class="small" style="padding:10px 12px">找不到符合的會員</div>';
+ box.style.display='block';
+}
+function umbrellaPickMember_(btn){
+ const el=$('umbrellaMember'),box=$('umbrellaMemberResults');if(!el||!btn)return;
+ const id=String(btn.dataset.mid||''),name=String(btn.dataset.mname||id);
+ el.value=name+' ('+id+')';el.dataset.memberId=id;
+ if(box){box.style.display='none';box.innerHTML='';}
+}
+document.addEventListener('pointerdown',function(e){
+ const el=$('umbrellaMember'),box=$('umbrellaMemberResults');
+ if(el&&box&&!el.contains(e.target)&&!box.contains(e.target))box.style.display='none';
+},true);
 function umbrellaRule_(k,v){db.activityManagement.umbrellaRules[k]=+v||0;persist();renderActivities()}
 function umbrellaTypeChanged_(){const k=$('umbrellaType').value;$('umbrellaCoupons').value=db.activityManagement.umbrellaRules[k]??0}
 async function addUmbrella_(){
  try{
   ensureActDb_();
-  const memberEl=$('umbrellaMemberSelect'),typeEl=$('umbrellaType'),dateEl=$('umbrellaDate'),couponEl=$('umbrellaCoupons'),noteEl=$('umbrellaNote');
+  const memberEl=$('umbrellaMember'),typeEl=$('umbrellaType'),dateEl=$('umbrellaDate'),couponEl=$('umbrellaCoupons'),noteEl=$('umbrellaNote');
   if(!memberEl)return alert('保護傘會員欄位載入失敗，請重新整理頁面');
-  const id=String(memberEl.value||'').trim();
-  if(!id)return alert('請選擇會員');
+  const id=String(memberEl.dataset.memberId||actResolveMember_('umbrellaMember')||'').trim();
+  if(!id)return alert('請先輸入關鍵字並從搜尋結果選擇會員');
   if(!(db.members||[]).some(m=>String(m.id)===id))return alert('此會員不存在，請重新整理會員資料後再試');
   const k=String(typeEl?.value||'').trim();
   if(!k)return alert('請選擇被超車牌型');
@@ -5635,7 +5662,7 @@ function actUmbrella_(){
  const A=db.activityManagement,{from,to}=actActivityRange_('umbrella'),allRows=Array.isArray(A.umbrella)?A.umbrella:[],rankRows=allRows.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to)),rows=allRows.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||activityStamp_(b)-activityStamp_(a)),tot={};rankRows.forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));const rank=Object.entries(tot).map(([id,score])=>({id,name:actMember_(id).name||id,score})).sort((a,b)=>b.score-a.score);
  const rules=Object.entries(A.umbrellaRules);
  return `<div class="card"><h3>保護傘｜牌型券數設定</h3><div class="formgrid" style="grid-template-columns:repeat(${rules.length},1fr)">${rules.map(([k,v])=>`<div><label>${k}</label><input type="number" value="${v}" onchange="umbrellaRule_('${k}',this.value)"></div>`).join('')}</div>
- <h3 style="margin-top:14px">登記保護傘</h3><div class="formgrid" style="grid-template-columns:.9fr 1.2fr 1.2fr .6fr 1.2fr auto"><div><label>日期</label><input type="date" id="umbrellaDate" value="${new Date().toISOString().slice(0,10)}"></div><div><label>會員</label><select id="umbrellaMemberSelect"><option value="">選擇會員</option>${(db.members||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'zh-Hant')).map(m=>`<option value="${String(m.id||'').replace(/"/g,'&quot;')}">${m.name||m.id}（${m.id||''}）</option>`).join('')}</select></div><div><label>被超車牌型</label><select id="umbrellaType" onchange="umbrellaTypeChanged_()">${rules.map(([k])=>`<option>${k}</option>`).join('')}</select></div><div><label>券數</label><input type="number" id="umbrellaCoupons" value="${rules[0]?.[1]||0}"></div><div><label>備註</label><input id="umbrellaNote"></div><div style="align-self:end"><button type="button" onclick="addUmbrella_()">登記</button></div></div>
+ <h3 style="margin-top:14px">登記保護傘</h3><div class="formgrid" style="grid-template-columns:.9fr 1.2fr 1.2fr .6fr 1.2fr auto"><div><label>日期</label><input type="date" id="umbrellaDate" value="${new Date().toISOString().slice(0,10)}"></div><div style="position:relative"><label>會員</label><input id="umbrellaMember" autocomplete="off" placeholder="輸入姓名 / 會員ID 關鍵字" oninput="umbrellaMemberSearch_(this)" onfocus="umbrellaMemberSearch_(this)"><div id="umbrellaMemberResults" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:80;max-height:260px;overflow:auto;background:var(--card,#111820);border:1px solid #59636e;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35)"></div></div><div><label>被超車牌型</label><select id="umbrellaType" onchange="umbrellaTypeChanged_()">${rules.map(([k])=>`<option>${k}</option>`).join('')}</select></div><div><label>券數</label><input type="number" id="umbrellaCoupons" value="${rules[0]?.[1]||0}"></div><div><label>備註</label><input id="umbrellaNote"></div><div style="align-self:end"><button type="button" onclick="addUmbrella_()">登記</button></div></div>
  <h3 style="margin-top:14px">排行榜</h3><table><thead><tr><th>排名</th><th>會員</th><th>券數</th></tr></thead><tbody>${rank.map((x,i)=>`<tr><td>${i+1}</td><td>${x.name}</td><td>${x.score}</td></tr>`).join('')||'<tr><td colspan="3">尚無資料</td></tr>'}</tbody></table>
  <h3 style="margin-top:14px">明細</h3><table><thead><tr><th>日期</th><th>會員</th><th>牌型</th><th>券數（可改）</th><th>備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.date}</td><td>${actMember_(x.memberId).name||x.memberId}</td><td>${x.type}</td><td><input type="number" style="width:90px" value="${x.coupons}" onchange="umbrellaEdit_('${x.id}',this.value)"></td><td>${x.note||''}</td><td><button class="danger" onclick="umbrellaDel_('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚無資料</td></tr>'}</tbody></table></div>`;
 }
