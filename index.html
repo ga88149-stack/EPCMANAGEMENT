@@ -2184,7 +2184,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.34 · Recovery Navigation Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcAuditFirebaseBtn" class="secondary" style="padding:7px 10px;border-color:#ff9f43;color:#ffbd73" onclick="openFirebaseRecoveryPreviewV15228_()">預覽 10/4～10/6 復原</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.35 · Recovery Render Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcAuditFirebaseBtn" class="secondary" style="padding:7px 10px;border-color:#ff9f43;color:#ffbd73" onclick="openFirebaseRecoveryPreviewV15228_()">預覽 10/4～10/6 復原</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -6092,17 +6092,14 @@ function actIdentity_(id){id=String(id||'');const m=actMember_(id)||{};return ac
 function setActIdentityMode_(v){localStorage.setItem(ACT_IDENTITY_MODE_KEY,v==='id'?'id':'name');renderActivities();setTimeout(()=>publishAllDisplays_(),300)}
 function actIdentityControl_(){const v=actIdentityMode_();return '<div class="card" style="margin-bottom:10px;padding:10px 12px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>活動／排行榜玩家顯示</b><select style="width:180px" onchange="setActIdentityMode_(this.value)"><option value="name" '+(v==='name'?'selected':'')+'>顯示姓名</option><option value="id" '+(v==='id'?'selected':'')+'>顯示會員編號</option></select><span class="small">此設定套用活動管理內所有排行榜、紀錄與顯示器玩家身分。</span></div></div>'}
 function renderActivities(){
- if(!$('activities'))return;ensureActDb_();
+ if(!$('activities'))return;
+ try{ensureActDb_();}catch(e){console.warn('[EPC] ensureActDb recovery guard',e);if(!db.activityManagement||typeof db.activityManagement!=='object')db.activityManagement={};}
+ const safe=(id,fn)=>{try{const el=$(id);if(el)el.innerHTML=fn();}catch(e){console.warn('[EPC] activity render failed',id,e);const el=$(id);if(el)el.innerHTML='<div class="card"><b>此區塊資料正在復原</b><div class="small">'+String(e&&e.message||e)+'</div></div>';}};
  if($('actActivityRangeTop'))$('actActivityRangeTop').innerHTML=actIdentityControl_()+actRangeEditor_(actTab_);
  const panes={weekly:'actWeekly',pioneer:'actPioneer',rank:'actRank',hunter:'actHunter',umbrella:'actUmbrella',boss:'actBoss'};
  document.querySelectorAll('.act-pane').forEach(x=>x.style.display='none');
  const id=panes[actTab_]||'actWeekly';if($(id))$(id).style.display='block';
- if($('actWeekly'))$('actWeekly').innerHTML=actWeekly_();
- if($('actPioneer'))$('actPioneer').innerHTML=actPioneer_();
- if($('actRank'))$('actRank').innerHTML=actRank_();
- if($('actHunter'))$('actHunter').innerHTML=actHunter_();
- if($('actUmbrella'))$('actUmbrella').innerHTML=actUmbrella_();
- if($('actBoss'))$('actBoss').innerHTML=actBoss_();
+ safe('actWeekly',actWeekly_); safe('actPioneer',actPioneer_); safe('actRank',actRank_); safe('actHunter',actHunter_); safe('actUmbrella',actUmbrella_); safe('actBoss',actBoss_);
  setTimeout(enhanceSearchCombos_,0);
 }
 function render(){
