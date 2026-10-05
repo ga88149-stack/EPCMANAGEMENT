@@ -2005,8 +2005,10 @@ window.epcFirebaseReadEventIndex=async()=>{
  return out;
 };
 
-window.epcFirebaseRecoverOctober=async()=>{
- console.info("[EPC] October recovery bridge invoked");
+/* V1.52.20 — October recovery is driven by a module-local button handler.
+   It no longer depends on a window global that another script can overwrite. */
+async function recoverOctoberFromFirestore_(){
+ console.info("[EPC] October recovery button invoked");
  const u=auth.currentUser;
  if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
  const indexed=await window.epcFirebaseReadEventIndex();
@@ -2015,14 +2017,18 @@ window.epcFirebaseRecoverOctober=async()=>{
    return d>='2026-10-01'&&d<='2026-10-31';
  });
  if(!oct.length)throw new Error("NO_OCTOBER_EVENTS_IN_FIRESTORE");
- backupLocal('before-firestore-october-recovery');
+ const playerCount=oct.reduce((n,e)=>n+(Array.isArray(e.players)?e.players.length:0),0);
+ const summary=oct.map(e=>String(e.date||'')+'｜'+String(e.id||'')+'｜'+(Array.isArray(e.players)?e.players.length:0)+' 位').join("\n");
+ const ok=confirm('Firestore 找到 2026 年 10 月資料：\n\n'+oct.length+' 場賽事｜'+playerCount+' 筆玩家資料\n\n'+summary+'\n\n按「確定」才會合併回目前畫面。\n此動作不會寫入舊雲端或 Firestore。');
+ if(!ok){
+   setCloudState('☁ 10月 Firestore 復原已取消｜未修改資料');
+   return {cancelled:true,count:oct.length,players:playerCount};
+ }
+ backupLocal('before-firestore-october-recovery-v15220');
  const byId=new Map((db.events||[]).map(e=>[String(e&&e.id||''),e]));
  for(const fe of oct){
    if(!fe||!fe.id)continue;
    const id=String(fe.id),old=byId.get(id)||{};
-   // Firestore event document is the recovery authority for event fields.
-   // Keep local-only fields when Firestore does not contain them, but always
-   // use the recovered players subcollection (including a legitimate empty list).
    const merged={...cloneCloud_(old),...cloneCloud_(fe)};
    merged.players=Array.isArray(fe.players)?cloneCloud_(fe.players):[];
    byId.set(id,merged);
@@ -2030,13 +2036,31 @@ window.epcFirebaseRecoverOctober=async()=>{
  db.events=[...byId.values()];
  epcLastPersistSnapshot_=cloneCloud_(db);
  localStorage.setItem('epcV1',JSON.stringify(db));
- localStorage.setItem('epcRecoveryOctoberV1',JSON.stringify({at:Date.now(),count:oct.length,ids:oct.map(e=>e.id)}));
+ localStorage.setItem('epcRecoveryOctoberV1',JSON.stringify({at:Date.now(),count:oct.length,players:playerCount,ids:oct.map(e=>e.id)}));
  render();
- setCloudState('☁ Firestore 10月唯讀復原完成｜'+oct.length+' 場｜尚未寫回舊雲端');
- return {count:oct.length,events:oct.map(e=>({id:e.id,date:e.date,players:(e.players||[]).length,status:e.status||''}))};
-};
-window.dispatchEvent(new CustomEvent("epcOctoberRecoveryReady"));
-console.info("[EPC] October recovery ready", typeof window.epcFirebaseRecoverOctober);
+ setCloudState('☁ Firestore 10月復原完成｜'+oct.length+' 場｜'+playerCount+' 筆玩家｜尚未寫回舊雲端');
+ return {count:oct.length,players:playerCount,events:oct.map(e=>({id:e.id,date:e.date,players:(e.players||[]).length,status:e.status||''}))};
+}
+function bindOctoberRecoveryButton_(){
+ const btn=document.getElementById('epcRecoverOctoberBtn');
+ if(!btn||btn.dataset.bound==='1')return;
+ btn.dataset.bound='1';
+ btn.addEventListener('click',async()=>{
+   if(btn.disabled)return;
+   const oldText=btn.textContent;
+   btn.disabled=true;btn.textContent='讀取 10 月中…';
+   try{await recoverOctoberFromFirestore_();}
+   catch(e){
+     console.error("[EPC] October recovery failed",e);
+     const msg=String(e&&e.message||e);
+     setCloudState('☁ 10月 Firestore 復原失敗｜'+msg);
+     alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」再執行 10 月復原。':'10 月復原失敗：'+msg);
+   }finally{btn.disabled=false;btn.textContent=oldText;}
+ });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindOctoberRecoveryButton_,{once:true});
+else bindOctoberRecoveryButton_();
+console.info("[EPC] October recovery button bridge ready");
 
 
 /* Phase 1 realtime observer — detection only.
@@ -2110,7 +2134,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.19 · Recovery Function Bridge</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.20 · Safe October Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
