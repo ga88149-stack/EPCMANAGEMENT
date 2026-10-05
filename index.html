@@ -2076,7 +2076,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.15 · Firestore Recovery Lock</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.16 · Recovery Freeze</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3076,64 +3076,12 @@ render=function(){
 };
 function startLiveSync_(){
  if(liveSyncTimer)clearInterval(liveSyncTimer);
- // Firebase verified snapshots are now the sole realtime authority.
- // Keep legacy Apps Script available only for explicit save/load and fallback.
- liveSyncTimer=setInterval(async()=>{
-   if(cloudSaving||document.hidden||epcEditLocked_())return;
-   try{
-     const meta=await cloudGet('revision');
-     const rev=Number(meta.revision||0);
-     if(!(rev>cloudRevision))return;
-
-     const res=await cloudGet('load');
-     const loadedRev=Number(res.revision||0);
-     if(!(loadedRev>cloudRevision)||!res.data||typeof res.data!=='object')return;
-
-     let remote=cloneCloud_(res.data);
-     remote=preserveMembers_(db,remote,res.members);
-
-     if(!localDirty){
-       backupLocal('before-live-remote-apply-v2');
-       // V1.52.15: never let the legacy 1.5s live-sync snapshot erase events
-       // recovered from Firestore. Preserve any local event absent from legacy
-       // cloud, and preserve the richer local copy when it contains players
-       // that the legacy snapshot does not.
-       remote=preserveEventEdits_(db,remote);
-       db=remote;
-       epcLastPersistSnapshot_=cloneCloud_(db);
-       cloudRevision=loadedRev;
-       setCloudBase_(remote);
-       localStorage.setItem('epcV1',JSON.stringify(db));
-       localStorage.setItem('epcCloudRevision',String(loadedRev));
-       localStorage.removeItem('epcLocalDirty');
-       render();
-       setCloudState('☁ 已同步另一台電腦｜Revision '+loadedRev+'｜Firestore 賽事保護中');
-       return;
-     }
-
-     // Unsaved work exists locally: three-way merge, never overwrite it.
-     backupLocal('before-live-merge-v3');
-     const localBeforeMerge=cloneCloud_(db);
-     let merged=mergeCloud3_(cloudBase||remote,localBeforeMerge,remote);
-     merged=preserveManualDiscountEdits_(localBeforeMerge,merged);
-     merged=preserveActivityEdits_(localBeforeMerge,merged);
-     merged=preserveEventEdits_(localBeforeMerge,merged);
-     merged=preserveMembers_(localBeforeMerge,merged,res.members);
-     db=merged;
-     epcLastPersistSnapshot_=cloneCloud_(db);
-     cloudRevision=loadedRev;
-     setCloudBase_(remote);
-     localStorage.setItem('epcV1',JSON.stringify(db));
-     localStorage.setItem('epcCloudRevision',String(loadedRev));
-     localStorage.setItem('epcLocalDirty','1');
-     localDirty=true;
-     render();
-     setCloudState('● 已合併另一台電腦｜正在同步本機修改…');
-     scheduleCloudSave();
-   }catch(e){
-     console.warn('live sync v2 failed',e);
-   }
- },1500);
+ // V1.52.16 RECOVERY MODE:
+ // Legacy Apps Script live-sync is temporarily disabled because its stale whole-db
+ // snapshot can overwrite Firestore-recovered October data. Explicit cloud load/save
+ // remains available, but no background whole-db replacement is allowed.
+ liveSyncTimer=null;
+ setCloudState('☁ 復原保護模式｜已停用舊版背景回朔');
 }
 async function initializeCloud(){
  setCloudState('● 本機已儲存｜正在連接雲端…');
