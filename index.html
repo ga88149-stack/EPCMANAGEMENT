@@ -2336,7 +2336,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.87 RC · Sync Baseline Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.88 RC · Event Anti-Rollback Floor</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3158,12 +3158,33 @@ function preserveEventEdits_(local,merged){
  for(const e of le){
    const k=String(e&&e.id||''); if(!k)continue;
    const r=mm.get(k);
-   if(!r){me.push(cloneCloud_(e));continue;}
+   if(!r){me.push(cloneCloud_(e));mm.set(k,me[me.length-1]);continue;}
    const lt=Number(e._eventUpdatedAt||0),rt=Number(r._eventUpdatedAt||0);
    if(lt>rt){
-     const idx=me.indexOf(r);
-     me[idx]=cloneCloud_(e);
-     mm.set(k,me[idx]);
+     const idx=me.indexOf(r); me[idx]=cloneCloud_(e); mm.set(k,me[idx]); continue;
+   }
+   // Hard anti-rollback floor for event operational data. Older/equal snapshots
+   // may add missing information, but they may never reduce an existing event.
+   const lp=Array.isArray(e.players)?e.players:[],rp=Array.isArray(r.players)?r.players:[];
+   const rpm=new Map(rp.map(p=>[String(p.memberId||''),p]));
+   for(const p of lp){
+     const pk=String(p&&p.memberId||''); if(!pk)continue;
+     const q=rpm.get(pk);
+     if(!q){rp.push(cloneCloud_(p));rpm.set(pk,rp[rp.length-1]);continue;}
+     // Counts/stacks/prizes are monotonic only against an older event snapshot.
+     for(const f of ['buyin','rebuy','manualDiscount','stack','prize']){
+       const lv=Number(p[f]||0),rv=Number(q[f]||0);
+       if(lv>rv)q[f]=p[f];
+     }
+     if(p.group&&!q.group)q.group=p.group;
+   }
+   r.players=rp;
+   // Never let an older snapshot reopen a formally settled event.
+   if(String(e.status||'')==='已結算'&&String(r.status||'')!=='已結算'){
+     r.status='已結算';
+     if(e.finalAccounting)r.finalAccounting=cloneCloud_(e.finalAccounting);
+     if(e.finalJP!=null)r.finalJP=e.finalJP;
+     if(e.settledAt)r.settledAt=e.settledAt;
    }
  }
  if(merged)merged.events=me;
@@ -3388,7 +3409,9 @@ function startLiveSync_(){
 
      if(!localDirty){
        backupLocal('before-live-remote-apply-v2');
-       db=remote;
+       const localBeforeRemote=cloneCloud_(db);
+       db=preserveEventEdits_(localBeforeRemote,remote);
+       db=preserveActivityEdits_(localBeforeRemote,db);
        epcLastPersistSnapshot_=cloneCloud_(db);
        cloudRevision=loadedRev;
        setCloudBase_(remote);
@@ -3453,7 +3476,9 @@ async function initializeCloud(){
        return;
      }else{
        backupLocal('startup-cloud-load-v2');
-       db=remote;
+       const localBeforeStartup=cloneCloud_(db);
+       db=preserveEventEdits_(localBeforeStartup,remote);
+       db=preserveActivityEdits_(localBeforeStartup,db);
        cloudRevision=serverRevision;
        setCloudBase_(remote);
        localStorage.setItem('epcV1',JSON.stringify(db));
