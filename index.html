@@ -2223,6 +2223,7 @@ function epcApplyRemoteField_(d){
   localStorage.setItem('epcV1',JSON.stringify(db));
   if(cloudBase)try{localStorage.setItem('epcCloudBase',JSON.stringify(cloudBase));}catch(_){}
   if(!epcEditLocked_()){render();setTimeout(()=>{try{refreshSettlementActionState_();}catch(_){}},0);}
+  scheduleDisplayRepublish_();
   if(remoteVersion)epcAppliedRemoteVersions_.set(path,remoteVersion);
   window.epcLastRemoteFieldApply={path,version:remoteVersion,clientId:String(d.clientId||''),appliedAt:Date.now()};
   return {ok:true,path,version:remoteVersion};
@@ -2336,7 +2337,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.73 DEV · Settlement Chain Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.74 DEV · Display Sync Consistency</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -7298,7 +7299,10 @@ function displayLeaderboard_(kind){
  }else if(kind==='hunter'){
   (A.hunter||[]).filter(x=>inRange(x.date)).forEach(x=>tot[x.killer]=(tot[x.killer]||0)+(+x.points||0));
  }else if(kind==='umbrella'){
-  (A.umbrella||[]).filter(x=>inRange(x.date)).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
+  // Keep DISPLAY consistent with the management leaderboard: registered umbrella
+  // records remain ranked even when the activity range is only used to control
+  // when the slide itself is visible.
+  (A.umbrella||[]).forEach(x=>tot[x.memberId]=(tot[x.memberId]||0)+(+x.coupons||0));
  }else if(kind==='rank'){
   actEvents_('rank').forEach(e=>eventTopScores_(e).forEach(x=>tot[x.id]=(tot[x.id]||0)+(+x.score||0)));
   const key=(range.from||'')+'_'+(range.to||''),adj=(A.rankAdjustByPeriod||{})[key]||{};
@@ -7357,6 +7361,14 @@ async function publishAllDisplays_(){
 const _renderActivitiesDisplayBase=typeof renderActivities==='function'?renderActivities:null;
 if(_renderActivitiesDisplayBase){
  renderActivities=function(){const r=_renderActivitiesDisplayBase.apply(this,arguments);setTimeout(()=>publishAllDisplays_(),250);return r}
+}
+// Remote Firebase updates can call the main render() without opening Activity Management.
+// Republish displays after any settled/activity data change so TV content follows the
+// same synchronized db instead of waiting for someone to visit the activity page.
+let epcDisplayPublishTimer_=0;
+function scheduleDisplayRepublish_(){
+ clearTimeout(epcDisplayPublishTimer_);
+ epcDisplayPublishTimer_=setTimeout(()=>{try{publishAllDisplays_()}catch(_){}},500);
 }
 let epcDisplayReconnectBusy_=false;
 async function reconnectDisplays_(republish=false){
