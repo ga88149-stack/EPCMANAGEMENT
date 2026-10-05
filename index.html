@@ -2265,9 +2265,27 @@ function startFieldRealtimeObserver_(){
  fieldRealtimeReady=false;
  const q=query(collection(fs,'epcFieldVersionsV2'),orderBy('updatedAt','desc'),limit(250));
  fieldRealtimeUnsub=onSnapshot(q,snap=>{
-  // Firestore's first snapshot is historical state, not a remote event for this
-  // browser. Skip it; subsequent document changes are live field deliveries.
-  if(!fieldRealtimeReady){fieldRealtimeReady=true;return;}
+  // IMPORTANT: the initial Firestore snapshot is not disposable history. It is
+  // the server-side version ledger that tells a freshly opened/reloaded machine
+  // which field values are newest. Seed/apply it before allowing any legacy
+  // whole-db snapshot to win. This survives browser reloads because authority
+  // lives in Firestore, not only in epcAppliedRemoteVersions_ memory.
+  if(!fieldRealtimeReady){
+   fieldRealtimeReady=true;
+   for(const docSnap of snap.docs){
+    const d=docSnap.data()||{},path=String(d.path||'');
+    if(!path||path.startsWith('__syncCanary.'))continue;
+    const version=Number(d.version||0);
+    if(String(d.clientId||'')===String(epcClientId_||'')){if(version)epcAppliedRemoteVersions_.set(path,version);continue;}
+    if(epcHasLocalPathWork_(path)||epcEditLocked_()){epcQueueRemoteField_(d);continue;}
+    // Initial ledger values are authoritative even after reload. Apply them so
+    // stale localStorage/mirror data cannot reappear simply because this browser
+    // missed the original realtime event.
+    epcApplyRemoteField_({...d,clientId:String(d.clientId||'')});
+   }
+   epcDrainRemoteFieldQueue_();
+   return;
+  }
   for(const chg of snap.docChanges()){
    if(chg.type!=='added'&&chg.type!=='modified')continue;
    const d=chg.doc.data()||{},path=String(d.path||'');
@@ -2346,7 +2364,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.80 DEV · Boss Attack State Reset</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.81 DEV · Persistent Version Authority</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
