@@ -2160,7 +2160,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.25 · Firebase Raw Audit</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.26 · Firebase Audit UI</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcAuditFirebaseBtn" class="secondary" style="padding:7px 10px;border-color:#ff9f43;color:#ffbd73" onclick="auditFirebaseRawV15226_()">掃描 Firebase 原始資料</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3448,6 +3448,46 @@ async function recoverFullBackupV15221_(){
    console.error('V1.52.24 recovery failed',err);
    const msg=String(err&&err.message||err);setCloudState('⚠ 日期掃描失敗｜'+msg,true);
    alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」後再試。':'掃描失敗：'+msg);
+ }finally{if(btn){btn.disabled=false;btn.textContent=oldText;}}
+}
+
+async function auditFirebaseRawV15226_(){
+ const btn=$('epcAuditFirebaseBtn'),oldText=btn?btn.textContent:'掃描 Firebase 原始資料';
+ try{
+  if(btn){btn.disabled=true;btn.textContent='掃描 23 場中…';}
+  setCloudState('☁ 正在唯讀掃描 Firebase events 原始欄位…');
+  if(typeof window.epcFirebaseAuditRawEvents!=='function')throw new Error('FIREBASE_RAW_AUDIT_NOT_READY');
+  const rows=await window.epcFirebaseAuditRawEvents();
+  const pick=(f,k)=>f&&Object.prototype.hasOwnProperty.call(f,k)?f[k]:undefined;
+  const show=v=>{
+    if(v==null||v==='')return '-';
+    if(typeof v==='object'){
+      if(v.iso)return v.iso;
+      try{return JSON.stringify(v)}catch(_){return String(v)}
+    }
+    return String(v);
+  };
+  const keys=['date','businessDate','eventDate','createdAt','updatedAt','modifiedAt','startDateTime','timestamp'];
+  const lines=(rows||[]).map((r,i)=>{
+    const f=r.fields||{};
+    const times=keys.map(k=>k+'='+show(pick(f,k))).join(' | ');
+    return String(i+1).padStart(2,'0')+'. '+r.id+' | players='+r.players+'\n'+times;
+  });
+  const text='Firebase 原始 events：'+(rows||[]).length+' 場\n\n'+lines.join('\n\n');
+  window.epcFirebaseRawAuditLast=rows;
+  try{localStorage.setItem('epcFirebaseRawAuditV15226',JSON.stringify({at:Date.now(),rows}));}catch(_){}
+  console.group('[EPC] Firebase Raw Event Audit');console.log(text);console.log(rows);console.groupEnd();
+  const w=window.open('','_blank','width=1100,height=850,scrollbars=yes,resizable=yes');
+  if(w){
+    w.document.write('<!doctype html><meta charset="utf-8"><title>EPC Firebase Raw Audit</title><style>body{font-family:Consolas,"Microsoft JhengHei",monospace;background:#0b0f14;color:#eef3f8;padding:22px;white-space:pre-wrap;line-height:1.55}h2{color:#d6b35a}pre{white-space:pre-wrap}</style><h2>EPC Firebase 原始賽事唯讀掃描</h2><pre id="x"></pre>');
+    w.document.close();w.document.getElementById('x').textContent=text;
+  }else alert(text.slice(0,12000));
+  setCloudState('☁ Firebase 原始掃描完成｜'+(rows||[]).length+' 場｜未修改任何資料');
+ }catch(err){
+  console.error('V1.52.26 raw audit failed',err);
+  const msg=String(err&&err.message||err);
+  setCloudState('⚠ Firebase 原始掃描失敗｜'+msg,true);
+  alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」後再掃描。':'掃描失敗：'+msg);
  }finally{if(btn){btn.disabled=false;btn.textContent=oldText;}}
 }
 
