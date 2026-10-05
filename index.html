@@ -2041,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.90 RECOVERY · Verified Sync Baseline</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.91 RECOVERY · Activity Business-Day Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5293,7 +5293,19 @@ function actRangeEditor_(kind){
 }
 function actEvents_(kind=actTab_){
  const {from,to}=actActivityRange_(kind);
- return (db.events||[]).filter(e=>(!from||String(e.date||'')>=from)&&(!to||String(e.date||'')<=to));
+ return (db.events||[]).filter(e=>{
+  // Activities follow EPC business day, not the raw calendar date. After midnight
+  // the second/third event still belongs to the configured business day.
+  const d=(typeof businessDateForEvent==='function'?businessDateForEvent(e):'')||String(e.date||'');
+  if(from&&d<from)return false;
+  if(to&&d>to)return false;
+  if(kind==='rank'){
+   const settled=String(e.status||'')==='已結算'||!!e.finalAccounting||e.finalJP!=null||
+    (db.members||[]).some(m=>(m.history||[]).some(h=>String(h.eventId)===String(e.id)));
+   if(!settled)return false;
+  }
+  return true;
+ });
 }
 function actMember_(id){return (db.members||[]).find(m=>String(m.id)===String(id))||{}}
 
