@@ -2230,6 +2230,26 @@ function epcApplyRemoteField_(d){
   db=before;return {ok:false,error:String(e&&e.message||e)};
  }
 }
+function epcProtectAppliedRealtimeFields_(candidate,liveDb){
+ // A verified whole-db snapshot can lag behind field-version delivery.
+ // Once this browser has consumed a newer realtime field, never let the older
+ // snapshot/legacy merge roll that exact path back.
+ if(!candidate||!liveDb)return candidate;
+ for(const [path,version] of epcAppliedRemoteVersions_.entries()){
+  if(!version||!String(path).startsWith('events['))continue;
+  const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
+  let cur=liveDb,ok=true;
+  for(const k of parts){
+   if(Array.isArray(cur)){
+    const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===String(k));
+    if(idx<0){ok=false;break;} cur=cur[idx];
+   }else if(cur&&Object.prototype.hasOwnProperty.call(cur,k))cur=cur[k];
+   else {ok=false;break;}
+  }
+  if(ok)epcSetPathValue_(candidate,path,cloneCloud_(cur));
+ }
+ return candidate;
+}
 function epcDrainRemoteFieldQueue_(){
  if(epcEditLocked_())return;
  for(const [path,d] of [...epcRemoteFieldQueue_.entries()]){
@@ -2293,7 +2313,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.68 DEV · Settlement Action Refresh</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.69 DEV · Realtime Rollback Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3526,6 +3546,7 @@ async function saveCloudNow(force=false){
    const localAtStart=cloneCloud_(db);
 
    let candidate=mergeCloud3_(base,localAtStart,remote);
+   candidate=epcProtectAppliedRealtimeFields_(candidate,localAtStart);
    candidate=preserveManualDiscountEdits_(localAtStart,candidate);
    candidate=preserveMembers_(localAtStart,candidate,latest.members);
 
@@ -4318,6 +4339,7 @@ function scheduleFirebaseConflictDrain_(){
          return; // Only conflicting paths remain quarantined.
        }
        db=mergeCloud3_(base,localNow,remote);
+       db=epcProtectAppliedRealtimeFields_(db,localNow);
        db=preserveManualDiscountEdits_(localNow,db);
        db=preserveActivityEdits_(localNow,db);
        db=preserveEventEdits_(localNow,db);
