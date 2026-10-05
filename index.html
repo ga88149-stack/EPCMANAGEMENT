@@ -2346,7 +2346,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.76 DEV · Legacy Write Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.77 DEV · Versioned Mutation Guard</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="showSyncDiagnostics_()">同步診斷</button><button class="secondary" style="padding:7px 10px" onclick="runLiveFirebaseValidation_()">Firebase 實測</button><button class="secondary" style="padding:7px 10px" onclick="showTwoDeviceValidation_()">雙機測試</button><button class="secondary" style="padding:7px 10px" onclick="showProductionCanary_()">正式管線 Canary</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3354,14 +3354,13 @@ function epcRestoreEdit_(){
 }
 function epcMarkLocalEdit_(el){
  epcCaptureEdit_(el);
- localDirty=true;
- try{localStorage.setItem('epcLocalDirty','1');}catch(_){}
- // Keep a local snapshot immediately. Existing field handlers then commit their model
- // value; the delayed cloud save runs only after the operator has finished the edit.
+ // Typing in a form is only a draft until that field's handler commits it to db.
+ // Do NOT mark the whole database dirty here: a draft-only dirty flag can trigger
+ // a legacy whole-db save even though no versioned business mutation exists yet.
+ // Real mutations call persist(), which records the exact changed paths.
  clearTimeout(epcEditCommitTimer_);
  epcEditCommitTimer_=setTimeout(()=>{
-   try{localStorage.setItem('epcV1',JSON.stringify(db));}catch(_){}
-   if(cloudReady&&!epcEditingField_())scheduleCloudSave();
+   if(cloudReady&&!epcEditingField_()&&(window.epcFieldChanges||[]).some(ch=>ch&&!ch.publishedAt&&!ch.conflict))epcScheduleFieldPublish_();
  },1800);
 }
 document.addEventListener('focusin',e=>epcCaptureEdit_(e.target),true);
@@ -3811,7 +3810,7 @@ if(!db.settings.businessStart)db.settings.businessStart='16:00';
 if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
 
 // 自動清理舊版本留下的「孤兒會員盈虧紀錄」：eventId 已不存在於賽事資料時直接移除。
-function cleanupOrphanMemberHistory(){
+function cleanupOrphanMemberHistory(syncChange=false){
  const validEventIds=new Set((db.events||[]).map(e=>String(e.id)));
  let changed=false;
  (db.members||[]).forEach(m=>{
@@ -3819,9 +3818,15 @@ function cleanupOrphanMemberHistory(){
    m.history=(m.history||[]).filter(h=>h && h.eventId!=null && validEventIds.has(String(h.eventId)));
    if(m.history.length!==before)changed=true;
  });
- if(changed)localStorage.setItem('epcV1',JSON.stringify(db));
+ // Startup migration must not manufacture a new edit before sync is initialized.
+ // Runtime cleanup (for example event deletion) must enter the versioned ledger.
+ if(changed){
+   if(syncChange&&typeof persist==='function')persist();
+   else localStorage.setItem('epcV1',JSON.stringify(db));
+ }
+ return changed;
 }
-cleanupOrphanMemberHistory();
+cleanupOrphanMemberHistory(false);
 
 
 function hmMinutes(v,fallback){
@@ -4941,7 +4946,9 @@ async function performDeleteEventByIndex(index){
    m.history=(m.history||[]).filter(h=>String(h.eventId)!==String(id));
  });
  db.events.splice(index,1);
- cleanupOrphanMemberHistory();
+ // History removal is part of the same business mutation; persist once below so
+ // event deletion + member settlement-history deletion share one versioned batch.
+ cleanupOrphanMemberHistory(false);
  if(String(localStorage.getItem(EPC_DEVICE_EVENT_KEY)||db.currentEventId||'')===String(id)){
    const nextId=db.events[0]?.id||null;
    setCurrentEventDevice_(nextId);
