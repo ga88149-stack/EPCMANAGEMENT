@@ -2044,7 +2044,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.00 · Umbrella Ranking Live Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.01 · Boss Live Pool</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3941,12 +3941,21 @@ function handleAddPlayerSearchKey(event){
  const sel=$('addPlayerMember');if(!sel||!sel.value)return;
  addPlayer();
 }
+function bossLiveEventChanged_(e=currentEvent()){
+ if(!e||e.status==='已結算')return;
+ // Running-event player/group changes must immediately become part of the Boss pool.
+ // Persist/render already publish the full state; this stamp guarantees realtime
+ // activity/display merge logic sees the event as newer than any stale snapshot.
+ touchEvent_(e);
+ epcStrongPendingActivities_=true;
+}
 function addPlayer(){
  if(currentEvent()?.status==='已結算')return alert('此賽事已完成結算並鎖定，不能加入玩家。');
  let id=$('addPlayerMember').value;if(!id)return alert('請先建立會員');
  if(currentEvent().players.some(p=>p.memberId===id))return alert('此會員已加入本場');
  let m=db.members.find(x=>x.id===id);
  currentEvent().players.push({memberId:id,buyin:1,rebuy:0,addon:0,manualDiscount:0,stack:0,nickname:m.nickname||'',group:$('addPlayerGroup').value.trim()||m.group||'',prize:0});
+ bossLiveEventChanged_(currentEvent());
  $('addPlayerGroup').value='';
  if($('addPlayerSearch'))$('addPlayerSearch').value='';
  persist();render();
@@ -3956,6 +3965,7 @@ function setP(i,k,v){
  if(e.status==='已結算')return alert('此賽事已完成結算並鎖定，不能再修改。');
  const p=e.players[i]; if(!p)return;
  p[k]=((k==='group'||k==='nickname'||k==='seat')?v:+v);
+ if(['buyin','rebuy','addon'].includes(k))bossLiveEventChanged_(e);
  if(k==='manualDiscount'){
    // Field-level revision: newest explicit edit wins across computers.
    // This also allows an intentional reset back to 0.
@@ -3971,7 +3981,7 @@ function removePlayerSafe(memberId){
  if(idx<0)return alert('找不到這位玩家');
  const m=db.members.find(x=>x.id===memberId);
  if(!window.confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
- e.players.splice(idx,1);persist();render();alert('玩家已移除');
+ e.players.splice(idx,1);bossLiveEventChanged_(e);persist();render();alert('玩家已移除');
 }
 
 function delP(i){
@@ -3980,7 +3990,7 @@ function delP(i){
  let p=e.players[i],m=db.members.find(x=>x.id===p?.memberId);
  if(!p)return;
  if(!confirm(`確定從本場移除「${m?.name||'此玩家'}」？`))return;
- e.players.splice(i,1);persist();render();
+ e.players.splice(i,1);bossLiveEventChanged_(e);persist();render();
 }
 function calcPlayer(p){
  let e=currentEvent(); if(!e)return {groups:0,auto:0,paid:0,pool:0};
