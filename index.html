@@ -2041,7 +2041,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.93 RECOVERY · Per-Boss Cycle Reset</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.51.94 RECOVERY · Umbrella Registration Fix</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -5590,7 +5590,27 @@ function actHunter_(){
 }
 function umbrellaRule_(k,v){db.activityManagement.umbrellaRules[k]=+v||0;persist();renderActivities()}
 function umbrellaTypeChanged_(){const k=$('umbrellaType').value;$('umbrellaCoupons').value=db.activityManagement.umbrellaRules[k]??0}
-function addUmbrella_(){const id=actResolveMember_('umbrellaMember'),k=$('umbrellaType').value;if(!id)return actionMsg('請選會員',true);db.activityManagement.umbrella.unshift({id:'U'+Date.now(),date:$('umbrellaDate').value||new Date().toISOString().slice(0,10),memberId:id,type:k,coupons:+$('umbrellaCoupons').value||0,note:$('umbrellaNote').value||''});persist();renderActivities()}
+function addUmbrella_(){
+ ensureActDb_();
+ const memberInput=$('umbrellaMember'),typeInput=$('umbrellaType'),dateInput=$('umbrellaDate'),couponInput=$('umbrellaCoupons'),noteInput=$('umbrellaNote');
+ if(!memberInput||!typeInput)return actionMsg('保護傘表單尚未載入，請重新整理後再試',true);
+ const raw=String(memberInput.value||'').trim();
+ let id=actResolveMember_('umbrellaMember');
+ // Accept exact ID, exact name, or the datalist "姓名 (ID)" format.
+ if(!id&&raw){
+   const hit=(db.members||[]).find(m=>String(m.id||'').trim()===raw||String(m.name||'').trim()===raw);
+   if(hit)id=String(hit.id||'');
+ }
+ if(!id)return actionMsg('找不到此會員，請從會員搜尋結果選擇',true);
+ const k=String(typeInput.value||'').trim();
+ if(!k)return actionMsg('請選擇被超車牌型',true);
+ const row={id:'U'+Date.now(),date:dateInput?.value||new Date().toISOString().slice(0,10),memberId:id,type:k,coupons:Number(couponInput?.value||0),note:noteInput?.value||'',_updatedAt:Date.now()};
+ db.activityManagement.umbrella=Array.isArray(db.activityManagement.umbrella)?db.activityManagement.umbrella:[];
+ db.activityManagement.umbrella.unshift(row);
+ persist();
+ actionMsg('保護傘已登記');
+ renderActivities();
+}
 function umbrellaEdit_(id,v){const x=db.activityManagement.umbrella.find(z=>z.id===id);if(x){x.coupons=+v||0;persist();renderActivities()}}
 function umbrellaDel_(id){db.activityManagement.umbrella=db.activityManagement.umbrella.filter(x=>x.id!==id);persist();renderActivities()}
 function actUmbrella_(){
