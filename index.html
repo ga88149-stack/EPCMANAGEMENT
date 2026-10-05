@@ -1784,7 +1784,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
    being mistaken for proof that the actual Firestore payload is complete. */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot,runTransaction} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import {getFirestore,doc,setDoc,getDoc,getDocs,collection,serverTimestamp,writeBatch,onSnapshot,runTransaction} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDomain:"epcmenagement.firebaseapp.com",projectId:"epcmenagement",storageBucket:"epcmenagement.firebasestorage.app",messagingSenderId:"257676873693",appId:"1:257676873693:web:f4edfe9199cc60e8d93034"});
 const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
@@ -1976,6 +1976,22 @@ window.epcFirebaseReadVerified=async()=>{
 };
 window.epcFirebaseVerifiedMeta=()=>clean(verifiedMeta);
 
+/* V1.52.12 — recovery reader for legacy per-event Firestore documents.
+   Read-only: never writes/deletes events. Used by manual cloud load to recover
+   events that exist in Firestore but are absent from an older full snapshot. */
+window.epcFirebaseReadEventIndex=async()=>{
+ const u=auth.currentUser;
+ if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
+ const q=await getDocs(collection(fs,"events"));
+ const out=[];
+ q.forEach(d=>{
+  const x=clean(d.data()||{});
+  if(!x.id)x.id=d.id;
+  out.push(x);
+ });
+ return out;
+};
+
 /* Phase 1 realtime observer — detection only.
    It NEVER mutates EPC db. This lets us prove A/B delivery before enabling remote apply. */
 let realtimeUnsub=null,lastSeenGeneration="";
@@ -2047,7 +2063,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.11 · Global Activity Identity Display</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V1.52.12 · Firestore Event Recovery</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3370,6 +3386,27 @@ async function manualCloudLoad(){
    if(!res.data || typeof res.data!=='object')throw new Error('CLOUD_EMPTY');
    db=res.data;
    db=preserveMembers_(db,db,res.members);
+   // V1.52.12: the legacy cloud snapshot can lag behind Firestore's per-event
+   // index. Recover missing/newer event documents read-only before rendering.
+   if(typeof window.epcFirebaseReadEventIndex==='function'){
+     try{
+       const indexed=await window.epcFirebaseReadEventIndex();
+       if(Array.isArray(indexed)&&indexed.length){
+         const byId=new Map((db.events||[]).map(e=>[String(e&&e.id||''),e]));
+         for(const remoteEvent of indexed){
+           if(!remoteEvent||!remoteEvent.id)continue;
+           const id=String(remoteEvent.id),localEvent=byId.get(id);
+           if(!localEvent){byId.set(id,remoteEvent);continue;}
+           const rt=Date.parse(remoteEvent.updatedAt||remoteEvent.modifiedAt||remoteEvent.createdAt||'')||0;
+           const lt=Date.parse(localEvent.updatedAt||localEvent.modifiedAt||localEvent.createdAt||'')||0;
+           // Replace only when Firestore is demonstrably newer. If timestamps
+           // are unavailable, keep the snapshot copy to avoid destructive guesses.
+           if(rt>lt)byId.set(id,remoteEvent);
+         }
+         db.events=[...byId.values()];
+       }
+     }catch(e){console.warn('Firestore event recovery skipped',e);}
+   }
    cloudRevision=Number(res.revision||0);
    setCloudBase_(db);
    localStorage.setItem('epcV1',JSON.stringify(db));
