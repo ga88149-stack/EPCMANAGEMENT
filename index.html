@@ -2032,6 +2032,26 @@ window.epcFirebaseVerify=async()=>{
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
 onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
+<style id="epcNavHardGuard">
+#nav{position:relative!important;z-index:2147483647!important;pointer-events:auto!important}
+#nav button[data-page]{pointer-events:auto!important;position:relative!important;z-index:2147483647!important}
+</style>
+<script id="epcNavHardGuardScript">
+(function(){
+ document.addEventListener('pointerdown',function(ev){
+  var b=ev.target&&ev.target.closest?ev.target.closest('#nav button[data-page]'):null;
+  if(!b)return;
+  ev.preventDefault();ev.stopPropagation();
+  var id=b.getAttribute('data-page');
+  document.querySelectorAll('#nav button[data-page]').forEach(function(x){x.classList.toggle('active',x===b);});
+  document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id);});
+ },true);
+ document.addEventListener('click',function(ev){
+  var b=ev.target&&ev.target.closest?ev.target.closest('#nav button[data-page]'):null;
+  if(b){ev.preventDefault();ev.stopPropagation();}
+ },true);
+})();
+</script>
 </head>
 <script>
 (function(){
