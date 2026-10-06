@@ -2191,7 +2191,7 @@ function startFieldRealtimeV2_(){
 window.epcFirebaseStartFieldRealtimeV2=startFieldRealtimeV2_;
 
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();startFieldRealtimeV2_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜安全營業模式");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -4129,11 +4129,7 @@ window.addEventListener("epcFirebaseRemoteFieldV2",function(e){
 
 /* V2.0 phone stacks: automatic read-in while an event is open.
    The existing manual "同步手機籌碼" button remains available. */
-let epcPhoneAutoTimerV2_=setInterval(()=>{
- const e=currentEvent();
- if(!e||e.status==='已結算'||__phoneStackSyncBusy||document.hidden||epcEditLocked_())return;
- syncPhoneStacksOnly().catch(()=>{});
-},4000);
+let epcPhoneAutoTimerV2_=null; // V2.0 SAFE MODE: auto polling paused until live A/B validation. Manual phone-stack sync remains available.
 
 function persist(){
  const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
