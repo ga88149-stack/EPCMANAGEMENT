@@ -1784,7 +1784,7 @@ html[data-epc-theme="light"] #settlementConfirmModal h3{color:#087f96!important}
    being mistaken for proof that the actual Firestore payload is complete. */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import {getFirestore,doc,setDoc,getDoc,getDocs,collection,serverTimestamp,writeBatch,onSnapshot,runTransaction} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import {getFirestore,doc,setDoc,getDoc,serverTimestamp,writeBatch,onSnapshot,runTransaction} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 const app=initializeApp({apiKey:"AIzaSyAt98g3mzH_vMifrIq-xvf8hMQwUyUmGiQ",authDomain:"epcmenagement.firebaseapp.com",projectId:"epcmenagement",storageBucket:"epcmenagement.firebasestorage.app",messagingSenderId:"257676873693",appId:"1:257676873693:web:f4edfe9199cc60e8d93034"});
 const auth=getAuth(app),fs=getFirestore(app),provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:"select_account"});
@@ -1976,143 +1976,6 @@ window.epcFirebaseReadVerified=async()=>{
 };
 window.epcFirebaseVerifiedMeta=()=>clean(verifiedMeta);
 
-/* V1.52.12 — recovery reader for legacy per-event Firestore documents.
-   Read-only: never writes/deletes events. Used by manual cloud load to recover
-   events that exist in Firestore but are absent from an older full snapshot. */
-window.epcFirebaseReadEventIndex=async()=>{
- const u=auth.currentUser;
- if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
- const q=await getDocs(collection(fs,"events"));
- const out=[];
- // V1.52.14: players are stored as an events/{eventId}/players subcollection.
- // Rebuild each event with its complete player array before recovery merge.
- for(const d of q.docs){
-  const x=clean(d.data()||{});
-  if(!x.id)x.id=d.id;
-  try{
-   const pq=await getDocs(collection(fs,"events",d.id,"players"));
-   x.players=pq.docs.map(p=>{
-    const v=clean(p.data()||{});
-    if(!v.id)v.id=p.id;
-    return v;
-   });
-  }catch(e){
-   console.warn("Firestore players recovery skipped",d.id,e);
-   if(!Array.isArray(x.players))x.players=[];
-  }
-  out.push(x);
- }
- return out;
-};
-/* V1.52.25 — read-only raw audit of every Firestore event document.
-   Keeps original field names/types so recovery can identify the 14 events whose
-   business date is not stored in the legacy `date` field. */
-window.epcFirebaseAuditRawEvents=async()=>{
- const u=auth.currentUser;
- if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
- const q=await getDocs(collection(fs,"events"));
- const norm=v=>{
-   if(v==null)return v;
-   if(typeof v==='object'){
-     if(typeof v.toMillis==='function')return {__type:'Timestamp',millis:v.toMillis(),iso:new Date(v.toMillis()).toISOString()};
-     if(Number.isFinite(v.seconds))return {__type:'Timestamp',seconds:v.seconds,nanoseconds:v.nanoseconds||0,iso:new Date(v.seconds*1000).toISOString()};
-   }
-   return clean(v);
- };
- const out=[];
- for(const d of q.docs){
-   const raw=d.data()||{},fields={};
-   Object.keys(raw).forEach(k=>fields[k]=norm(raw[k]));
-   let players=0;
-   try{const pq=await getDocs(collection(fs,"events",d.id,"players"));players=pq.size;}catch(_){}
-   out.push({id:d.id,players,fields});
- }
- return out;
-};
-/* V1.52.27 — full read-only Firestore recovery inventory. */
-window.epcFirebaseAuditAllRecovery=async()=>{
- const u=auth.currentUser;if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
- const names=["events","members","epcFieldVersions","epcFieldVersionsV2","epcLiveRoster","epcMirrorCore","epcMirrorMeta","epcMirrorSnapshots","epcValidationProbesV1","epcValidationTwoDeviceV1"];
- const norm=v=>{
-  if(v==null)return v;
-  if(typeof v==='object'){
-   if(typeof v.toMillis==='function')return {__type:"Timestamp",millis:v.toMillis(),iso:new Date(v.toMillis()).toISOString()};
-   if(Number.isFinite(v.seconds))return {__type:"Timestamp",seconds:v.seconds,nanoseconds:v.nanoseconds||0,iso:new Date(v.seconds*1000).toISOString()};
-   if(Array.isArray(v))return v.map(norm);
-   const o={};Object.keys(v).forEach(k=>o[k]=norm(v[k]));return o;
-  }
-  return v;
- };
- const out={};
- for(const name of names){
-  try{
-   const q=await getDocs(collection(fs,name));
-   out[name]=q.docs.map(d=>({id:d.id,data:norm(d.data()||{})}));
-  }catch(err){out[name]={error:String(err&&err.message||err)}}
- }
- return out;
-};
-
-
-
-/* V1.52.20 — October recovery is driven by a module-local button handler.
-   It no longer depends on a window global that another script can overwrite. */
-async function recoverOctoberFromFirestore_(){
- console.info("[EPC] October recovery button invoked");
- const u=auth.currentUser;
- if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
- const indexed=await window.epcFirebaseReadEventIndex();
- const oct=(indexed||[]).filter(e=>{
-   const d=String(e&&e.date||'').trim();
-   return d>='2026-10-01'&&d<='2026-10-31';
- });
- if(!oct.length)throw new Error("NO_OCTOBER_EVENTS_IN_FIRESTORE");
- const playerCount=oct.reduce((n,e)=>n+(Array.isArray(e.players)?e.players.length:0),0);
- const summary=oct.map(e=>String(e.date||'')+'｜'+String(e.id||'')+'｜'+(Array.isArray(e.players)?e.players.length:0)+' 位').join("\n");
- const ok=confirm('Firestore 找到 2026 年 10 月資料：\n\n'+oct.length+' 場賽事｜'+playerCount+' 筆玩家資料\n\n'+summary+'\n\n按「確定」才會合併回目前畫面。\n此動作不會寫入舊雲端或 Firestore。');
- if(!ok){
-   setCloudState('☁ 10月 Firestore 復原已取消｜未修改資料');
-   return {cancelled:true,count:oct.length,players:playerCount};
- }
- backupLocal('before-firestore-october-recovery-v15220');
- const byId=new Map((db.events||[]).map(e=>[String(e&&e.id||''),e]));
- for(const fe of oct){
-   if(!fe||!fe.id)continue;
-   const id=String(fe.id),old=byId.get(id)||{};
-   const merged={...cloneCloud_(old),...cloneCloud_(fe)};
-   merged.players=Array.isArray(fe.players)?cloneCloud_(fe.players):[];
-   byId.set(id,merged);
- }
- db.events=[...byId.values()];
- epcLastPersistSnapshot_=cloneCloud_(db);
- localStorage.setItem('epcV1',JSON.stringify(db));
- localStorage.setItem('epcRecoveryOctoberV1',JSON.stringify({at:Date.now(),count:oct.length,players:playerCount,ids:oct.map(e=>e.id)}));
- render();
- setCloudState('☁ Firestore 10月復原完成｜'+oct.length+' 場｜'+playerCount+' 筆玩家｜尚未寫回舊雲端');
- return {count:oct.length,players:playerCount,events:oct.map(e=>({id:e.id,date:e.date,players:(e.players||[]).length,status:e.status||''}))};
-}
-function bindOctoberRecoveryButton_(){
- const btn=document.getElementById('epcRecoverOctoberBtn');
- if(!btn||btn.dataset.bound==='1')return;
- btn.dataset.bound='1';
- btn.addEventListener('click',async()=>{
-   if(btn.disabled)return;
-   const oldText=btn.textContent;
-   btn.disabled=true;btn.textContent='讀取 10 月中…';
-   try{await recoverOctoberFromFirestore_();}
-   catch(e){
-     console.error("[EPC] October recovery failed",e);
-     const msg=String(e&&e.message||e);
-     setCloudState('☁ 10月 Firestore 復原失敗｜'+msg);
-     alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」再執行 10 月復原。':'10 月復原失敗：'+msg);
-   }finally{btn.disabled=false;btn.textContent=oldText;}
- });
-}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindOctoberRecoveryButton_,{once:true});
-else bindOctoberRecoveryButton_();
-console.info("[EPC] October recovery button bridge ready");
-
-
 /* Phase 1 realtime observer — detection only.
    It NEVER mutates EPC db. This lets us prove A/B delivery before enabling remote apply. */
 let realtimeUnsub=null,lastSeenGeneration="";
@@ -2172,26 +2035,8 @@ window.epcFirebaseVerify=async()=>{
   return ok;
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
-
-/* V2.0 — safe A/B field-level realtime sync. Initial Firestore contents are ignored:
-   only changes arriving after this browser connects are forwarded to the working DB. */
-let epcFieldRealtimeUnsub_=null;
-function startFieldRealtimeV2_(){
- if(epcFieldRealtimeUnsub_)epcFieldRealtimeUnsub_();
- let primed=false;
- epcFieldRealtimeUnsub_=onSnapshot(collection(fs,"epcFieldVersions"),snap=>{
-   if(!primed){primed=true;return;}
-   for(const ch of snap.docChanges()){
-     if(ch.type!=="added"&&ch.type!=="modified")continue;
-     const x=clean(ch.doc.data()||{});
-     window.dispatchEvent(new CustomEvent("epcFirebaseRemoteFieldV2",{detail:x}));
-   }
- },e=>console.warn("V2 field realtime observer failed",e));
-}
-window.epcFirebaseStartFieldRealtimeV2=startFieldRealtimeV2_;
-
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜安全營業模式");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -2202,7 +2047,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V2.0</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button id="epcRecoverOctoberBtn" class="secondary" style="padding:7px 10px;border-color:#d6b35a;color:#ffd76a">復原 10 月資料</button><button id="epcAuditFirebaseBtn" class="secondary" style="padding:7px 10px;border-color:#ff9f43;color:#ffbd73" onclick="openFirebaseRecoveryPreviewV15228_()">預覽 10/4～10/6 復原</button><button id="epcRecoverFullBackupBtn" class="secondary" style="padding:7px 10px;border-color:#63e6ff;color:#63e6ff" onclick="recoverFullBackupV15221_()">完整合併復原</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V2.0 · Stable Core</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -3202,22 +3047,126 @@ render=function(){
 };
 function startLiveSync_(){
  if(liveSyncTimer)clearInterval(liveSyncTimer);
- // V1.52.16 RECOVERY MODE:
- // Legacy Apps Script live-sync is temporarily disabled because its stale whole-db
- // snapshot can overwrite Firestore-recovered October data. Explicit cloud load/save
- // remains available, but no background whole-db replacement is allowed.
- liveSyncTimer=null;
- setCloudState('☁ 復原保護模式｜已停用舊版背景回朔');
+ // Firebase verified snapshots are now the sole realtime authority.
+ // Keep legacy Apps Script available only for explicit save/load and fallback.
+ liveSyncTimer=setInterval(async()=>{
+   if(cloudSaving||document.hidden||epcEditLocked_())return;
+   try{
+     const meta=await cloudGet('revision');
+     const rev=Number(meta.revision||0);
+     if(!(rev>cloudRevision))return;
+
+     const res=await cloudGet('load');
+     const loadedRev=Number(res.revision||0);
+     if(!(loadedRev>cloudRevision)||!res.data||typeof res.data!=='object')return;
+
+     let remote=cloneCloud_(res.data);
+     remote=preserveMembers_(db,remote,res.members);
+
+     if(!localDirty){
+       backupLocal('before-live-remote-apply-v2');
+       db=remote;
+       epcLastPersistSnapshot_=cloneCloud_(db);
+       cloudRevision=loadedRev;
+       setCloudBase_(remote);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localStorage.setItem('epcCloudRevision',String(loadedRev));
+       localStorage.removeItem('epcLocalDirty');
+       render();
+       setCloudState('☁ 已同步另一台電腦｜Revision '+loadedRev);
+       return;
+     }
+
+     // Unsaved work exists locally: three-way merge, never overwrite it.
+     backupLocal('before-live-merge-v3');
+     const localBeforeMerge=cloneCloud_(db);
+     let merged=mergeCloud3_(cloudBase||remote,localBeforeMerge,remote);
+     merged=preserveManualDiscountEdits_(localBeforeMerge,merged);
+     merged=preserveActivityEdits_(localBeforeMerge,merged);
+     merged=preserveEventEdits_(localBeforeMerge,merged);
+     merged=preserveMembers_(localBeforeMerge,merged,res.members);
+     db=merged;
+     epcLastPersistSnapshot_=cloneCloud_(db);
+     cloudRevision=loadedRev;
+     setCloudBase_(remote);
+     localStorage.setItem('epcV1',JSON.stringify(db));
+     localStorage.setItem('epcCloudRevision',String(loadedRev));
+     localStorage.setItem('epcLocalDirty','1');
+     localDirty=true;
+     render();
+     setCloudState('● 已合併另一台電腦｜正在同步本機修改…');
+     scheduleCloudSave();
+   }catch(e){
+     console.warn('live sync v2 failed',e);
+   }
+ },1500);
 }
 async function initializeCloud(){
- // V1.52.17 RECOVERY ISOLATION:
- // During recovery, startup must never consume the stale legacy whole-db snapshot.
- // Keep the already recovered/local database intact and only mark the connection ready.
- cloudReady=navigator.onLine!==false;
- epcLastPersistSnapshot_=cloneCloud_(db);
- localStorage.setItem('epcV1',JSON.stringify(db));
- render();
- setCloudState('☁ 復原隔離模式｜啟動時不載入舊快照');
+ setCloudState('● 本機已儲存｜正在連接雲端…');
+ try{
+   const res=await cloudGet('load');
+   const serverRevision=Number(res.revision||0);
+   const hasRemote=!!(res.data&&typeof res.data==='object');
+   let remote=hasRemote?cloneCloud_(res.data):null;
+   if(remote)remote=preserveMembers_(db,remote,res.members);
+
+   if(remote){
+     if(localDirty){
+       backupLocal('startup-three-way-merge-v2');
+       db=mergeCloud3_(cloudBase||remote,db,remote);
+       db=preserveManualDiscountEdits_(db,db);
+     db=preserveActivityEdits_(db,db);
+     db=preserveEventEdits_(db,db);
+       db=preserveMembers_(db,db,res.members);
+       cloudRevision=serverRevision;
+       setCloudBase_(remote);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localStorage.setItem('epcCloudRevision',String(cloudRevision));
+       localStorage.setItem('epcLocalDirty','1');
+       cloudReady=true;
+       render();
+       setCloudState('● 已合併雲端｜正在補同步本機修改…');
+       await saveCloudNow(false);
+       return;
+     }else{
+       backupLocal('startup-cloud-load-v2');
+       db=remote;
+       cloudRevision=serverRevision;
+       setCloudBase_(remote);
+       localStorage.setItem('epcV1',JSON.stringify(db));
+       localStorage.setItem('epcCloudRevision',String(cloudRevision));
+       localStorage.removeItem('epcLocalDirty');
+       localDirty=false;
+     }
+   }else{
+     db=preserveMembers_(db,db,res.members);
+     cloudRevision=serverRevision;
+     setCloudBase_(db);
+     localDirty=true;
+     localStorage.setItem('epcLocalDirty','1');
+   }
+
+   if(!db.settings)db.settings={};
+   if(!db.settings.businessStart)db.settings.businessStart='16:00';
+   if(!db.settings.businessEnd)db.settings.businessEnd='07:00';
+   if(!Array.isArray(db.dailySettlementReports))db.dailySettlementReports=[];
+   cloudReady=true;
+   epcLastPersistSnapshot_=cloneCloud_(db);
+   localStorage.setItem('epcV1',JSON.stringify(db));
+   render();
+
+   if(!hasRemote)await saveCloudNow(false);
+   else{
+     const t=res.updatedAt?new Date(res.updatedAt).toLocaleTimeString():new Date().toLocaleTimeString();
+     setCloudState('☁ 雲端已載入｜Revision '+cloudRevision+'｜'+t);
+   }
+ }catch(err){
+   cloudReady=false;
+   setCloudState('⚠ 雲端暫時離線｜本機資料安全保存｜將自動重連',true);
+   console.error('EPC cloud init failed',err);
+   scheduleCloudReconnect_();
+   render();
+ }
 }
 async function refreshFormMembers(saveAfter=true){
  if(epcEditLocked_())return false;
@@ -3409,282 +3358,7 @@ async function syncPhoneStacksOnly(){
   if(btn){btn.disabled=false;btn.textContent=btn.dataset.oldText||'同步手機籌碼';}
  }
 }
-/* V1.52.21 — Safe full recovery from the Apps Script EPC_DATA snapshot.
-   Reads the chunk-reconstructed snapshot via action=load, previews its coverage,
-   then restores the whole snapshot and overlays Firestore event+player records.
-   No cloud write is performed by this recovery action. */
-async function recoverFullBackupV15221_(){
- const btn=$('epcRecoverFullBackupBtn');
- const oldText=btn?btn.textContent:'完整合併復原';
- function recoveryDate_(e){
-   const direct=String(e&&e.date||'').trim();
-   if(/^2026-\d{2}-\d{2}$/.test(direct))return direct;
-   const vals=[e&&e.businessDate,e&&e.eventDate,e&&e.createdAt,e&&e.startDateTime,e&&e.updatedAt,e&&e.modifiedAt,e&&e.timestamp];
-   for(const v of vals){
-     if(v==null||v==='')continue;
-     let d=null;
-     if(typeof v==='number')d=new Date(v<1e12?v*1000:v);
-     else if(typeof v==='string'){
-       const m=v.match(/(2026-\d{2}-\d{2})/);if(m)return m[1];
-       const n=Number(v);d=Number.isFinite(n)&&n>0?new Date(n<1e12?n*1000:n):new Date(v);
-     }else if(typeof v==='object'){
-       if(Number.isFinite(v.seconds))d=new Date(v.seconds*1000);
-       else if(typeof v.toDate==='function')try{d=v.toDate()}catch(_){}
-     }
-     if(d&&!isNaN(d)){
-       const z=new Date(d.getTime()+8*3600000);
-       if(z.getUTCHours()<7)z.setUTCDate(z.getUTCDate()-1);
-       return z.toISOString().slice(0,10);
-     }
-   }
-   return '';
- }
- try{
-   if(btn){btn.disabled=true;btn.textContent='掃描 Firebase 日期…';}
-   setCloudState('☁ 正在唯讀掃描 Google Sheet + Firebase 全部賽事日期…');
-   if(typeof window.epcFirebaseReadEventIndex!=='function')throw new Error('FIREBASE_READER_NOT_READY');
-   const [res,indexed]=await Promise.all([cloudGet('load'),window.epcFirebaseReadEventIndex()]);
-   const snap=res&&res.data;
-   if(!snap||typeof snap!=='object')throw new Error('EPC_DATA_BACKUP_EMPTY');
-   if(!Array.isArray(indexed))throw new Error('FIREBASE_EVENT_INDEX_EMPTY');
-
-   const rev=Number(res.revision||0),sheetEvents=Array.isArray(snap.events)?snap.events:[],fsEvents=indexed.filter(e=>e&&e.id);
-   const byId=new Map(sheetEvents.map(e=>[String(e.id||''),cloneCloud_(e)]));
-   let fsPlayers=0;
-   const fsAudit=[];
-   for(const fe0 of fsEvents){
-     const fe=cloneCloud_(fe0),id=String(fe.id),derived=recoveryDate_(fe);
-     if(derived&&!/^2026-\d{2}-\d{2}$/.test(String(fe.date||'')))fe.date=derived;
-     fsPlayers+=Array.isArray(fe.players)?fe.players.length:0;
-     fsAudit.push({id,date:derived||String(fe.date||''),players:Array.isArray(fe.players)?fe.players.length:0,status:String(fe.status||'')});
-     const old=byId.get(id)||{},merged={...cloneCloud_(old),...fe};
-     if(Array.isArray(fe.players))merged.players=cloneCloud_(fe.players);
-     byId.set(id,merged);
-   }
-   const mergedEvents=[...byId.values()];
-   const oct=mergedEvents.filter(e=>{const d=recoveryDate_(e);return d>='2026-10-01'&&d<='2026-10-31';})
-     .map(e=>{const x=cloneCloud_(e);x.date=recoveryDate_(e)||x.date;return x;})
-     .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||(+a.seq||0)-(+b.seq||0));
-   const dayMap={};
-   oct.forEach(e=>{const d=String(e.date||'未知');if(!dayMap[d])dayMap[d]={events:0,players:0};dayMap[d].events++;dayMap[d].players+=Array.isArray(e.players)?e.players.length:0;});
-   const daySummary=Object.entries(dayMap).map(([d,x])=>d+'：'+x.events+' 場｜'+x.players+' 位玩家').join('\n');
-   const unresolved=fsAudit.filter(x=>!/^2026-\d{2}-\d{2}$/.test(x.date));
-   const fsList=fsAudit.sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(x=>(x.date||'日期未知')+'｜'+x.id+'｜'+x.players+' 位').join('\n');
-   const activityKeys=Object.keys(snap.activityManagement&&typeof snap.activityManagement==='object'?snap.activityManagement:{});
-   const summary='Google Sheet Revision：'+rev+'\nFirebase events：'+fsEvents.length+' 場｜玩家 '+fsPlayers+' 筆\n合併後 10 月賽事：'+oct.length+' 場\n\n'+(daySummary||'沒有找到 10 月賽事')+'\n\nFirebase 逐場日期：\n'+fsList+'\n\n日期仍無法判定：'+unresolved.length+' 場\n活動資料區：'+activityKeys.length+' 組';
-
-   const ok=confirm('Firebase 日期掃描完成：\n\n'+summary+'\n\n先核對 10/4、10/5、10/6。\n按「確定」才會套用；取消則完全不修改資料。\n此步驟不會寫回任何雲端。');
-   if(!ok){setCloudState('☁ 日期掃描已取消｜未修改資料');return;}
-
-   backupLocal('before-firebase-date-recovery-v15224');
-   let recovered=cloneCloud_(snap);
-   recovered=preserveMembers_(db,recovered,res.members);
-   recovered.events=mergedEvents.map(e=>{const x=cloneCloud_(e),d=recoveryDate_(x);if(d)x.date=d;return x;});
-   db=recovered;epcLastPersistSnapshot_=cloneCloud_(db);cloudRevision=rev;setCloudBase_(db);localDirty=false;
-   localStorage.setItem('epcV1',JSON.stringify(db));localStorage.setItem('epcCloudRevision',String(rev));localStorage.removeItem('epcLocalDirty');
-   localStorage.setItem('epcFullRecoveryV15224',JSON.stringify({at:Date.now(),revision:rev,firestoreEvents:fsEvents.length,firestorePlayers:fsPlayers,days:dayMap}));
-   render();
-   setCloudState('☁ 日期合併復原完成｜尚未寫回雲端');
-   alert('已套用到目前畫面。\n\n'+daySummary+'\n\n目前尚未寫回任何雲端。');
- }catch(err){
-   console.error('V1.52.24 recovery failed',err);
-   const msg=String(err&&err.message||err);setCloudState('⚠ 日期掃描失敗｜'+msg,true);
-   alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」後再試。':'掃描失敗：'+msg);
- }finally{if(btn){btn.disabled=false;btn.textContent=oldText;}}
-}
-
-function epcSetByPathV15228_(root,path,value){
- const toks=[];String(path||'').replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{toks.push(a!=null?a:b);return _});
- if(!toks.length)return false;
- let o=root;
- for(let i=0;i<toks.length-1;i++){
-  let k=toks[i],next=toks[i+1],isIdx=/^\d+$/.test(next);
-  if(o[k]==null||typeof o[k]!=='object')o[k]=isIdx?[]:{};
-  o=o[k];
- }
- o[toks[toks.length-1]]=cloneCloud_(value);return true;
-}
-async function buildFirebaseRecoveryPreviewV15228_(){
- // Recovery must start from the durable full Google Sheet snapshot, not the
- // currently damaged in-memory db. Then replay later Firestore field versions.
- const sheet=await cloudGet('load');
- const sheetDb=sheet&&sheet.data&&typeof sheet.data==='object'?sheet.data:(sheet&&sheet.db&&typeof sheet.db==='object'?sheet.db:null);
- if(!sheetDb)throw new Error('GOOGLE_SHEET_BASELINE_NOT_AVAILABLE');
- const base=cloneCloud_(sheetDb),all=await window.epcFirebaseAuditAllRecovery(),candidates=[];
- const baselineUpdated=Date.parse(String(sheet.updatedAt||sheet.updated_at||''))||0;
- for(const col of ['epcFieldVersions','epcFieldVersionsV2']){
-  const rows=Array.isArray(all[col])?all[col]:[];
-  for(const r of rows){
-   const x=r.data||{},path=String(x.path||'').trim();if(!path)continue;
-   let ms=0,u=x.updatedAt;
-   if(u&&typeof u==='object')ms=Number(u.millis||0)||Number(u.seconds||0)*1000;
-   ms=ms||Number(x.clientChangedAt||0);
-   // Replay every Firebase field newer than the baseline snapshot. If backend
-   // omitted its update timestamp, use the requested Oct 4-6 recovery window.
-   if(baselineUpdated&&ms&&ms<=baselineUpdated)continue;
-   if(!baselineUpdated&&ms<Date.parse('2026-10-04T00:00:00+08:00'))continue;
-   candidates.push({col,id:r.id,path,value:x.value,ms,version:Number(x.version||0)});
-  }
- }
- candidates.sort((a,b)=>a.ms-b.ms||a.version-b.version);
- const latest=new Map();for(const x of candidates)latest.set(x.path,x);
- const applied=[];for(const x of latest.values()){if(epcSetByPathV15228_(base,x.path,x.value))applied.push(x)}
- // Root Firestore event documents + players are authoritative event records.
- const fsEvents=await window.epcFirebaseReadEventIndex();
- const byId=new Map((base.events||[]).filter(Boolean).map(e=>[String(e.id||''),e]));
- for(const fe of (fsEvents||[])){
-  if(!fe||!fe.id)continue;
-  const id=String(fe.id),old=byId.get(id)||{};
-  const merged={...cloneCloud_(old),...cloneCloud_(fe)};
-  if(Array.isArray(fe.players))merged.players=cloneCloud_(fe.players);
-  byId.set(id,merged);
- }
- base.events=[...byId.values()];
- window.epcRecoveryPreviewV15228={db:base,applied,all,createdAt:Date.now(),sheetRevision:sheet.revision||sheet.rev||'?',sheetUpdatedAt:sheet.updatedAt||'',firestoreEvents:(fsEvents||[]).length};
- return window.epcRecoveryPreviewV15228;
-}
-async function openFirebaseRecoveryPreviewV15228_(){
- try{
-  setCloudState('☁ 正在建立 10/4～10/6 復原預覽｜不寫入正式資料…');
-  const p=await buildFirebaseRecoveryPreviewV15228_();
-  const cats={賽事:0,帳務:0,保護傘:0,先鋒榜:0,週排行:0,狩王:0,活動設定:0,會員:0,其他:0};
-  for(const x of p.applied){
-   const z=x.path.toLowerCase();
-   if(z.includes('umbrella'))cats.保護傘++;
-   else if(z.includes('pioneer'))cats.先鋒榜++;
-   else if(z.includes('rank'))cats.週排行++;
-   else if(z.includes('boss')||z.includes('hunter'))cats.狩王++;
-   else if(z.includes('activity'))cats.活動設定++;
-   else if(z.includes('account')||z.includes('ledger')||z.includes('expense'))cats.帳務++;
-   else if(z.includes('member'))cats.會員++;
-   else if(z.includes('event'))cats.賽事++;
-   else cats.其他++;
-  }
-  const summary='Google Sheet 基底 + Firebase 重播復原預覽已建立\\n\\nSheet Revision：'+p.sheetRevision+'\\nFirestore events：'+p.firestoreEvents+'\\n重播最新欄位：'+p.applied.length+' 筆\\n'+Object.entries(cats).map(([k,v])=>k+'：'+v).join('\\n')+
-  '\n\n目前尚未修改正式 DB、Google Sheet 或 Firebase。\n\n按「確定」只會暫時把預覽資料載入目前這個瀏覽器畫面，重新整理即可退出預覽。\n請勿在預覽模式按「立即儲存雲端」。';
-  // Native confirm() was leaving Chrome in a blocked modal state on this recovery flow.
-  // Build and enter the read-only preview directly; no cloud write occurs here.
-  console.info('[EPC] recovery preview summary',summary);
-  backupLocal('before-v15228-recovery-preview');
-  window.epcRecoveryPreviewOriginalDb=cloneCloud_(db);
-  db=cloneCloud_(p.db);
-  // Field-version records can legitimately contain null/deleted values.
-  // Preview rendering expects several top-level collections to always exist.
-  // Normalize only the preview copy; never write these defaults back to cloud.
-  const arrKeys=['members','events','dailyAccounting','expenses'];
-  for(const k of arrKeys)if(!Array.isArray(db[k]))db[k]=[];
-  if(!db.activityManagement||typeof db.activityManagement!=='object')db.activityManagement={};
-  // Remove null array members created by historical indexed-path field versions.
-  db.members=db.members.filter(Boolean);
-  db.events=db.events.filter(Boolean).map(e=>e&&typeof e==='object'?{...e,players:Array.isArray(e.players)?e.players.filter(Boolean):[]}:e).filter(Boolean);
-  window.epcRecoveryPreviewMode=true;
-  try{render();}
-  catch(renderErr){
-    console.warn('[EPC] recovery preview full render fallback',renderErr);
-    // Keep preview DB loaded even if one legacy page contains a malformed historic record.
-    try{if(typeof renderActivities==='function')renderActivities()}catch(_){}
-  }
-  setCloudState('👁 復原預覽模式｜10/4～10/6｜禁止儲存雲端');
-  // Do not open a second blocking alert here: the operator must be able to
-  // navigate the recovered preview immediately after confirming it.
-  try{const b=document.getElementById('saveCloudBtn');if(b){b.disabled=true;b.title='復原預覽模式禁止儲存';}}catch(_){}
-  // Rebind navigation explicitly after preview render. Some recovery records can
-  // make render() return early before legacy navigation state is usable.
-  document.querySelectorAll('#nav button[data-page]').forEach(b=>{
-    b.disabled=false;
-    b.style.pointerEvents='auto';
-    b.onclick=(ev)=>{
-      if(ev){ev.preventDefault();ev.stopPropagation();}
-      const id=b.dataset.page;
-      document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.toggle('active',x===b));
-      document.querySelectorAll('.page').forEach(pg=>pg.classList.toggle('active',pg.id===id));
-      try{render();}catch(err){console.warn('[EPC] preview page render',id,err);}
-      return false;
-    };
-  });
-  // Remove any stale full-screen modal/backdrop left by the recovery action.
-  document.querySelectorAll('dialog[open]').forEach(d=>{try{d.close()}catch(_){d.removeAttribute('open')}});
-  document.body.style.pointerEvents='auto';
- }catch(err){console.error(err);alert('建立復原預覽失敗：'+String(err&&err.message||err));}
-}
-
-async function auditFirebaseAllV15227_(){
- const btn=$('epcAuditFirebaseBtn'),old=btn?btn.textContent:'掃描 Firebase 全部資料';
- try{
-  if(btn){btn.disabled=true;btn.textContent='全面掃描中…';}
-  setCloudState('☁ 正在唯讀掃描 Firebase 所有復原資料區…');
-  const all=await window.epcFirebaseAuditAllRecovery();
-  const hit=[];
-  const isoRe=/2026-10-0[4-6]/;
-  const activityRe=/umbrella|pioneer|rank|hunter|boss|weekly|activity/i;
-  for(const [col,rows] of Object.entries(all)){
-   if(!Array.isArray(rows))continue;
-   for(const r of rows){
-    let js='';try{js=JSON.stringify(r.data)}catch(_){}
-    const dateHits=[...new Set((js.match(/2026-10-0[4-6][^"\\]{0,30}/g)||[]))];
-    const actHits=[...new Set((js.match(/(?:umbrella|pioneer|rank|hunter|boss|weekly|activity)[^"\\]{0,80}/ig)||[]))];
-    if(dateHits.length||actHits.length)hit.push({collection:col,id:r.id,dateHits,activityHits:actHits.slice(0,12),data:r.data});
-   }
-  }
-  const counts=Object.fromEntries(Object.entries(all).map(([k,v])=>[k,Array.isArray(v)?v.length:'ERR']));
-  const summary='Firebase 全面唯讀掃描完成\n\n各集合筆數：\n'+Object.entries(counts).map(([k,v])=>k+'：'+v).join('\n')+
-   '\n\n10/4～10/6 或活動關鍵字命中：'+hit.length+' 筆\n\n'+hit.map((x,i)=>(i+1)+'. ['+x.collection+'] '+x.id+'\n日期：'+(x.dateHits.join('、')||'-')+'\n活動：'+(x.activityHits.join('、')||'-')).join('\n\n');
-  window.epcFirebaseFullAuditLast={all,hit,counts};
-  try{localStorage.setItem('epcFirebaseFullAuditV15227',JSON.stringify({at:Date.now(),counts,hit}));}catch(_){}
-  console.group('[EPC] Full Firebase Recovery Audit');console.log(summary);console.log(all);console.log('HITS',hit);console.groupEnd();
-  const w=window.open('','_blank','width=1200,height=900,scrollbars=yes,resizable=yes');
-  if(w){w.document.write('<!doctype html><meta charset="utf-8"><title>EPC Full Firebase Audit</title><style>body{font-family:Consolas,"Microsoft JhengHei",monospace;background:#0b0f14;color:#eef3f8;padding:22px;white-space:pre-wrap;line-height:1.55}h2{color:#d6b35a}</style><h2>EPC Firebase 全面唯讀掃描</h2><pre id="x"></pre>');w.document.close();w.document.getElementById('x').textContent=summary;}
-  else alert(summary.slice(0,15000));
-  setCloudState('☁ Firebase 全面掃描完成｜命中 '+hit.length+' 筆｜未修改任何資料');
- }catch(err){const msg=String(err&&err.message||err);console.error(err);setCloudState('⚠ 全面掃描失敗｜'+msg,true);alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先登入 Firebase。':'全面掃描失敗：'+msg)}
- finally{if(btn){btn.disabled=false;btn.textContent=old;}}
-}
-
-async function auditFirebaseRawV15226_(){
- const btn=$('epcAuditFirebaseBtn'),oldText=btn?btn.textContent:'掃描 Firebase 原始資料';
- try{
-  if(btn){btn.disabled=true;btn.textContent='掃描 23 場中…';}
-  setCloudState('☁ 正在唯讀掃描 Firebase events 原始欄位…');
-  if(typeof window.epcFirebaseAuditRawEvents!=='function')throw new Error('FIREBASE_RAW_AUDIT_NOT_READY');
-  const rows=await window.epcFirebaseAuditRawEvents();
-  const pick=(f,k)=>f&&Object.prototype.hasOwnProperty.call(f,k)?f[k]:undefined;
-  const show=v=>{
-    if(v==null||v==='')return '-';
-    if(typeof v==='object'){
-      if(v.iso)return v.iso;
-      try{return JSON.stringify(v)}catch(_){return String(v)}
-    }
-    return String(v);
-  };
-  const keys=['date','businessDate','eventDate','createdAt','updatedAt','modifiedAt','startDateTime','timestamp'];
-  const lines=(rows||[]).map((r,i)=>{
-    const f=r.fields||{};
-    const times=keys.map(k=>k+'='+show(pick(f,k))).join(' | ');
-    return String(i+1).padStart(2,'0')+'. '+r.id+' | players='+r.players+'\n'+times;
-  });
-  const text='Firebase 原始 events：'+(rows||[]).length+' 場\n\n'+lines.join('\n\n');
-  window.epcFirebaseRawAuditLast=rows;
-  try{localStorage.setItem('epcFirebaseRawAuditV15226',JSON.stringify({at:Date.now(),rows}));}catch(_){}
-  console.group('[EPC] Firebase Raw Event Audit');console.log(text);console.log(rows);console.groupEnd();
-  const w=window.open('','_blank','width=1100,height=850,scrollbars=yes,resizable=yes');
-  if(w){
-    w.document.write('<!doctype html><meta charset="utf-8"><title>EPC Firebase Raw Audit</title><style>body{font-family:Consolas,"Microsoft JhengHei",monospace;background:#0b0f14;color:#eef3f8;padding:22px;white-space:pre-wrap;line-height:1.55}h2{color:#d6b35a}pre{white-space:pre-wrap}</style><h2>EPC Firebase 原始賽事唯讀掃描</h2><pre id="x"></pre>');
-    w.document.close();w.document.getElementById('x').textContent=text;
-  }else alert(text.slice(0,12000));
-  setCloudState('☁ Firebase 原始掃描完成｜'+(rows||[]).length+' 場｜未修改任何資料');
- }catch(err){
-  console.error('V1.52.26 raw audit failed',err);
-  const msg=String(err&&err.message||err);
-  setCloudState('⚠ Firebase 原始掃描失敗｜'+msg,true);
-  alert(msg==='FIREBASE_NOT_SIGNED_IN'?'請先按「Firebase 登入」後再掃描。':'掃描失敗：'+msg);
- }finally{if(btn){btn.disabled=false;btn.textContent=oldText;}}
-}
-
 async function manualCloudLoad(){
- // V1.52.19 STABLE-1003: legacy whole-db load is locked for today's operation.
- // It may contain a stale snapshot and must never replace the 10/3 stable baseline.
- alert('目前為 10/3 穩定營業版。為避免資料回朔，已暫停「從舊雲端整包載入」。');
- return;
  if(localDirty){
    const ok=confirm('這台電腦有尚未成功上傳的修改。\n\n從雲端載入會替換目前畫面資料，但系統會先建立本機安全備份。\n\n確定要載入雲端嗎？');
    if(!ok)return;
@@ -3696,27 +3370,6 @@ async function manualCloudLoad(){
    if(!res.data || typeof res.data!=='object')throw new Error('CLOUD_EMPTY');
    db=res.data;
    db=preserveMembers_(db,db,res.members);
-   // V1.52.12: the legacy cloud snapshot can lag behind Firestore's per-event
-   // index. Recover missing/newer event documents read-only before rendering.
-   if(typeof window.epcFirebaseReadEventIndex==='function'){
-     try{
-       const indexed=await window.epcFirebaseReadEventIndex();
-       if(Array.isArray(indexed)&&indexed.length){
-         const byId=new Map((db.events||[]).map(e=>[String(e&&e.id||''),e]));
-         for(const remoteEvent of indexed){
-           if(!remoteEvent||!remoteEvent.id)continue;
-           const id=String(remoteEvent.id),localEvent=byId.get(id);
-           if(!localEvent){byId.set(id,remoteEvent);continue;}
-           const rt=Date.parse(remoteEvent.updatedAt||remoteEvent.modifiedAt||remoteEvent.createdAt||'')||0;
-           const lt=Date.parse(localEvent.updatedAt||localEvent.modifiedAt||localEvent.createdAt||'')||0;
-           // Replace only when Firestore is demonstrably newer. If timestamps
-           // are unavailable, keep the snapshot copy to avoid destructive guesses.
-           if(rt>lt)byId.set(id,remoteEvent);
-         }
-         db.events=[...byId.values()];
-       }
-     }catch(e){console.warn('Firestore event recovery skipped',e);}
-   }
    cloudRevision=Number(res.revision||0);
    setCloudBase_(db);
    localStorage.setItem('epcV1',JSON.stringify(db));
@@ -3840,9 +3493,6 @@ window.epcFirebaseCanAutoApply=function(){
  return !localDirty && !cloudSaving && !cloudPending && !epcEditLocked_() && !epcEditingField_();
 };
 window.epcFirebaseApplyRemote=function(remote,meta){
- // V1.52.17: whole-database Firebase snapshot apply is disabled during recovery.
- // Verified snapshots may still be inspected, but cannot replace the working db.
- return false;
  if(!remote||typeof remote!=='object'||!window.epcFirebaseCanAutoApply())return false;
  try{
    // A remote apply is consumption, not a new local edit. Suppress echo-mirroring
@@ -3919,11 +3569,7 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(Array.isArray(before)&&Array.isArray(after)){
    const key=(x,i)=>x&&typeof x==='object'?String(x.id??x.memberId??x.eventId??('idx:'+i)):('idx:'+i);
    const bm=new Map(before.map((x,i)=>[key(x,i),x])),am=new Map(after.map((x,i)=>[key(x,i),x]));
-   for(const k of new Set([...bm.keys(),...am.keys()])){
-     const bv=bm.get(k),av=am.get(k),p=path+'['+k+']';
-     if(bv===undefined||av===undefined)out.push({path:p,before:cloneCloud_(bv),after:cloneCloud_(av),clientId:epcClientId_,changedAt:Date.now()});
-     else epcCollectFieldChanges_(bv,av,p,out);
-   }
+   for(const k of new Set([...bm.keys(),...am.keys()]))epcCollectFieldChanges_(bm.get(k),am.get(k),path+'['+k+']',out);
    return out;
  }
  if(obj(before)&&obj(after)){
@@ -3935,10 +3581,10 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
 }
 window.epcGetFieldChanges=()=>cloneCloud_(window.epcFieldChanges||[]);
 function epcSetPathValue_(root,path,value){
- const parts=[];String(path).replace(/([^.[\\]]+)|\\[([^\\]]+)\\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
+ const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
  let cur=root;
  for(let i=0;i<parts.length-1;i++){
-  const k=parts[i];
+  const k=parts[i],next=parts[i+1];
   if(Array.isArray(cur)){
    let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===k);
    if(idx<0)return false;cur=cur[idx];
@@ -3948,12 +3594,8 @@ function epcSetPathValue_(root,path,value){
  const last=parts[parts.length-1];
  if(Array.isArray(cur)){
   const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
-  if(value===undefined||value===null){if(idx>=0)cur.splice(idx,1);return idx>=0;}
-  if(idx<0){cur.push(cloneCloud_(value));return true;}
-  cur[idx]=cloneCloud_(value);
- }else{
-  if(value===undefined)delete cur[last]; else cur[last]=cloneCloud_(value);
- }
+  if(idx<0)return false;cur[idx]=cloneCloud_(value);
+ }else cur[last]=cloneCloud_(value);
  return true;
 }
 window.epcShowFieldConflict=function(x){
@@ -4110,26 +3752,6 @@ function scheduleFirebaseConflictDrain_(){
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
  // Diagnostic mode intentionally observes only; no automatic merge/write.
 });
-
-
-/* V2.0 receiver: apply only a remote field/record, never a whole database snapshot. */
-window.addEventListener("epcFirebaseRemoteFieldV2",function(e){
- try{
-  const x=e.detail||{},path=String(x.path||''),remoteClient=String(x.clientId||'');
-  if(!path||remoteClient===epcClientId_)return;
-  if(epcEditLocked_()||epcEditingField_())return setTimeout(()=>window.dispatchEvent(new CustomEvent("epcFirebaseRemoteFieldV2",{detail:x})),700);
-  if(epcSetPathValue_(db,path,x.value)){
-    epcLastPersistSnapshot_=cloneCloud_(db);
-    localStorage.setItem('epcV1',JSON.stringify(db));
-    if(!epcEditLocked_())render();
-    setCloudState('☁ 已同步另一台電腦｜'+path);
-  }
- }catch(err){console.warn('V2 remote field apply failed',err);}
-});
-
-/* V2.0 phone stacks: automatic read-in while an event is open.
-   The existing manual "同步手機籌碼" button remains available. */
-let epcPhoneAutoTimerV2_=null; // V2.0 SAFE MODE: auto polling paused until live A/B validation. Manual phone-stack sync remains available.
 
 function persist(){
  const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
@@ -5003,17 +4625,7 @@ function renderAccountingManager(){
  }
  const tbody=$('accountingDayRows');if(!tbody)return;
  let af=$('accountingDateFrom')?.value||'',at=$('accountingDateTo')?.value||'';
- // V1.52.22: show recoverable accounting days even when no explicit
- // dailyAccounting row was created. The figures are derived by
- // dailyAccountingInfo() from event/player/final accounting data.
- const recoverableDates=[...new Set([
-   ...(db.dailyAccounting||[]).map(rec=>rec&&rec.date).filter(Boolean),
-   ...(db.events||[])
-     .filter(e=>!isIndependentAccountingEvent(e))
-     .filter(e=>{const s=String(e&&e.status||'').trim();return s==='已結算'||s==='已結束'||s==='結算完成';})
-     .map(e=>businessDateForEvent(e)).filter(Boolean)
- ])].sort().reverse();
- const rows=recoverableDates.filter(date=>(!af||date>=af)&&(!at||date<=at)).map(date=>(db.dailyAccounting||[]).find(rec=>rec&&rec.date===date)||{date,items:[],_recoveredFromEvents:true});
+ const rows=(db.dailyAccounting||[]).filter(rec=>rec&&rec.date&&(!af||rec.date>=af)&&(!at||rec.date<=at));
  let totalEvents=0,totalGross=0,totalMembership=0,totalDiscount=0,totalIncome=0,totalExpense=0,totalNet=0;
  tbody.innerHTML=rows.map(rec=>{
    const ai=dailyAccountingInfo(rec.date);
@@ -5567,13 +5179,7 @@ function renderDashboardSummary(){
  if($('dashboardDateFrom')&&!$('dashboardDateFrom').value)$('dashboardDateFrom').value=from;
  if($('dashboardDateTo')&&!$('dashboardDateTo').value)$('dashboardDateTo').value=to;
 
- // V1.52.13: recovered Firestore events use more than one historical
- // settlement label. Treat the same explicit settled statuses used by the
- // activity/ranking system as completed events for dashboard reporting.
- const settled=(db.events||[]).filter(e=>{
-   const status=String(e&&e.status||'').trim();
-   return status==='已結算'||status==='已結束'||status==='結算完成';
- });
+ const settled=(db.events||[]).filter(e=>e.status==='已結算');
  const inRange=settled.filter(e=>{
    const d=businessDateForEvent(e);
    return (!from||d>=from)&&(!to||d<=to);
@@ -5582,16 +5188,7 @@ function renderDashboardSummary(){
  // IMPORTANT: dashboard accounting KPIs use the SAME source as EPC 帳務.
  // Only established normal daily-accounting records are included.
  // Independent-accounting groups remain excluded by dailyAccountingInfo().
- // V1.52.22: a dailyAccounting row is optional. Historical accounting can be
- // reconstructed from settled event/player data (admin, discounts, JP and
- // event-level accountingItems), so include those business dates too.
- const allLedgerDates=[...new Set([
-   ...(db.dailyAccounting||[]).map(r=>r&&r.date).filter(Boolean),
-   ...(db.events||[])
-     .filter(e=>!isIndependentAccountingEvent(e))
-     .filter(e=>{const s=String(e&&e.status||'').trim();return s==='已結算'||s==='已結束'||s==='結算完成';})
-     .map(e=>businessDateForEvent(e)).filter(Boolean)
- ])];
+ const allLedgerDates=[...new Set((db.dailyAccounting||[]).map(r=>r&&r.date).filter(Boolean))];
  const rangeLedgerDates=allLedgerDates.filter(d=>(!from||d>=from)&&(!to||d<=to));
 
  const ledgerTotals=dates=>dates.reduce((a,date)=>{
@@ -6142,14 +5739,17 @@ function actIdentity_(id){id=String(id||'');const m=actMember_(id)||{};return ac
 function setActIdentityMode_(v){localStorage.setItem(ACT_IDENTITY_MODE_KEY,v==='id'?'id':'name');renderActivities();setTimeout(()=>publishAllDisplays_(),300)}
 function actIdentityControl_(){const v=actIdentityMode_();return '<div class="card" style="margin-bottom:10px;padding:10px 12px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>活動／排行榜玩家顯示</b><select style="width:180px" onchange="setActIdentityMode_(this.value)"><option value="name" '+(v==='name'?'selected':'')+'>顯示姓名</option><option value="id" '+(v==='id'?'selected':'')+'>顯示會員編號</option></select><span class="small">此設定套用活動管理內所有排行榜、紀錄與顯示器玩家身分。</span></div></div>'}
 function renderActivities(){
- if(!$('activities'))return;
- try{ensureActDb_();}catch(e){console.warn('[EPC] ensureActDb recovery guard',e);if(!db.activityManagement||typeof db.activityManagement!=='object')db.activityManagement={};}
- const safe=(id,fn)=>{try{const el=$(id);if(el)el.innerHTML=fn();}catch(e){console.warn('[EPC] activity render failed',id,e);const el=$(id);if(el)el.innerHTML='<div class="card"><b>此區塊資料正在復原</b><div class="small">'+String(e&&e.message||e)+'</div></div>';}};
+ if(!$('activities'))return;ensureActDb_();
  if($('actActivityRangeTop'))$('actActivityRangeTop').innerHTML=actIdentityControl_()+actRangeEditor_(actTab_);
  const panes={weekly:'actWeekly',pioneer:'actPioneer',rank:'actRank',hunter:'actHunter',umbrella:'actUmbrella',boss:'actBoss'};
  document.querySelectorAll('.act-pane').forEach(x=>x.style.display='none');
  const id=panes[actTab_]||'actWeekly';if($(id))$(id).style.display='block';
- safe('actWeekly',actWeekly_); safe('actPioneer',actPioneer_); safe('actRank',actRank_); safe('actHunter',actHunter_); safe('actUmbrella',actUmbrella_); safe('actBoss',actBoss_);
+ if($('actWeekly'))$('actWeekly').innerHTML=actWeekly_();
+ if($('actPioneer'))$('actPioneer').innerHTML=actPioneer_();
+ if($('actRank'))$('actRank').innerHTML=actRank_();
+ if($('actHunter'))$('actHunter').innerHTML=actHunter_();
+ if($('actUmbrella'))$('actUmbrella').innerHTML=actUmbrella_();
+ if($('actBoss'))$('actBoss').innerHTML=actBoss_();
  setTimeout(enhanceSearchCombos_,0);
 }
 function render(){
@@ -6568,27 +6168,7 @@ function printDailySettlement(groupNames=null){
  </style></head><body>
  <h1>EPC 當日分帳報表</h1>
  <div class="meta">日期：${date}　已結算場次：${d.events.length}　列印群組：${printGroups.map(g=>g.name).join('、')}</div>
- ${sections}<script id="epcV2EmergencyNav">
-(function(){
- function bind(){
-  document.querySelectorAll('#nav button[data-page]').forEach(function(b){
-   b.disabled=false;b.style.pointerEvents='auto';
-   b.onclick=function(ev){
-    if(ev){ev.preventDefault();ev.stopPropagation();}
-    var id=b.getAttribute('data-page');
-    document.querySelectorAll('#nav button[data-page]').forEach(function(x){x.classList.toggle('active',x===b);});
-    document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id);});
-    try{if(typeof window.render==='function')window.render();}catch(e){console.warn('V2 emergency render',e);}
-    return false;
-   };
-  });
-  document.body.style.pointerEvents='auto';
- }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind);else bind();
- setTimeout(bind,500);
-})();
-</script>
-</body></html>`);
+ ${sections}</body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),350);
 }
 function printReport(id){
