@@ -3125,6 +3125,7 @@ function startLiveSync_(){
  },1500);
 }
 async function initializeCloud(){
+ if(window.EPC_RECOVERY_READONLY){cloudReady=false;setCloudState('☁ 10/3 唯讀基線｜已禁止舊雲端覆蓋');render();return;}
  setCloudState('● 本機已儲存｜正在連接雲端…');
  try{
    const res=await cloudGet('load');
