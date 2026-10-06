@@ -1971,6 +1971,20 @@ window.epcFirebaseReadVerified=async()=>{
  return clean(result.data);
 };
 window.epcFirebaseVerifiedMeta=()=>clean(verifiedMeta);
+window.epcFirebaseRecoveryAudit=async()=>{
+ const u=auth.currentUser;
+ if(!u)throw new Error("FIREBASE_NOT_SIGNED_IN");
+ const s=await getDoc(doc(fs,"epcMirrorMeta","current"));
+ if(!s.exists())throw new Error("MIRROR_META_NOT_FOUND");
+ const meta=s.data()||{},result=await readSnapshot_(meta),data=clean(result.data||{});
+ const events=Array.isArray(data.events)?data.events:[];
+ const dates=events.map(e=>String(e&&e.date||"")).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)).sort();
+ const audit={schema:String(meta.schema||""),generation:String(meta.generation||""),memberCount:(data.members||[]).length,eventCount:events.length,latestEventDate:dates.length?dates[dates.length-1]:"",snapshotHashOk:result.hash===String(meta.fullDataHash||""),legacyRevision:Number(meta.legacyRevision||0),clientTime:String(meta.clientTime||"")};
+ window.epcRecoveryAuditResult=audit;
+ state("Firebase：唯讀盤點完成｜會員 "+audit.memberCount+"｜賽事 "+audit.eventCount+"｜最新 "+(audit.latestEventDate||"—"));
+ return audit;
+};
+
 
 /* Phase 1 realtime observer — detection only.
    It NEVER mutates EPC db. This lets us prove A/B delivery before enabling remote apply. */
