@@ -3387,9 +3387,9 @@ async function loadVerifiedRecovery_(){
  try{
   const data=await window.epcFirebaseReadVerified();
   if(!data||!Array.isArray(data.members)||!Array.isArray(data.events))throw new Error('INVALID_VERIFIED_SNAPSHOT');
-  const dates=data.events.map(e=>String(e&&e.date||'')).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)).sort();
-  const latest=dates.length?dates[dates.length-1]:'';
-  if(data.members.length!==1667||data.events.length!==24||latest!=='2026-10-03')throw new Error('VERIFIED_BASELINE_CHANGED');
+  const audit=await window.epcFirebaseRecoveryAudit();
+  if(!audit||audit.snapshotHashOk!==true)throw new Error('SNAPSHOT_HASH_NOT_VERIFIED');
+  if(audit.memberCount!==1667||audit.eventCount!==24||audit.latestEventDate!=='2026-10-03')throw new Error('VERIFIED_BASELINE_CHANGED');
   backupLocal('before-verified-recovery');
   db=cloneCloud_(data);
   epcLastPersistSnapshot_=cloneCloud_(db);
@@ -3397,7 +3397,7 @@ async function loadVerifiedRecovery_(){
   render();
   setCloudState('✓ 已載入 10/3 驗證資料｜唯讀保護中');
   return true;
- }catch(e){console.error(e);setCloudState('⚠ 驗證資料載入失敗',true);return false;}
+ }catch(e){console.error(e);setCloudState('⚠ 驗證資料載入失敗｜'+String(e&&e.message||e),true);return false;}
 }
 async function manualCloudLoad(){
  if(localDirty){
