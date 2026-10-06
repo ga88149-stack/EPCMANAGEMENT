@@ -2046,7 +2046,7 @@ window.epcFirebaseVerify=async()=>{
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜唯讀盤點中…");startRealtimeObserver_();setTimeout(async()=>{try{const a=await window.epcFirebaseRecoveryAudit();let box=document.getElementById("epcRecoveryAuditBox");if(!box){box=document.createElement("div");box.id="epcRecoveryAuditBox";box.style.cssText="position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#101923;border:2px solid #d6b35a;border-radius:12px;padding:14px 16px;color:#fff;font-weight:800;max-width:520px;box-shadow:0 12px 40px #000";document.body.appendChild(box);}box.textContent="Firebase 唯讀盤點｜會員 "+a.memberCount+"｜賽事 "+a.eventCount+"｜最新賽事 "+(a.latestEventDate||"—")+"｜SHA-256 "+(a.snapshotHashOk?"通過":"失敗")+"｜Revision "+a.legacyRevision;}catch(e){state("Firebase：唯讀盤點失敗｜"+String(e&&e.message||e),true);}},700);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 <style id="epcNavHardGuard">
 #nav{position:relative!important;z-index:2147483647!important;pointer-events:auto!important}
