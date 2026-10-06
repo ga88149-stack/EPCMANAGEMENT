@@ -3393,8 +3393,8 @@ async function loadVerifiedRecovery_(){
   backupLocal('before-verified-recovery');
   db=cloneCloud_(data);
   localStorage.setItem('epcV1',JSON.stringify(db));
-  render();
-  setCloudState('✓ 已載入 10/3 驗證資料｜唯讀保護中');
+  localStorage.setItem('epcVerifiedOct3Restored','1');
+  location.reload();
   return true;
  }catch(e){console.error(e);setCloudState('⚠ 驗證資料載入失敗｜'+String(e&&e.message||e),true);return false;}
 }
