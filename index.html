@@ -1957,7 +1957,7 @@ async function mirror(){
  }catch(e){console.error("Firebase mirror failed",e);state("Firebase：鏡像失敗（正式資料不受影響）",true);}
  finally{busy=false;if(pending)setTimeout(mirror,300);}
 }
-window.epcFirebaseMirrorSchedule=()=>{if(Date.now()<suppressMirrorUntil)return;clearTimeout(timer);timer=setTimeout(mirror,1200);};
+window.epcFirebaseMirrorSchedule=()=>{if(window.EPC_RECOVERY_READONLY)return;if(Date.now()<suppressMirrorUntil)return;clearTimeout(timer);timer=setTimeout(mirror,1200);};
 window.epcFirebaseMirrorForce=()=>{lastFingerprint="";suppressMirrorUntil=0;clearTimeout(timer);return mirror();};
 window.epcFirebaseMirrorNow=()=>mirror();
 window.epcFirebaseReadVerified=async()=>{
@@ -2077,7 +2077,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
 </script><body><script>window.EPC_RECOVERY_READONLY=true;</script>
-<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V2.0 · Verified Stable Baseline</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
+<header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V2.0 · Verified Stable Baseline</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="epcShowRecoveryAudit_()">唯讀盤點</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
 <button data-page="members">會員</button>
@@ -4784,7 +4784,16 @@ function printDailyAccounting(){
   <h2>當日賽事明細</h2>
   <table><thead><tr><th>場次</th><th>賽事</th><th>組數</th><th>行政費收入</th><th>重買優惠</th><th>組數優惠</th><th>手動優惠</th><th>折扣支出</th><th>實收行政費</th><th>JP</th></tr></thead><tbody>${eventRows}</tbody></table>
   <div class="sign"><div>製表：____________________</div><div>覆核：____________________</div></div>
- </div></body></html>`;
+ </div><script>
+async function epcShowRecoveryAudit_(){
+ try{
+  const a=await window.epcFirebaseRecoveryAudit();
+  let box=document.getElementById("epcRecoveryAuditBox");
+  if(!box){box=document.createElement("div");box.id="epcRecoveryAuditBox";box.style.cssText="position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#101923;border:2px solid #d6b35a;border-radius:12px;padding:14px 16px;color:#fff;font-weight:800;max-width:560px;box-shadow:0 12px 40px #000";document.body.appendChild(box);}
+  box.textContent="Firebase 唯讀盤點｜會員 "+a.memberCount+"｜賽事 "+a.eventCount+"｜最新賽事 "+(a.latestEventDate||"—")+"｜SHA-256 "+(a.snapshotHashOk?"通過":"失敗")+"｜Revision "+a.legacyRevision;
+ }catch(e){alert("唯讀盤點失敗："+String(e&&e.message||e));}
+}
+</script></body></html>`;
 
  const w=window.open('','_blank');
  if(!w){
