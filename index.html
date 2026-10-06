@@ -6568,7 +6568,27 @@ function printDailySettlement(groupNames=null){
  </style></head><body>
  <h1>EPC 當日分帳報表</h1>
  <div class="meta">日期：${date}　已結算場次：${d.events.length}　列印群組：${printGroups.map(g=>g.name).join('、')}</div>
- ${sections}</body></html>`);
+ ${sections}<script id="epcV2EmergencyNav">
+(function(){
+ function bind(){
+  document.querySelectorAll('#nav button[data-page]').forEach(function(b){
+   b.disabled=false;b.style.pointerEvents='auto';
+   b.onclick=function(ev){
+    if(ev){ev.preventDefault();ev.stopPropagation();}
+    var id=b.getAttribute('data-page');
+    document.querySelectorAll('#nav button[data-page]').forEach(function(x){x.classList.toggle('active',x===b);});
+    document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id);});
+    try{if(typeof window.render==='function')window.render();}catch(e){console.warn('V2 emergency render',e);}
+    return false;
+   };
+  });
+  document.body.style.pointerEvents='auto';
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind);else bind();
+ setTimeout(bind,500);
+})();
+</script>
+</body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),350);
 }
 function printReport(id){
