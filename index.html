@@ -1793,6 +1793,7 @@ function epcFieldKey_(path){
  return 'f_'+(h>>>0).toString(16);
 }
 window.epcFirebasePublishFieldChanges=async function(changes){
+ if(window.EPC_RECOVERY_READONLY)return false;
  if(!auth.currentUser)return false;
  const queue=(changes||[]).filter(x=>!x.publishedAt).slice(0,100);
  for(const ch of queue){
@@ -1902,6 +1903,7 @@ async function readSnapshot_(meta){
  return {data,hash,bytes:byteCount,generation};
 }
 async function mirror(){
+ if(window.EPC_RECOVERY_READONLY){state('Firebase：唯讀復原模式｜禁止寫入');return;}
  if(busy){pending=true;return;}
  const u=auth.currentUser;
  if(!u||String(u.email||"").toLowerCase()!=="ga88149@gmail.com"){state("Firebase：等待登入");return;}
@@ -2060,7 +2062,7 @@ onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@g
   document.documentElement.setAttribute('data-epc-theme',t==='light'?'light':'dark');
  }catch(_){document.documentElement.setAttribute('data-epc-theme','dark')}
 })();
-</script><body>
+</script><body><script>window.EPC_RECOVERY_READONLY=true;</script>
 <header><div><div class="brand"><b>EPC</b> Poker Management <span class="brand-version">V2.0 · Verified Stable Baseline</span></div></div><div style="display:flex;align-items:center;gap:10px"><div class="small" id="saveState">☁ 連線準備中…</div><div class="small" id="firebaseMirrorState">Firebase：載入中</div><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseLogin()">Firebase 登入</button><button class="secondary" style="padding:7px 10px" onclick="epcFirebaseVerify()">檢查 Firebase</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudSync()">立即儲存雲端</button><button class="secondary" style="padding:7px 10px" onclick="manualCloudLoad()">從雲端載入</button></div></header>
 <nav id="nav">
 <button data-page="dashboard" class="active">總覽</button>
@@ -3194,6 +3196,7 @@ async function refreshFormMembers(saveAfter=true){
  }catch(err){console.error('member refresh failed',err);return false;}
 }
 function scheduleCloudSave(){
+ if(window.EPC_RECOVERY_READONLY){setCloudState('☁ 唯讀復原模式｜禁止雲端寫入');return;}
  cloudPending=true;
  clearTimeout(cloudSaveTimer);
  if(!cloudReady){
@@ -3204,6 +3207,7 @@ function scheduleCloudSave(){
  cloudSaveTimer=setTimeout(saveCloudNow,900);
 }
 async function saveCloudNow(force=false){
+ if(window.EPC_RECOVERY_READONLY){setCloudState('☁ 唯讀復原模式｜禁止雲端寫入');return false;}
  const fieldConflict=!!window.epcFirebaseFieldConflict||(window.epcFieldChanges||[]).some(ch=>ch.conflict);
  if((window.epcFirebaseConflicts||[]).length||fieldConflict){
    cloudPending=true;
