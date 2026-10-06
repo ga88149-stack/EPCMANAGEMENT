@@ -3392,7 +3392,6 @@ async function loadVerifiedRecovery_(){
   if(audit.memberCount!==1667||audit.eventCount!==24||audit.latestEventDate!=='2026-10-03')throw new Error('VERIFIED_BASELINE_CHANGED');
   backupLocal('before-verified-recovery');
   db=cloneCloud_(data);
-  epcLastPersistSnapshot_=cloneCloud_(db);
   localStorage.setItem('epcV1',JSON.stringify(db));
   render();
   setCloudState('✓ 已載入 10/3 驗證資料｜唯讀保護中');
