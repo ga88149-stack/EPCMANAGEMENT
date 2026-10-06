@@ -6,7 +6,7 @@
 <meta http-equiv="Expires" content="0">
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EPC Poker Management System V1.50.35</title>
+<title>EPC Poker Management System V2.0</title>
 <style>
 :root{--bg:#0b0f14;--card:#121922;--card2:#17212c;--text:#eef3f8;--muted:#91a0b2;--line:#263443;--accent:#d6b35a;--good:#49c27d;--bad:#ff6b6b}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
@@ -2172,8 +2172,26 @@ window.epcFirebaseVerify=async()=>{
   return ok;
  }catch(e){console.error("Firebase verify failed",e);state("Firebase：完整快照驗證失敗｜"+String(e.message||e),true);return false;}
 };
+
+/* V2.0 — safe A/B field-level realtime sync. Initial Firestore contents are ignored:
+   only changes arriving after this browser connects are forwarded to the working DB. */
+let epcFieldRealtimeUnsub_=null;
+function startFieldRealtimeV2_(){
+ if(epcFieldRealtimeUnsub_)epcFieldRealtimeUnsub_();
+ let primed=false;
+ epcFieldRealtimeUnsub_=onSnapshot(collection(fs,"epcFieldVersions"),snap=>{
+   if(!primed){primed=true;return;}
+   for(const ch of snap.docChanges()){
+     if(ch.type!=="added"&&ch.type!=="modified")continue;
+     const x=clean(ch.doc.data()||{});
+     window.dispatchEvent(new CustomEvent("epcFirebaseRemoteFieldV2",{detail:x}));
+   }
+ },e=>console.warn("V2 field realtime observer failed",e));
+}
+window.epcFirebaseStartFieldRealtimeV2=startFieldRealtimeV2_;
+
 window.epcFirebaseLogin=async()=>{try{await signInWithPopup(auth,provider);}catch(e){console.error(e);state("Firebase：登入失敗",true);}};
-onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
+onAuthStateChanged(auth,u=>{if(u&&String(u.email||"").toLowerCase()==="ga88149@gmail.com"){state("Firebase：已登入｜準備即時監聽");startRealtimeObserver_();startFieldRealtimeV2_();setTimeout(()=>window.epcFirebaseMirrorSchedule(),500);}else if(u)state("Firebase：帳號未授權",true);else{if(realtimeUnsub){realtimeUnsub();realtimeUnsub=null;}state("Firebase：尚未登入");}});
 </script>
 </head>
 <script>
@@ -3663,6 +3681,10 @@ async function auditFirebaseRawV15226_(){
 }
 
 async function manualCloudLoad(){
+ // V1.52.19 STABLE-1003: legacy whole-db load is locked for today's operation.
+ // It may contain a stale snapshot and must never replace the 10/3 stable baseline.
+ alert('目前為 10/3 穩定營業版。為避免資料回朔，已暫停「從舊雲端整包載入」。');
+ return;
  if(localDirty){
    const ok=confirm('這台電腦有尚未成功上傳的修改。\n\n從雲端載入會替換目前畫面資料，但系統會先建立本機安全備份。\n\n確定要載入雲端嗎？');
    if(!ok)return;
@@ -3897,7 +3919,11 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
  if(Array.isArray(before)&&Array.isArray(after)){
    const key=(x,i)=>x&&typeof x==='object'?String(x.id??x.memberId??x.eventId??('idx:'+i)):('idx:'+i);
    const bm=new Map(before.map((x,i)=>[key(x,i),x])),am=new Map(after.map((x,i)=>[key(x,i),x]));
-   for(const k of new Set([...bm.keys(),...am.keys()]))epcCollectFieldChanges_(bm.get(k),am.get(k),path+'['+k+']',out);
+   for(const k of new Set([...bm.keys(),...am.keys()])){
+     const bv=bm.get(k),av=am.get(k),p=path+'['+k+']';
+     if(bv===undefined||av===undefined)out.push({path:p,before:cloneCloud_(bv),after:cloneCloud_(av),clientId:epcClientId_,changedAt:Date.now()});
+     else epcCollectFieldChanges_(bv,av,p,out);
+   }
    return out;
  }
  if(obj(before)&&obj(after)){
@@ -3909,10 +3935,10 @@ function epcCollectFieldChanges_(before,after,path='',out=[]){
 }
 window.epcGetFieldChanges=()=>cloneCloud_(window.epcFieldChanges||[]);
 function epcSetPathValue_(root,path,value){
- const parts=[];String(path).replace(/([^.[\]]+)|\[([^\]]+)\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
+ const parts=[];String(path).replace(/([^.[\\]]+)|\\[([^\\]]+)\\]/g,(_,a,b)=>{parts.push(a!==undefined?a:b);});
  let cur=root;
  for(let i=0;i<parts.length-1;i++){
-  const k=parts[i],next=parts[i+1];
+  const k=parts[i];
   if(Array.isArray(cur)){
    let idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===k);
    if(idx<0)return false;cur=cur[idx];
@@ -3922,8 +3948,12 @@ function epcSetPathValue_(root,path,value){
  const last=parts[parts.length-1];
  if(Array.isArray(cur)){
   const idx=cur.findIndex((x,j)=>String(x&&typeof x==='object'?(x.id??x.memberId??x.eventId??('idx:'+j)):('idx:'+j))===last);
-  if(idx<0)return false;cur[idx]=cloneCloud_(value);
- }else cur[last]=cloneCloud_(value);
+  if(value===undefined||value===null){if(idx>=0)cur.splice(idx,1);return idx>=0;}
+  if(idx<0){cur.push(cloneCloud_(value));return true;}
+  cur[idx]=cloneCloud_(value);
+ }else{
+  if(value===undefined)delete cur[last]; else cur[last]=cloneCloud_(value);
+ }
  return true;
 }
 window.epcShowFieldConflict=function(x){
@@ -4080,6 +4110,30 @@ function scheduleFirebaseConflictDrain_(){
 window.addEventListener("epcFirebaseRemoteSnapshot",e=>{
  // Diagnostic mode intentionally observes only; no automatic merge/write.
 });
+
+
+/* V2.0 receiver: apply only a remote field/record, never a whole database snapshot. */
+window.addEventListener("epcFirebaseRemoteFieldV2",function(e){
+ try{
+  const x=e.detail||{},path=String(x.path||''),remoteClient=String(x.clientId||'');
+  if(!path||remoteClient===epcClientId_)return;
+  if(epcEditLocked_()||epcEditingField_())return setTimeout(()=>window.dispatchEvent(new CustomEvent("epcFirebaseRemoteFieldV2",{detail:x})),700);
+  if(epcSetPathValue_(db,path,x.value)){
+    epcLastPersistSnapshot_=cloneCloud_(db);
+    localStorage.setItem('epcV1',JSON.stringify(db));
+    if(!epcEditLocked_())render();
+    setCloudState('☁ 已同步另一台電腦｜'+path);
+  }
+ }catch(err){console.warn('V2 remote field apply failed',err);}
+});
+
+/* V2.0 phone stacks: automatic read-in while an event is open.
+   The existing manual "同步手機籌碼" button remains available. */
+let epcPhoneAutoTimerV2_=setInterval(()=>{
+ const e=currentEvent();
+ if(!e||e.status==='已結算'||__phoneStackSyncBusy||document.hidden||epcEditLocked_())return;
+ syncPhoneStacksOnly().catch(()=>{});
+},4000);
 
 function persist(){
  const changes=epcCollectFieldChanges_(epcLastPersistSnapshot_,db);
